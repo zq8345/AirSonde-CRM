@@ -116,7 +116,7 @@ function parseEmail(recommended: string): { subject: string; body: string } {
     const body = text.slice(text.indexOf(m[0]) + m[0].length).replace(/^\s+/, "");
     return { subject, body };
   }
-  return { subject: "Hello from Wanew", body: text };
+  return { subject: "Hello from AirSonde", body: text };
 }
 
 function esc(s: string): string {
@@ -178,7 +178,7 @@ export async function sentTodayBreakdown(env: Env): Promise<{ total: number; ini
   ).first<{ total: number; initial: number; followup: number; transactional: number; auto: number }>();
   const initial = r?.initial ?? 0, followup = r?.followup ?? 0;
   // ⚠️ `initial` 口径已收紧为**严格 kind='initial'（含历史 NULL）**。原来写的是 `!= 'followup'`，
-  //    那会把 confirmation/reply 一起算进"首触" —— 询盘确认信刚随 wanew.com 产品询盘上线，
+  //    那会把 confirmation/reply 一起算进"首触" —— 上游确认信随官网产品询盘上线后，
   //    再不改，Joe 看到的"首触 N 封"里会混进事务信，又是一个**数字没错但没说自己由什么构成**的坑。
   return { total: r?.total ?? 0, initial, followup, auto: r?.auto ?? 0,
            cold: initial + followup, transactional: r?.transactional ?? 0 };
@@ -186,8 +186,8 @@ export async function sentTodayBreakdown(env: Env): Promise<{ total: number; ini
 
 // ⭐⭐ 系统级发信限额（Joe 定调：「不针对某一个发信邮箱，而是针对整套系统」）----------------
 //
-// 病史（2026-07-28 实测挖出）：闸曾是 `wanew_daily_limit` + 计数 `senderSentToday(hello@wanew.net)`
-//   —— **把限额绑死在一个发件地址上**。tejoy 退役后它成了唯一真闸，而生产从没设过该 key →
+// 病史（上游 2026-07-28 实测挖出）：闸曾是 `wanew_daily_limit` + 按单一发件地址计数
+//   —— **把限额绑死在一个发件地址上**。上游旧发件域退役后它成了唯一真闸，而生产从没设过该 key →
 //   静默落到默认 10 → 出信量从 ~85-100/天 砍到 **精确 10/天，连续三天没人发现**。
 //   没人发现的原因不是没人看：设置页那个写着「全部共用这个总闸」的框绑的是 `daily_send_limit`(25)，
 //   **早已不起作用** —— 界面在说谎。
@@ -203,8 +203,8 @@ export type LimitSource = "configured" | "legacy" | "default";
 
 // ---- 新域爬坡保护（ramp guard）------------------------------------------------
 // 为什么需要：天花板（Joe 设的 1000）**不是日均目标**，是上限。真实发量受"已批准线索数"约束，
-//   平时根本到不了。风险只在**某天批量批准几百家**时一次性喷出去 —— 对 wanew.net 这种
-//   刚起步的发件域，一天从 10 封跳到 500 封是最典型的"被判垃圾发信"路径，域名声誉一旦烧掉
+//   平时根本到不了。风险只在**某天批量批准几百家**时一次性喷出去 —— 对刚起步的发件域
+//   （AirSonde 的更是零信誉），一天从 10 封跳到 500 封是最典型的"被判垃圾发信"路径，域名声誉一旦烧掉
 //   要几个月养回来，比"少发几天"贵得多。
 // 机制（取最简那种）：批量通道的生效上限 = min(天花板, max(地板, 昨日冷发 × 系数))。
 //   地板保证起得来（昨天 0 封也允许今天发 30），系数保证每天最多涨 50%。
@@ -286,19 +286,21 @@ export async function coldSentToday(env: Env): Promise<number> {
   return r?.n ?? 0;
 }
 
-// ---- 发件域：tejoy 已退役，所有出站一律 wanew.net（品牌统一，公司即 Wanew）----
-// 原批㉘"在途会话不换发件人 → followup/reply 沿用该 lead 上一封 sender_email"的续发分支**已删**：
-//   正是它让老在途线索继续用 hello@tejoy.net 发，而正文/卖点/company_name 已全局 Wanew →
-//   造成"正文 Wanew／发件人 Tejoy"打架（Joe 在 outbox 存档看到）。现所有出站都 wanew，From/正文一致。
-//   SENDER_LEGACY(hello@tejoy.net) 仅保留在 IMAP 收信端（双箱 reply-fetch），出站一个都不出。
-export const SENDER_WANEW = "hello@wanew.net";
-export const SENDER_LEGACY = "hello@tejoy.net";   // 仅收信端(IMAP 双箱)用，绝不再作发件人
+// ---- 发件域：所有出站一律主发件域（品牌统一，From/正文一致）----
+// 上游病史：原批㉘"在途会话不换发件人"的续发分支让老在途线索继续用退役旧域发，
+//   而正文/卖点/company_name 已全局换新品牌 → 造成"正文新品牌／发件人旧品牌"打架（Joe 在 outbox 存档看到）。
+//   修法=续发分支已删，所有出站恒走 pickSender 单一真源。
+// ⚠️ AirSonde：主发件域候选 airsonde.net，**待 Joe 确认注册**（下面是占位值）。
+//   C1 发信结构性锁死（无 RESEND_API_KEY），此值不会产生任何真实出站。
+//   SENDER_LEGACY 在 AirSonde 无旧域，置空 —— 它仅在 IMAP 收信端作 fallback，空=fail-closed。
+export const SENDER_PRIMARY = "hello@airsonde.net";
+export const SENDER_LEGACY = "";   // AirSonde 无退役旧域；仅收信端(IMAP 双箱)语义保留
 export async function pickSender(_env: Env, _lead: any, _kind: string): Promise<string> {
-  return SENDER_WANEW;   // initial/confirmation/followup/reply 全部 wanew.net
+  return SENDER_PRIMARY;   // initial/confirmation/followup/reply 全部主发件域
 }
-/** 短品牌名随发件域（与 From 显示名 send.ts:pickSender 分支同一套逻辑 = 唯一真源）：wanew 域→"Wanew"，否则→env.SENDER_NAME||"Tejoy"。 */
+/** 短品牌名随发件域（与 From 显示名 send.ts:pickSender 分支同一套逻辑 = 唯一真源）：airsonde 域→"AirSonde"，否则→env.SENDER_NAME||"AirSonde"。 */
 export function senderBrand(env: Env, senderEmail: string): string {
-  return senderEmail.includes("wanew") ? "Wanew" : (env.SENDER_NAME || "Tejoy");
+  return senderEmail.includes("airsonde") ? "AirSonde" : (env.SENDER_NAME || "AirSonde");
 }
 /** 某线索某类邮件的**正文品牌** = 它将用的发件人对应的短品牌（走 pickSender = 与 deliverEmail 同结果 → From/正文品牌一致，守"在途不换品牌"红线）。 */
 export async function brandForLead(env: Env, lead: any, kind: string): Promise<string> {
@@ -323,8 +325,8 @@ export async function autoSentToday(env: Env): Promise<number> {
 }
 
 // ⭐ 熔断器：自动发送的前提条件，不是附加功能。
-// 实证：40 封手动 → 12 退订（30%）。手动时这个问题每天发生一次；自动之后 7×24 发生。
-// 按 15/天自动发就是每天 ~4-5 个退订，Resend 会标记账号、收件方开始把 hello@tejoy.net 判垃圾。
+// 实证（上游）：40 封手动 → 12 退订（30%）。手动时这个问题每天发生一次；自动之后 7×24 发生。
+// 按 15/天自动发就是每天 ~4-5 个退订，Resend 会标记账号、收件方开始把发件域判垃圾。
 export const BREAKER_WINDOW = 30;      // 窗口：最近 30 封**自动发出的初次开发信**
 export const BREAKER_THRESHOLD = 0.15; // 退订占比 ≥15% 即熔断
 
@@ -422,19 +424,17 @@ export async function deliverEmail(env: Env, lead: any, subject: string, body: s
         skipped: `这个邮箱已经收过开发信了（线索 #${dupAddr.lead_id} —— 同一家被重复录入），不再发第二封` };
     }
   }
-  // 批㉘：发件人按路由定（initial/confirmation→wanew;followup/reply→沿该 lead 发信史,红线=在途不换人）。
+  // 上游批㉘：发件人按路由定（现恒走 pickSender 单一真源，红线=在途不换人）。
   // env.SENDER_EMAIL 不再直接当发件人;显示名沿用现有 SENDER_NAME 逻辑(规格点名)。
   const senderEmail = await pickSender(env, lead, kind);
-  // ㉘b：显示名**随发件域**——wanew 域配 "Wanew"（否则新客户收到 "Tejoy <hello@wanew.net>"
-  // 品牌打架,恰是本批要消灭的现象）;tejoy 域沿用 env.SENDER_NAME||"Tejoy"（在途客户认识的名字,
-  // 与发件人红线同一条连续性道理）。
+  // ㉘b：显示名**随发件域**——防"正文品牌 A／发件人品牌 B"打架（上游真发生过，Joe 在 outbox 存档看到）。
   const senderName = senderBrand(env, senderEmail);
-  // #53：新邮件退订链接优先用公开 API 正门 api.wanew.com（PUBLIC_API_URL）；未配则回退 APP_URL（老 workers.dev）。
-  //   已发出的老邮件仍指老地址、workers.dev 路由永久保留 → 照常解析（additive，只加不断）。
+  // #53：新邮件退订链接优先用公开 API 正门（PUBLIC_API_URL）；未配则回退 APP_URL。
+  //   ⚠️ AirSonde C1 两者都指不到公开面（无发信能力，无实害）；发信域单落地时必须给公开 host。
   const appUrl = (env.PUBLIC_API_URL || env.APP_URL || "http://localhost:8787").replace(/\/+$/, "");
-  const company = await getSetting(env, "company_name", "Wanew Starlink Accessories");
+  const company = await getSetting(env, "company_name", "AirSonde");
   const address = await getSetting(env, "company_address", "");
-  const website = await getSetting(env, "company_website", env.SITE_URL || "https://tejoy.com");
+  const website = await getSetting(env, "company_website", env.SITE_URL || "https://airsonde.com");
 
   const token = crypto.randomUUID();
   const unsubUrl = `${appUrl}/u/${token}`;
@@ -442,7 +442,7 @@ export async function deliverEmail(env: Env, lead: any, subject: string, body: s
   //   回信的 In-Reply-To 会指向它 → 这是唯一"与发件地址无关"的确定匹配手段
   //   （对方用任何地址回都认得出 —— 今天 Michael 用 michael@ 回我们发给 sales@ 的信就是这个情况）。
   //   域名用发件域，符合 RFC 5322 对 msg-id 的要求（右半边应是发信方的域）。
-  const ourMessageId = `<${crypto.randomUUID()}@${(senderEmail.split("@")[1] || "tejoy.net")}>`;
+  const ourMessageId = `<${crypto.randomUUID()}@${(senderEmail.split("@")[1] || "airsonde.net")}>`;
 
   await ensureEmailColumns(env);   // 幂等补 error 列（每 isolate 只跑一次）
   const ins = await env.DB.prepare(
@@ -451,7 +451,7 @@ export async function deliverEmail(env: Env, lead: any, subject: string, body: s
   const emailId = ins.meta.last_row_id;
 
   // L4(#54)：BCC 存档——settings.bcc_archive 非空即对**所有外发**（开发信/跟进/回信/确认）密送。
-  // 默认空=关；Joe 建好 outbox@wanew.net 公共邮箱后在发信设置里填上即生效（代码先行）。
+  // 默认空=关；Joe 建好 outbox 公共邮箱（域待定）后在发信设置里填上即生效（代码先行）。
   const bccArchive = (await getSetting(env, "bcc_archive", "")).trim();
   try {
     const res = await fetch(RESEND_URL, {
@@ -549,7 +549,7 @@ export async function sendFollowup(env: Env, lead: any, warm = false): Promise<S
 
   let subject: string, body: string;
   try {
-    const brand = await brandForLead(env, lead, "followup");   // 正文品牌随发件人（in-flight 沿 tejoy=Tejoy / 新域=Wanew）
+    const brand = await brandForLead(env, lead, "followup");   // 正文品牌随发件人（pickSender 单一真源，恒 AirSonde）
     const raw = warm
       ? await writeWarmFollowup(env, brand, lead.company_name || "", await getProfile(env), original)
       : await writeFollowup(env, brand, lead.company_name || "", original);
@@ -567,7 +567,7 @@ export async function sendFollowup(env: Env, lead: any, warm = false): Promise<S
   // 跟进信主题接原信更自然
   if (!/^re:/i.test(subject)) {
     const os = parseEmail(original).subject;
-    if (os && os !== "Hello from Wanew") subject = "Re: " + os;
+    if (os && os !== "Hello from AirSonde") subject = "Re: " + os;
   }
   return await deliverEmail(env, lead, subject, body, "followup");
 }
@@ -770,12 +770,13 @@ export async function sendApprovedBatch(
 export async function sendInboundConfirmation(env: Env, lead: { id: number; email: string; company_name?: string }): Promise<SendOutcome> {
   if (!env.RESEND_API_KEY) return { ok: false, id: lead.id, error: "缺少 RESEND_API_KEY" };
   if (!lead.email) return { ok: false, id: lead.id, skipped: "无邮箱" };
-  const subject = "Your Wanew wholesale price list request";
+  // ⚠️ AirSonde 文案占位草稿（C1），待 Joe 审定；C1 无 RESEND_API_KEY，此信发不出
+  const subject = "Your AirSonde wholesale price list request";
   const body =
     "Hi there,\n\n" +
-    "Thanks for requesting our wholesale price list for Starlink accessories. We've received your request — our team will email you the catalog and trade pricing shortly.\n\n" +
-    "Wanew is the supply source behind many top-selling Starlink accessory listings — dropship-ready, no minimum-order games, and fast fulfillment for resellers, dealers, and installers worldwide.\n\n" +
-    "Talk soon,\nThe Wanew Team";
+    "Thanks for requesting our wholesale price list for air quality monitors. We've received your request — our team will email you the catalog and trade pricing shortly.\n\n" +
+    "AirSonde builds IAQ monitors factory-direct — OEM/ODM private-label, flexible MOQs, and integration-ready hardware for brands, distributors, and HVAC integrators worldwide.\n\n" +
+    "Talk soon,\nThe AirSonde Team";
   return await deliverEmail(env, lead, subject, body, "confirmation");
 }
 

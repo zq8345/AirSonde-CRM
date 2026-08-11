@@ -44,7 +44,7 @@ const REPLY_LABEL: Record<string, string> = {
   not_interested: "无兴趣", other: "其他",
 };
 
-// 单条热回复卡片（标题含 WANEW，兼容“自定义关键词”安全设置）
+// 单条热回复卡片（标题含 AIRSONDE，兼容“自定义关键词”安全设置）
 export function replyCard(r: { company?: string; from?: string; category?: string; summary?: string; snippet?: string; appUrl?: string }) {
   const elements: any[] = [
     { tag: "div", fields: [
@@ -61,7 +61,7 @@ export function replyCard(r: { company?: string; from?: string; category?: strin
       config: { wide_screen_mode: true },
       header: {
         template: r.category === "complaint" ? "red" : "green",
-        title: { tag: "plain_text", content: `WANEW 新回复 · ${REPLY_LABEL[r.category || "other"] || r.category}` },
+        title: { tag: "plain_text", content: `AIRSONDE 新回复 · ${REPLY_LABEL[r.category || "other"] || r.category}` },
       },
       elements,
     },
@@ -79,7 +79,7 @@ export function clickCard(d: { company?: string; to?: string; appUrl?: string })
     msg_type: "interactive",
     card: {
       config: { wide_screen_mode: true },
-      header: { template: "orange", title: { tag: "plain_text", content: "WANEW 🔥 有人点击了开发信" } },
+      header: { template: "orange", title: { tag: "plain_text", content: "AIRSONDE 🔥 有人点击了开发信" } },
       elements,
     },
   };
@@ -108,7 +108,7 @@ export function inboundCard(d: { company?: string; email?: string; country?: str
     msg_type: "interactive",
     card: {
       config: { wide_screen_mode: true },
-      header: { template: "orange", title: { tag: "plain_text", content: d.isProduct ? "WANEW 产品询盘 🛒" : "WANEW 落地页新询盘 📥" } },
+      header: { template: "orange", title: { tag: "plain_text", content: d.isProduct ? "AIRSONDE 产品询盘 🛒" : "AIRSONDE 落地页新询盘 📥" } },
       elements,
     },
   };
@@ -131,7 +131,7 @@ export function digestCard(d: { inserted: number; analyzed: number; replies: num
     msg_type: "interactive",
     card: {
       config: { wide_screen_mode: true },
-      header: { template: "blue", title: { tag: "plain_text", content: "WANEW 获客 · 6 小时简报" } },
+      header: { template: "blue", title: { tag: "plain_text", content: "AIRSONDE 获客 · 6 小时简报" } },
       elements,
     },
   };
@@ -142,7 +142,7 @@ export function testCard(appUrl?: string) {
   return {
     msg_type: "interactive",
     card: {
-      header: { template: "turquoise", title: { tag: "plain_text", content: "WANEW 飞书通知 · 测试成功 ✅" } },
+      header: { template: "turquoise", title: { tag: "plain_text", content: "AIRSONDE 飞书通知 · 测试成功 ✅" } },
       elements: [
         { tag: "div", text: { tag: "lark_md", content: "如果你在群里看到这张卡片，说明获客系统已能推送到本群。\n今后有**热回复**会实时推，每 6 小时来一条**简报**。" } },
         ...(appUrl ? [{ tag: "action", actions: [{ tag: "button", text: { tag: "plain_text", content: "打开后台" }, url: appUrl, type: "primary" }] }] : []),

@@ -1,5 +1,7 @@
 // Landing 落地页 /catalog：公开、英文、面向经销/分销/集成/安装买家。索取批发价单表单 → POST /api/inbound。
-// 自包含 HTML（内联 CSS/JS，无外部资源）。不放任何星链价格。
+// 自包含 HTML（内联 CSS/JS，无外部资源）。不放任何价格。
+// ⚠️ AirSonde 文案为 C1 搬迁时的**占位草稿**（结构照上游，品类/卖点/FAQ 换成 IAQ 泛写），
+//    待 Joe 审定后重写；且 C1 未配 API_HOST → 本页无公开入口，纯留壳。
 
 const COUNTRY_OPTIONS = [
   ["us", "United States"], ["ca", "Canada"], ["au", "Australia"], ["nz", "New Zealand"],
@@ -10,19 +12,19 @@ const COUNTRY_OPTIONS = [
 ].map(([v, n]) => `<option value="${v}">${n}</option>`).join("") + `<option value="">Other</option>`;
 
 const CATEGORIES = [
-  ["Mounts &amp; Brackets", "Roof, pole, wall &amp; pipe mounts, adapters"],
-  ["Cables &amp; Adapters", "Extension &amp; replacement cables, connectors"],
-  ["Weatherproof Enclosures", "Outdoor housings, junction &amp; router boxes"],
-  ["Power Kits &amp; UPS", "12V/48V PoE, DC converters, battery kits"],
-  ["Antenna &amp; Signal Gear", "Grommets, masts, alignment &amp; protection"],
-  ["Custom &amp; OEM", "Private-label &amp; bulk custom accessories"],
+  ["Indoor Air Quality Monitors", "CO2, PM2.5/PM10, TVOC, temperature &amp; humidity"],
+  ["Wall &amp; Panel Displays", "Wall-mount monitors, desktop units, LED panels"],
+  ["Sensors &amp; Modules", "Replacement sensors, OEM modules, calibration"],
+  ["Connectivity &amp; Gateways", "WiFi, Modbus/BACnet, cloud &amp; API integration"],
+  ["Commercial &amp; HVAC Integration", "BMS-ready units for buildings, schools &amp; offices"],
+  ["Custom &amp; OEM/ODM", "Private-label &amp; custom-spec monitors at volume"],
 ].map(([t, d]) => `<div class="cat"><h3>${t}</h3><p>${d}</p></div>`).join("");
 
 const FAQS = [
-  ["Do you dropship?", "Yes — blind dropship. We ship directly to your customers with your branding, no Wanew marks."],
-  ["Is there a minimum order?", "No minimum-order games. We keep it flexible for growing resellers and scale with you."],
-  ["How fast is fulfillment?", "Fast dispatch from ready stock, with stable supply for repeat volume."],
-  ["Can you do custom / OEM?", "Yes, for volume partners — private-label and custom accessories are available."],
+  ["Do you do private label / ODM?", "Yes — your branding, your spec, no AirSonde marks. Private-label is our core business."],
+  ["Is there a minimum order?", "Flexible MOQs for growing brands and distributors — we scale with you."],
+  ["Which certifications do you support?", "CE / FCC / RoHS on standard lines; certification support for custom builds."],
+  ["Can you integrate with our platform?", "Yes — Modbus/BACnet, WiFi and cloud/API options for BMS and app integration."],
 ].map(([q, a]) => `<div class="faq"><h4>${q}</h4><p>${a}</p></div>`).join("");
 
 export function catalogHtml(): string {
@@ -31,8 +33,8 @@ export function catalogHtml(): string {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Wanew — Wholesale Starlink Accessories | Request Trade Price List</title>
-<meta name="description" content="Wholesale Starlink accessories straight from the source. In-house supply, dropship-ready fulfillment and trade pricing for resellers, dealers and installers worldwide.">
+<title>AirSonde — Air Quality Monitors OEM/ODM | Request Trade Price List</title>
+<meta name="description" content="Air quality monitors straight from the manufacturer. OEM/ODM, private-label and trade pricing for brands, distributors and HVAC integrators worldwide.">
 <style>
   :root{ --navy:#0f2740; --blue:#1c74d4; --ink:#1a2330; --muted:#5b6b7f; --bg:#f5f8fc; --line:#e2e9f2; --accent:#0ea5e9; }
   *{ box-sizing:border-box; }
@@ -84,12 +86,12 @@ export function catalogHtml(): string {
 <body>
   <header class="hero">
     <div class="wrap">
-      <p class="brand">WANEW · STARLINK ACCESSORIES SUPPLY</p>
-      <h1>Wholesale Starlink Accessories — Straight From the Source</h1>
-      <p class="sub">Mounts, cables, weatherproof enclosures, power kits &amp; antenna gear. In-house supply, volume trade pricing, and dropship-ready fulfillment for resellers, dealers &amp; installers worldwide.</p>
+      <p class="brand">AIRSONDE · AIR QUALITY MONITORING SUPPLY</p>
+      <h1>Air Quality Monitors — Straight From the Manufacturer</h1>
+      <p class="sub">CO2, PM2.5, TVOC &amp; multi-sensor IAQ monitors. Factory-direct supply, OEM/ODM private-label, and volume trade pricing for brands, distributors &amp; HVAC integrators worldwide.</p>
       <a class="btn" href="#request">Request Wholesale Price List</a>
       <div class="trust">
-        <span>In-house sourcing</span><span>Dropship-ready</span><span>No minimum-order games</span><span>Trusted by 100+ resellers</span>
+        <span>Factory-direct</span><span>OEM/ODM ready</span><span>Flexible MOQs</span><span>CE / FCC / RoHS</span>
       </div>
     </div>
   </header>
@@ -97,20 +99,20 @@ export function catalogHtml(): string {
   <section>
     <div class="wrap">
       <h2>Product Categories</h2>
-      <p class="lead">A full accessory line for Starlink Standard, Mini, and maritime/enterprise setups — built for resale, install and dropship.</p>
+      <p class="lead">A full IAQ monitoring line for homes, offices, schools and commercial buildings — built for resale, integration and private label.</p>
       <div class="grid">${CATEGORIES}</div>
     </div>
   </section>
 
   <section class="why">
     <div class="wrap">
-      <h2>Why partner with Wanew</h2>
-      <p class="lead">We're the supply behind many top-selling Starlink accessory listings. Sell more, stock smarter, ship faster.</p>
+      <h2>Why partner with AirSonde</h2>
+      <p class="lead">Factory-direct IAQ hardware with the flexibility big brands won't give you. Sell more, integrate faster, keep your margin.</p>
       <div class="grid4">
-        <div class="card"><b>In-house sourcing</b><p>Direct supply, stable stock, and pricing that leaves you real margin.</p></div>
-        <div class="card"><b>Dropship-ready</b><p>Blind dropship to your customers — no MOQ games, flexible for growth.</p></div>
-        <div class="card"><b>Fast fulfillment</b><p>Quick dispatch from ready stock, reliable for repeat volume.</p></div>
-        <div class="card"><b>Custom &amp; OEM</b><p>Private-label and bulk custom accessories for volume partners.</p></div>
+        <div class="card"><b>Factory-direct</b><p>Manufacturer supply, stable stock, and pricing that leaves you real margin.</p></div>
+        <div class="card"><b>OEM/ODM ready</b><p>Private-label and custom-spec builds — your brand on proven hardware.</p></div>
+        <div class="card"><b>Integration-friendly</b><p>Modbus/BACnet, WiFi and cloud/API options for BMS and app ecosystems.</p></div>
+        <div class="card"><b>Certification support</b><p>CE / FCC / RoHS on standard lines; support for custom compliance needs.</p></div>
       </div>
     </div>
   </section>
@@ -134,7 +136,7 @@ export function catalogHtml(): string {
             <div class="field"><label>Country</label><select name="country">${COUNTRY_OPTIONS}</select></div>
           </div>
           <div class="row2">
-            <div class="field"><label>Where do you sell?</label><input name="where_sell" maxlength="300" placeholder="e.g. Shopify store, marine dealer, Amazon US"></div>
+            <div class="field"><label>Where do you sell?</label><input name="where_sell" maxlength="300" placeholder="e.g. own brand, HVAC projects, Amazon US"></div>
             <div class="field"><label>Monthly volume</label><select name="monthly_volume">
               <option value="">Select…</option><option>&lt; 100 units</option><option>100–1,000 units</option><option>1,000–10,000 units</option><option>10,000+ units</option><option>Not sure yet</option>
             </select></div>
@@ -147,7 +149,7 @@ export function catalogHtml(): string {
     </div>
   </section>
 
-  <footer><div class="wrap">Wanew — Starlink accessories supply for resellers, dealers &amp; installers worldwide.</div></footer>
+  <footer><div class="wrap">AirSonde — Air quality monitoring supply for brands, distributors &amp; integrators worldwide.</div></footer>
 
   <script>
     var f = document.getElementById('inbound-form'), msg = document.getElementById('msg'), btn = document.getElementById('submitbtn');

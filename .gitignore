@@ -9,6 +9,5 @@ dist/
 .cf-token
 *.token
 .secrets/
-.github-pat-wanew-admin
-# 通配所有 GitHub PAT 文件（Wanew-CRM 是 Public 仓，防 git add . 误提交泄密）
+# 通配所有 GitHub PAT 文件（防 git add . 误提交泄密）
 .github-pat-*

@@ -1,49 +1,52 @@
-# TEJOY AI 自动获客系统
+# AirSonde-CRM · AI 自动获客系统
 
-为 [tejoy.com](https://tejoy.com/)（星链 Starlink 配件电商）自动寻找有配件需求的 B2B 客户。
-全 Serverless 架构：Cloudflare Workers + D1 + 静态资源 + OpenRouter + Resend + Migadu。
+> **fork 自 `AI云端获客`（Wanew-CRM 生产仓）@ `e2d0ad051f4991c8d772b9e8af7a32abd3082b3b`**
+> （分支 feat/access-jwt-authoritative 工作树，2026-08-11 搬迁，派单 C1）。
+> 那 13k 行和 16 个 schema 文件是上游几个月的踩坑史——本仓的原则是**搬和改名，不重写**。
+> 上游事故注释一律保留（品牌词已中性化），它们是这套系统为什么长这样的原始记录。
 
-## 分阶段路线
+为 [airsonde.com](https://airsonde.com/)（欧美 B2B/ODM 空气质量检测仪）自动寻找潜在客户。
+全 Serverless 架构：Cloudflare Workers + D1 + 静态资源 + OpenRouter + Resend + Lark IMAP。
 
-- **P0 域名**（并行）：tejoy.net 配 SPF/DKIM/DMARC + Resend 发 + Migadu 收
-- ✅ **P1 后台 + D1 + CSV 导入**
-- ✅ **P2 接 OpenRouter**：抓官网 + 打分 + 写开发信 ← 当前（需填 OpenRouter key 才能实跑）
-- **P3** 接 Resend：低量发信 + 退订 + 状态回写
-- **P4** 接 Migadu：收回复 + 分类
-- **P5** 自动搜索采集（数据验证有效后）
+## ⛔ 当前状态（C1 骨架期）：发信结构性锁死
 
-## 启用 AI 分析（P2）
+- `RESEND_API_KEY` / `LARK_WEBHOOK` / `LARK_IMAP_PASS` / `SEARCH_API_KEY` / `OPENROUTER_API_KEY` **全部未配** = 发信/通知/收信/搜索/AI 逐项 fail-closed
+- dev 出站闸（`src/devguard.ts`）保持激活：本地进程默认只准出 localhost
+- 发信域未定（候选 airsonde.net，待 Joe 确认）；飞书 webhook 待 Joe 建新群，**绝不复用 Wanew 的**
+- 公开 API 正门（API_HOST/PUBLIC_API_URL）故意不配 = 公开分支不激活，全站在 Access 门后
 
-1. 去 https://openrouter.ai/keys 生成 key，填进 `.dev.vars` 的 `OPENROUTER_API_KEY=`
-2. 重启 `npm run dev`
-3. 后台点某条线索 →「AI 分析」，或工具栏「批量 AI 分析」（一次处理 5 条 new 线索）
-4. 模型可在 `wrangler.jsonc` 的 `vars` 里改：`SCORE_MODEL`（打分，便宜）、`EMAIL_MODEL`（写信，质量高）
-5. 「客户画像」按钮可编辑打分/写信依据；抓取效果自查：`GET /api/debug/scrape?url=<网址>`
+## 链路（继承上游）
+
+discover（Serper 搜索/目录）→ scrape（抓官网）→ findemail → AI 打分+写信（OpenRouter）
+→ **人工审批**（humanapprove 闸，永不放开全自动）→ 发信（Resend，节流+熔断+suppress 压制）
+→ 收回复（Lark IMAP + 回复匹配）→ 飞书通知
 
 ## 本地开发
 
 ```bash
 npm install
-npm run db:init:local     # 建表（本地 D1）
-npm run db:seed:local     # 可选：灌 5 条样例数据
-npm run dev               # 打开 http://localhost:8787
+npm run db:init:local     # 建表（本地 D1，schema.sql 已是合并后的单一真源）
+npm run dev               # http://localhost:8787
 ```
 
-后台功能（P1）：客户列表（按状态分组）、详情、CSV 导入（自动去重）、批准/忽略/黑名单。
-
-## 部署到 Cloudflare（P1 完成后）
+## 部署
 
 ```bash
-npx wrangler login
-npx wrangler d1 create tejoy_getke          # 把返回的 database_id 填进 wrangler.jsonc
-npm run db:init:remote
-npm run deploy
+npm run deploy            # 前置 typecheck 是部署闸，别绕
 ```
+
+生产域 `crm.airsonde.com`（custom_domain，Cloudflare Access 门后）。
+
+## D1 结构
+
+- `schema.sql` — **单一真源**（上游 #45 已把 14 个 schema_*.sql 增量合并进来，新库跑它一次即全）
+- `migrations/0001_emails_error.sql` — 晚于 #45 合并的唯一增量（emails.error），新库需补跑
+- `schema_*.sql` — 上游历史增量，仅作留档与旧库补列用，**新库不要跑**（会 duplicate column）
 
 ## 目录
 
-- `src/index.ts` — Worker + Hono API
-- `src/csv.ts` — CSV 解析与字段映射
+- `src/index.ts` — Worker + Hono API（主路由与 auth 中间件）
+- `src/send.ts` — 发信（节流/熔断/审批闸/suppress）
+- `src/devguard.ts` — dev 出站闸门（本地不许碰真实第三方）
 - `public/index.html` — 后台前端（零构建）
-- `schema.sql` — D1 表结构（覆盖 P1–P4）
-- `wrangler.jsonc` — Cloudflare 配置
+- `docs/` — **上游 Wanew-CRM 历史文档，原样保留**（品牌词属历史事实，不改写）

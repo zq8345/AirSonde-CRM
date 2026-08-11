@@ -1,34 +1,34 @@
 // P5 自动找客户：关键词 → 搜索 API → 提取公司官网 → 去重入库
 import type { Env } from "./index";
 
-// 默认关键词池（E2：转向 经销/分销/集成/安装 渠道 + 配件×批发，避开亚马逊铺货红海）
+// 默认关键词池（上游 E2 思路沿用：搜 渠道/集成/分销，避开铺货红海）
+// ⚠️ AirSonde 关键词**草稿**（C1 搬迁时改写，待 Joe 审 + 按搜索数据迭代；后台关键词页可随时改）
 export const DEFAULT_KEYWORDS = [
-  // 渠道型 × Starlink
-  "Starlink dealer",
-  "Starlink distributor",
-  "Starlink wholesale supplier",
-  "Starlink reseller",
-  "Starlink authorized reseller",
-  "Starlink installer",
-  "satellite internet integrator",
+  // 渠道型 × IAQ
+  "air quality monitor distributor",
+  "air quality monitor wholesale",
+  "IAQ monitor supplier",
+  "air quality sensor distributor",
+  "environmental monitoring equipment distributor",
+  // 品牌方 / 白牌
+  "air quality monitor private label",
+  "air quality monitor OEM",
+  "IAQ device brand",
   // 垂直集成/安装
-  "marine satellite internet installer",
-  "marine electronics dealer",
-  "RV satellite internet installer",
-  "off-grid internet installer",
-  "off-grid solar installer",
-  "WISP wireless internet provider",
-  "wireless ISP Starlink",
-  "remote connectivity provider",
+  "HVAC controls integrator",
+  "building automation systems integrator",
+  "BMS integrator air quality",
+  "indoor air quality services company",
+  "ventilation systems installer",
+  "smart building solutions provider",
   // 相邻品类 分销/批发
-  "satellite communication equipment distributor",
-  "marine electronics wholesaler",
-  "RV parts wholesale distributor",
-  // 配件意图 × 批发/经销
-  "Starlink mount dealer",
-  "Starlink mount wholesale",
-  "Starlink cable wholesale",
-  "Starlink enclosure wholesale",
+  "HVAC parts wholesale distributor",
+  "test and measurement instruments distributor",
+  "electrical wholesale distributor sensors",
+  // 场景意图
+  "school air quality monitoring provider",
+  "office air quality compliance",
+  "CO2 monitor bulk supplier",
 ];
 
 // E2：每条搜索追加的排除串（滤掉中国铺货平台）。
@@ -38,7 +38,9 @@ export const EXCLUDE_QUERY = "-alibaba -aliexpress -made-in-china -dhgate -temu"
 
 interface SearchResult { title: string; url: string; }
 
-// ⭐⭐ 批㉑：目标国家（gl 代码 → 中文名），**覆盖 Starlink 已开放的全部市场**。
+// ⭐⭐ 上游批㉑：目标国家（gl 代码 → 中文名）。
+//   ⚠️ AirSonde 沿用上游国家表（当时按 Starlink 市场覆盖收录）作为 UI/校验真源；
+//     AirSonde 主攻欧美，搜索面收窄是数据配置（getSearchConfig）不是改表，待后续单定。
 //   Joe 拍板："把所有星链能辐射的国家和地区全部录入，我们又不挑客户。"
 //   —— 微市场"搜出来少"是结果不是门槛（cayelectronics.vg 英属维尔京群岛就是我们库里点过名的
 //      核心目标；船用/离网星链配件的客户密度和国家 GDP/人口不相关）。先跑，后按数据调。
@@ -490,7 +492,7 @@ export async function runNmeaDiscovery(env: Env, affcode: string): Promise<Direc
   let html = "";
   try {
     const res = await fetch(`https://web.nmea.org/directory/results/results.aspx?affcode=${encodeURIComponent(aff)}&ysort=true`, {
-      headers: { "user-agent": "WanewBot/1.0 (+https://wanew.com; contact hello@wanew.com)" },
+      headers: { "user-agent": "AirSondeBot/1.0 (+https://airsonde.com; contact hello@airsonde.com)" },
     });
     if (!res.ok) { out.errors.push(`HTTP ${res.status}`); return out; }
     html = await res.text();
@@ -575,7 +577,7 @@ export async function runLinkHarvest(env: Env, url: string, source: string, blac
   const out: DirectoryResult = { fetched: 0, inserted: 0, skipped: 0, noSite: 0, social: 0, errors: [] };
   let html = "";
   try {
-    const res = await fetch(url, { headers: { "user-agent": "WanewBot/1.0 (+https://wanew.com; contact hello@wanew.com)" } });
+    const res = await fetch(url, { headers: { "user-agent": "AirSondeBot/1.0 (+https://airsonde.com; contact hello@airsonde.com)" } });
     if (!res.ok) { out.errors.push(`HTTP ${res.status}`); return out; }
     html = await res.text();
   } catch (e: any) { out.errors.push(String(e?.message || e)); return out; }

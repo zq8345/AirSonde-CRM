@@ -1,14 +1,14 @@
 // 抓取客户官网正文：首页 + 最多几个相关子页（about/contact/products/services）
-// ⭐ UA：原来是纯 bot UA（`Mozilla/5.0 (compatible; TejoyBot/0.1; …)`），实测**被一批站直接挡**——
+// ⭐ UA：原来是纯 bot UA（`Mozilla/5.0 (compatible; AirSondeBot/0.1; …)`），实测**被一批站直接挡**——
 //   newegg / currys.co.uk / konga / harveynorman.co.nz 这类大零售，用浏览器 UA curl 是 200，
 //   用我们的 UA 就抓不到。很多 WAF 只做**粗糙的 UA 形状过滤**，不是站长真的表达"禁止机器人"。
 //
 // ⚠️ 这里刻意选**折中**，不做完全冒充：前半段是标准浏览器形状（过得了那类粗糙过滤），
-//   **后半段保留 `WanewBot/0.1 (+https://wanew.com)`** —— 站长依然一眼认得出我们是谁、想封随时封得掉。
+//   **后半段保留 `AirSondeBot/0.1 (+https://airsonde.com)`** —— 站长依然一眼认得出我们是谁、想封随时封得掉。
 //   完全伪装成 Chrome = 规避访问控制，那不是我们该干的事。
 //   配套：**对明确 403 的站不重试、不绕过**（见 fetchPage —— 403 直接记原因走人），
 //   目录抓取那条线也照旧守 Crawl-delay 与礼貌节奏。
-const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36 WanewBot/0.1 (+https://wanew.com)";
+const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36 AirSondeBot/0.1 (+https://airsonde.com)";
 // 原来只发 `accept: text/html`，有站会直接 415（实测 tbs-electronics.com）。给一个正常浏览器的 accept。
 const ACCEPT = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
 // ⭐ 首页给足时间，子页保持紧。

@@ -1,14 +1,15 @@
 {
-  // Wanew-CRM（原 TEJOY AI 获客）- Cloudflare Workers 配置
-  // D1 database_id 已配（见下方 d1_databases，真值勿改）；database_name 仍为 tejoy_getke（真 D1 名，改名=另起迁移，勿动）。
+  // AirSonde-CRM - Cloudflare Workers 配置
+  // fork 自 Wanew-CRM（AI云端获客）@ e2d0ad0；结构照抄上游，值换 AirSonde。
+  // D1 database_id 见下方 d1_databases（airsonde_crm，建库时生成，真值勿改）。
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "wanew-crm",
+  "name": "airsonde-crm",
   "main": "src/index.ts",
   "compatibility_date": "2025-07-01",
   "compatibility_flags": ["nodejs_compat"],
 
   // 后台前端静态资源（public/ 目录）
-  // run_worker_first: Worker 先跑，让 Basic Auth 中间件也能保护静态页面
+  // run_worker_first: Worker 先跑，让 auth 中间件也能保护静态页面
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",
@@ -19,93 +20,67 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "tejoy_getke",
-      "database_id": "86d5a4d9-0a32-4fff-aaeb-3857a384b62a"
+      "database_name": "airsonde_crm",
+      "database_id": "TBD-CREATED-IN-C1"
     }
   ],
 
   // 非机密变量（模型随时可改）。机密（OPENROUTER_API_KEY）：
   //   本地 → .dev.vars 文件；线上 → wrangler secret put OPENROUTER_API_KEY
+  //
+  // ⛔ C1 发信结构性锁死（不是"先不用"，是发不出）：
+  //   RESEND_API_KEY / LARK_WEBHOOK / LARK_IMAP_PASS / SEARCH_API_KEY / OPENROUTER_API_KEY
+  //   一律**不配** = fail-closed。飞书 webhook 绝不复用 Wanew 的，等 Joe 建新群再配。
   "vars": {
-    // 注意：该 OpenRouter 账号被美国厂商(Anthropic/OpenAI/Google)按区域 ToS 拒绝(403)，
-    // 只能用中国厂商模型。打分=DeepSeek(便宜)，写信=Qwen 高阶(质量好)。
+    // 该 OpenRouter 账号被美国厂商(Anthropic/OpenAI/Google)按区域 ToS 拒绝(403)，
+    // 只能用中国厂商模型。打分=DeepSeek(便宜)，写信=Qwen 高阶(质量好)。（上游实测结论，沿用）
     "SCORE_MODEL": "deepseek/deepseek-chat",
     "EMAIL_MODEL": "qwen/qwen3.7-max",
-    "SITE_URL": "https://wanew.com",
+    "SITE_URL": "https://airsonde.com",
 
-    // P3 发信身份。机密 RESEND_API_KEY 放 .dev.vars / wrangler secret。
-    // APP_URL 用于生成退订链接，部署后改成线上地址。
-    // tejoy 发件退役后：实际发件人由 send.ts pickSender 恒返回 hello@wanew.net；下面两个已非发件真源。
-    //   SENDER_EMAIL 仅剩 imap.ts 收信端 fallback（LARK_IMAP_USER 未配时才用，收信保留 tejoy）；SENDER_NAME 仅 senderBrand 兜底（现恒走 wanew→"Wanew"）。
-    "SENDER_EMAIL": "hello@tejoy.net",
-    "SENDER_NAME": "Wanew",
-    // APP_URL：退订链接用（必须公开可访问，故用 workers.dev，不放 Access 后面）
-    "APP_URL": "https://wanew-crm.zq8345.workers.dev",
-    // #53 api.wanew.com 公开 API 正门（additive-only，只加不断）：
-    //   ① PUBLIC_API_URL = 新邮件退订链接 base（send.ts 优先于 APP_URL 用它）；
-    //   ② 新的 Resend webhook / Lark 回调注册地址走它；
-    //   ③ 老正门（workers.dev + tejoy-ai-getke shim）永久保留、绝不停用——
-    //      已发出的邮件里的退订链接、已在 Resend/Lark 注册的回调 URL 全靠老地址活着（合规红线）。
-    //   auth 中间件：api.wanew.com 上只放公开端点（/u · /api/webhooks/* · /catalog · /api/inbound），
-    //   其余路径 404，admin 面绝不暴露在公开正门。
-    //   ⚠️ 必须公开：**不要**在 Zero Trust 给 api.wanew.com 建 Access 应用（否则退订/webhook 被边缘拦=合规违规）。
-    "API_HOST": "api.wanew.com",
-    "PUBLIC_API_URL": "https://api.wanew.com",
+    // 发信身份（⚠️ 全部待发信域单落地；候选 airsonde.net 待 Joe 确认注册）。
+    // SENDER_EMAIL 仅剩 imap.ts 收信端 fallback（LARK_IMAP_USER 未配时才用）；
+    // SENDER_NAME 仅 senderBrand 兜底。真实发件人 = send.ts pickSender（现为 airsonde.net 占位）。
+    "SENDER_EMAIL": "",
+    "SENDER_NAME": "AirSonde",
+    // APP_URL：退订链接 base。⚠️ 占位值指向 Access 门后的 crm 域 —— 发信开通前**必须**
+    //   换成公开可达 host（Access 挡退订链接 = 合规违规，见上游 #53 注释）。C1 零发信，无实害。
+    "APP_URL": "https://crm.airsonde.com",
+    // 上游的 API_HOST / PUBLIC_API_URL（公开 API 正门）**故意不配**：
+    //   未配 = #53 公开分支不激活（landing/退订/webhook 无公开面），全部路径留在 Access 门后。
+    //   AirSonde 开发信/落地页上线时再随发信域单一起配。
     // ADMIN_HOST/ADMIN_URL：团队后台自定义域名，受 Cloudflare Access 保护（每人邮箱登录）
-    // 批㉕a 迁域：ADMIN_HOST **逗号分隔多值**，过渡期新(crm.wanew.com)旧(admin.tejoy.com)并行，
-    //   两个域名都要求 cf-access-authenticated-user-email（auth 中间件按列表判断）。
-    // 批㉕a 第二刀：ADMIN_URL 已切到 crm.wanew.com（飞书卡片"打开后台"按钮从此指新域）；
-    //   同时 auth 中间件对 admin.tejoy.com 一律 301 → crm.wanew.com（老域名请求全部转走）。
-    //   ADMIN_HOST 仍保留两值：301 兜底之外，老域名请求仍能被识别进 admin 分支（防御）。
-    "ADMIN_HOST": "admin.tejoy.com,crm.wanew.com",
-    "ADMIN_URL": "https://crm.wanew.com",
+    "ADMIN_HOST": "crm.airsonde.com",
+    "ADMIN_URL": "https://crm.airsonde.com",
 
-    // P5 自动找客户。搜索提供商=serper（serper.dev，Google 搜索 API，有免费额度）。
-    // 机密 SEARCH_API_KEY 放 .dev.vars / wrangler secret。
+    // 自动找客户。搜索提供商=serper（serper.dev）。机密 SEARCH_API_KEY 不配 = discovery fail-closed。
     "SEARCH_PROVIDER": "serper",
 
-    // 后台登录用户名（非机密）。密码 ADMIN_PASSWORD 用 wrangler secret / .dev.vars。
-    "ADMIN_USER": "tejoy",
+    // 后台 Basic Auth 应急入口用户名（非机密）。密码 ADMIN_PASSWORD 不配 = 该入口 fail-closed。
+    "ADMIN_USER": "airsonde",
 
-    // P4 收回复：Lark 公共邮箱 IMAP。密码 LARK_IMAP_PASS 用 secret / .dev.vars。
+    // 收回复：Lark IMAP。密码 LARK_IMAP_PASS 不配 = 收信 fail-closed。USER 待发信域单定。
     "LARK_IMAP_HOST": "imap.larksuite.com",
     "LARK_IMAP_PORT": "993",
-    "LARK_IMAP_USER": "hello@tejoy.net"
+    "LARK_IMAP_USER": ""
   },
 
-  // Cron：每 6 小时找客户 + 分析（部署后生效；本地 dev 不自动跑）。
-  // ⚠️ cron 的 12 条/班是**日常新增线索**的节奏，不是批量工具 ——
-  //    Joe 的标准："如果每天只能分析30-50个信息，我压根都不需要用AI了。"
-  //    全量重扫走的是**交互式批量通道**（后台「重扫全部」按钮，见 /api/rescan/*），
-  //    那条通道的容量 Joe 手点实测过：一小时两百多条。
+  // Cron：沿用上游 24 班节奏（0 * * * *）。C1 无任何 key，所有出站动作 fail-closed，
+  // cron 空转只做无副作用的内部整理；discovery 仍只在 0/6/12/18 判定（index.ts isDiscoveryRound）。
   "triggers": {
-    // ⭐ P0-1：4 班 → **24 班**。Joe 要 100 封/天，而一封信实测 31-43s（瓶颈是 AI 写草稿），
-    //    4 班怎么都装不下：25 封/班串行要 15 分钟，正好贴死 Cron Trigger 的 15 分钟墙。
-    //    ⚠️ **discovery / 目录抓取仍然只在 0/6/12/18 跑**（见 index.ts 的 isDiscoveryRound）——
-    //       它们烧 Serper 积分/爬别人的站，跟着提频等于烧钱 ×6。Serper 用量一个字节不变。
     "crons": ["0 * * * *"]
   },
 
-  // 团队后台自定义域名（Cloudflare 自动建 DNS + 证书）。前提：域名在同一 CF 账号（tejoy.com、wanew.com 都在）。
-  // Access（Zero Trust）在后台对该域名启用邮箱验证码登录后，团队即可每人邮箱登录。
-  // 批㉕a 迁域：新增 crm.wanew.com（品牌统一，"后台按功能命名=CRM"），**保留 admin.tejoy.com 并行**，
-  //   custom_domain 会自动建 DNS+证书；过渡期两域名都能用，等 Joe 配好新域 Access 再切 ADMIN_URL + 301。
-  // #53：api.wanew.com = 公开 API 正门（**无 Access**）。custom_domain 自动建 DNS+证书；
-  //   部署后**不要**给它配 Zero Trust Access 应用——它服务退订/webhook/落地页，必须公开可达。
+  // 团队后台自定义域名（Cloudflare 自动建 DNS + 证书）。airsonde.com 在同一 CF 账号。
+  // Access 应用 airsonde-crm（crm.airsonde.com）Joe 已建好，worker 绑域即生效。
   "routes": [
-    { "pattern": "admin.tejoy.com", "custom_domain": true },
-    { "pattern": "crm.wanew.com", "custom_domain": true },
-    { "pattern": "api.wanew.com", "custom_domain": true }
+    { "pattern": "crm.airsonde.com", "custom_domain": true }
   ],
 
-  // ⭐ 可观测性：**开日志留存**。
-  // 起因（2026-07-28）：要回答"cron 那步到底跑没跑"时发现**历史日志根本不可查** ——
-  //   `wrangler tail` 只能看实时，于是只能守在整点等它再犯一次，或者靠推断填空白。
-  //   这不是那天才需要，是长期缺的一块：**出问题时只能等它复现**，代价远高于这点存储。
-  //   有了它，下次问"那一轮到底发生了什么"可以直接查，而不是先复现再看。
+  // 可观测性：开日志留存（上游 2026-07-28 事故结论：历史日志不可查 = 出问题只能等复现）。
   "observability": { "enabled": true, "head_sampling_rate": 1 },
 
-  // 保留 workers.dev 路由：①退订链接(APP_URL)必须公开可访问 ②Basic Auth 应急入口。
-  // 加了 routes 后 workers.dev 默认会被关，必须显式设 true。
-  "workers_dev": true
+  // C1 锁死：不开 workers.dev（上游开着是为了退订链接公开可达 + Basic Auth 应急；
+  // AirSonde 零在途邮件，无此需求。发信域单落地时再随公开正门一起评估）。
+  "workers_dev": false
 }

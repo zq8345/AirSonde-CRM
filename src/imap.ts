@@ -123,11 +123,13 @@ export interface FetchResult {
 
 // 连接 Lark IMAP，拉取 UID > sinceUid 的新邮件（首次 sinceUid<=0 时只取基线不回填）。
 // M2：整个会话被 IMAP_SESSION_TIMEOUT_MS 总超时兜住，超时抛错，由上层 try/catch 兜住不拖垮 Cron。
-// 批㉘：account 覆写=双收件箱（hello@tejoy.net 在途 + hello@wanew.net 新域）；不传=原行为零变化。
+// 上游批㉘：account 覆写=双收件箱（旧域在途 + 新域并行）；不传=原行为零变化。
+// AirSonde 单收件箱（信箱待发信域单定），覆写机制原样保留。
 export async function fetchNewMessages(env: Env, sinceUid: number, maxCount = IMAP_BATCH, timeoutMs = IMAP_SESSION_TIMEOUT_MS, account?: { user: string; pass: string }): Promise<FetchResult> {
   const host = env.LARK_IMAP_HOST || "imap.larksuite.com";
   const port = Number(env.LARK_IMAP_PORT) || 993;
-  const user = account?.user || env.LARK_IMAP_USER || env.SENDER_EMAIL || "hello@tejoy.net";
+  // 末位兜底为空串：user 空 + pass 缺 → 下一行就抛，fail-closed（AirSonde 信箱未定，不放占位真值）
+  const user = account?.user || env.LARK_IMAP_USER || env.SENDER_EMAIL || "";
   const pass = account?.pass || env.LARK_IMAP_PASS;
   if (!pass) throw new Error(`缺少 IMAP 密码（账户 ${user}）`);
 

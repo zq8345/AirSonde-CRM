@@ -1,7 +1,7 @@
 -- 0001_emails_error.sql —— 给 emails 加 error 列（存**服务商/运行时原话**，不存我们的措辞）
 --
 -- ⚠️ 这个文件由开发窗写，**开发窗不执行**。由总工在部署时跑：
---     npx wrangler d1 execute tejoy_getke --remote --file=migrations/0001_emails_error.sql
+--     npx wrangler d1 execute airsonde_crm --remote --file=migrations/0001_emails_error.sql
 --
 -- 为什么不靠运行时 DDL：代码里确实有幂等的 ensureEmailColumns()，但它挂在 deliverEmail 上，
 --   而 deliverEmail **连续 4 天一次都没被调用过**（发信开关关着 + 跟进死在它之前）

@@ -5,17 +5,19 @@ import { scoreLead, writeEmail } from "./openrouter";
 import { categorizeCustomerType } from "./taxonomy";
 import { inferCountryFromWebsite, COUNTRIES } from "./discover";
 
+// ⚠️ AirSonde 画像**草稿**（C1 搬迁时改写，待 Joe 审定；后台「客户画像」按钮可随时改，settings 里的值优先于此默认值）
 export const DEFAULT_PROFILE =
-  `Wanew 是星链 Starlink 配件的供应商/批发商(自有货源),寻找需要"进货/代发/上架销售/随安装打包"星链配件的 B2B 买家。优先毛利好、靠关系与本地化、能走量复购的渠道;刻意避开亚马逊上同质低价铺货的红海。\n\n` +
+  `AirSonde 是空气质量检测仪(IAQ monitor:CO2/PM2.5/TVOC/温湿度等)的中国供应链 ODM/OEM 制造方,寻找需要"贴牌定制/批量采购/随方案打包"检测仪的欧美 B2B 买家。优先能走量复购、按项目打包、对认证与定制有真实需求的渠道;刻意避开纯比价的低端零售铺货。\n\n` +
   `【最高价值目标(按优先级)】\n` +
-  `1) 垂直行业经销商 / 系统集成商 / 安装商 —— 船舶电子、房车/越野改装、离网太阳能、WISP 无线宽带运营商、应急/救灾通信、农业/矿业/油田通信、偏远网络服务商;把配件随安装或方案打包卖,价格不透明、毛利好、几乎无价格战,是最优质买家。\n` +
-  `2) 区域分销商 / 批发商 / 零售连锁 —— 美/加/澳/新/欧/拉美 的卫星通信、网络、船舶、房车、户外配件分销与批发商;走量、复购稳,处在 Wanew 的天然下游。\n\n` +
+  `1) IAQ/环境监测品牌方与想上自有品牌的渠道商 —— 已在卖或想推自有品牌空气检测产品的公司;ODM 贴牌是我们的主业务形态,单量大、复购稳、关系粘性强,是最优质买家。\n` +
+  `2) 楼宇自控/智能楼宇/HVAC 系统集成商与服务商 —— 把 IAQ 传感与监测仪随新风/空调/楼宇管理系统(BMS)项目打包交付;项目制、价格不透明、毛利好,且常要 Modbus/BACnet/API 对接等定制,正是 ODM 的长项。\n` +
+  `3) 进口商 / 区域分销商 / 批发商 —— 美/加/欧/英/澳 的暖通、电工电料、环境仪器、安防楼控品类分销与批发商;走量、复购稳,处在 AirSonde 的天然下游。\n\n` +
   `【次要目标(会买,低成本可得才做)】\n` +
-  `- 非中国的亚马逊/marketplace 卖家(美/欧/澳/加 本土 FBA)与独立站卖家;仅在免费/低成本可得时纳入,不作主力。\n\n` +
+  `- 学校/办公楼宇的 IAQ 合规服务商、室内环境检测/治理服务公司、职业健康与实验室设备商;仅在免费/低成本可得时纳入,不作主力。\n\n` +
   `【打分要点】\n` +
-  `- 高分:明显在做经销/分销/批发/安装集成/方案打包,有实体经营(店面/服务区域/产品目录/项目案例),经营 卫星·网络·船舶·房车·户外·离网 品类,提到 dealer/distributor/wholesale/installer/integrator/reseller,本地化、有品牌、非中国主体。\n` +
-  `- 加分:能规模化复购与走量;靠关系与服务而非纯比价;位于星链正放量、竞争较轻的地区。\n` +
-  `- 降分/谨慎:疑似中国铺货型卖家(中文站、.cn 或中国公司主体、大量同质超低价铺货)→ 一律显著降权(价格战压毛利);纯内容/攻略/评测/博客站(非经营实体);与联网/户外/卫星完全无关的行业;已是大型成熟"自有品牌配件制造/大牌"更像竞品 → 低分。`;
+  `- 高分:明显在做品牌/集成/分销/进口,有实体经营(产品目录/项目案例/服务区域/团队页),经营 IAQ·传感器·HVAC·新风·楼宇自控·环境仪器 品类,提到 OEM/ODM/private label/distributor/wholesale/integrator/installer/BMS,本土公司、有品牌、非中国主体。\n` +
+  `- 加分:能规模化复购与走量;有认证/定制/对接需求(CE/FCC/RoHS、Modbus/BACnet、云平台 API);位于 IAQ 法规趋严、需求正放量的市场(如学校通风法规、办公楼 ESG 认证)。\n` +
+  `- 降分/谨慎:疑似中国铺货型卖家(中文站、.cn 或中国公司主体、大量同质超低价铺货)→ 一律显著降权(价格战压毛利);纯内容/评测/博客站(非经营实体);与空气/环境/楼宇完全无关的行业;自有工厂的成熟检测仪大牌更像竞品 → 低分。`;
 
 export async function getProfile(env: Env): Promise<string> {
   const row = await env.DB.prepare("SELECT value FROM settings WHERE key = 'customer_profile'").first<{ value: string }>();
@@ -156,7 +158,7 @@ export async function ensureDraft(env: Env, lead: any): Promise<{ ok: boolean; d
     const profile = await getProfile(env);
     const scraped = await scrapeSite(lead.website || "");
     if (!scraped.ok) console.log(`draft: #${lead.id} 官网此刻抓不到（${scraped.error}），用打分时的证据写`);
-    const draft = await writeEmail(env, "Wanew", profile, lead.company_name || "", scraped.text, {  // 初次信恒从 wanew.net 发 → 正文品牌 Wanew（pickSender initial→SENDER_WANEW）
+    const draft = await writeEmail(env, "AirSonde", profile, lead.company_name || "", scraped.text, {  // 初次信恒从主发件域发 → 正文品牌 AirSonde（pickSender initial→SENDER_PRIMARY）
       customer_type: a.customer_type || "", match_score: a.match_score,
       needed_products: a.needed_products || "", reason: a.reason || "", country_code: "",
     }, lead.website);

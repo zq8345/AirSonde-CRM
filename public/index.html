@@ -3,10 +3,9 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>WANEW 获客后台</title>
-  <!-- #55 品牌换装：favicon/logo 自托管进 public/（不依赖官网部署时序/跨域）；?v=3 破缓存 -->
-  <link rel="icon" href="/favicon.ico?v=3" sizes="any">
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=3">
+  <title>AIRSONDE 获客后台</title>
+  <!-- favicon 自托管进 public/（不依赖官网部署时序/跨域）；?v=4 破缓存（AirSonde fork 换标） -->
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=4">
 
   <style>
     :root { --bg:#0f1115; --panel:#181b22; --surface-2:#171a21; --border:#2a2f3a; --text:#e6e8ee; --muted:#9aa3b2;
@@ -514,7 +513,7 @@
          群发→待发送页「发送选中」（批⑩B：全部发送已删，要发全部点表头全选框）；回复箱→已回复页；批量分析→待分析页；批量找邮箱/Hunter→待审批页；导入CSV→找客户页。 -->
     <!-- #55b：logo 按宽约束（Joe：宽度不要超下方左栏容器 178px）。原 height:22px → 等比宽≈190px 溢出；
          改 max-width:150px（≈左栏内容宽）等比缩，高分屏用原图 1604px 源缩放不糊。 -->
-    <div class="hdr-left"><img src="/wanew-logo-white.png" alt="WANEW" title="回待办事项首页" onclick="openToday()" style="max-width:150px;height:auto;display:block"></div>
+    <div class="hdr-left"><span title="回待办事项首页" onclick="openToday()" style="cursor:pointer;font-weight:700;letter-spacing:.14em;font-size:15px;color:#fff">AIRSONDE</span></div>
     <div class="hdr-right-zone">
       <input type="search" id="q" placeholder="搜索公司 / 邮箱 / 域名…" />
       <!-- 左栏导航的隐藏代理按钮（左栏 side-nav 的 handler 靠它们，勿删） -->
@@ -642,24 +641,24 @@
             <span class="hint" id="cfg-ramp-detail"></span>
           </div></div>
         <div class="k">公司名</div><div><input id="cfg-company" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:6px"></div>
-        <div class="k">官网</div><div><input id="cfg-website" placeholder="https://tejoy.com" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:6px"></div>
+        <div class="k">官网</div><div><input id="cfg-website" placeholder="https://airsonde.com" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:6px"></div>
       </div>
-      <p class="hint" style="margin:2px 0 0">官网会出现在每封开发信页脚(如 tejoy.com),让收信人知道你们的正式网站。发件域名仍是 tejoy.net 不变。</p>
+      <p class="hint" style="margin:2px 0 0">官网会出现在每封开发信页脚(如 airsonde.com),让收信人知道你们的正式网站。发件域独立(候选 airsonde.net,待 Joe 确认,与官网域分开)。</p>
       <div class="k muted" style="margin-top:8px">BCC 存档邮箱（#54，选填）</div>
-      <div><input id="cfg-bcc" placeholder="留空=关；填 outbox@wanew.net 后所有外发自动密送一份" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:6px"></div>
+      <div><input id="cfg-bcc" placeholder="留空=关；填 outbox 公共邮箱(域待定)后所有外发自动密送一份" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:6px"></div>
       <p class="hint" style="margin:2px 0 0">开发信/跟进/回信全部密送到这个邮箱留档。建好公共邮箱再填。</p>
       <div class="k muted" style="margin-top:8px">发件域（只读观察）</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        <span class="pill" style="background:#1d3a2a;color:#7fd6a2">hello@wanew.net · 唯一发件人</span>
-        <span class="hint" id="cfg-wanew-today"></span>
+        <span class="pill" style="background:#1d3a2a;color:#7fd6a2">hello@airsonde.net · 唯一发件人(占位,发信域待定)</span>
+        <span class="hint" id="cfg-primary-today"></span>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:4px">
-        <span class="pill" style="background:#3a2d1d;color:#d6b27f">hello@tejoy.net · 已退役(仅收信)</span>
-        <span class="hint" id="cfg-tejoy-today"></span>
+        <span class="pill" style="background:#3a2d1d;color:#d6b27f">(无退役旧域)</span>
+        <span class="hint" id="cfg-legacy-today"></span>
       </div>
-      <p class="hint" style="margin:2px 0 0">全部出站(首触/跟进/确认/回信)一律 wanew.net;tejoy.net 只用于 IMAP 收回信,不再发出任何邮件。<b>日限不按发件域分</b>——见上面的系统级总闸。</p>
+      <p class="hint" style="margin:2px 0 0">全部出站(首触/跟进/确认/回信)一律走主发件域(占位 airsonde.net,待定);AirSonde 无退役旧域。<b>日限不按发件域分</b>——见上面的系统级总闸。</p>
       <div class="k muted">公司地址（合规必填）</div>
-      <textarea id="cfg-address" style="min-height:60px" placeholder="e.g. TEJOY, 123 Example St, City, Country"></textarea>
+      <textarea id="cfg-address" style="min-height:60px" placeholder="e.g. AirSonde, 123 Example St, City, Country"></textarea>
 
       <div class="sec-title">⭐ 卖点 / 社会证明</div>
       <p class="hint" style="margin:0 0 4px">AI 写开发信/跟进/回复时可引用的可信卖点（英文更佳，别夸大、别点名具体客户）。留空用内置默认。</p>
@@ -667,7 +666,7 @@
 
       <div class="sec-title">💬 一键开聊话术</div>
       <p class="hint" style="margin:0 0 4px">详情弹层「一键开聊」按钮预填/复制的开场白（英文，用 {company} 占位公司名）。</p>
-      <textarea id="cfg-chatscript" style="min-height:64px" placeholder="Hi {company} team — TEJOY supplies wholesale Starlink accessories…"></textarea>
+      <textarea id="cfg-chatscript" style="min-height:64px" placeholder="Hi {company} team — AirSonde builds air quality monitors factory-direct…"></textarea>
 
       <div class="sec-title">🔁 无回复自动跟进</div>
       <label style="display:flex;gap:8px;align-items:center;cursor:pointer;margin:4px 0">
@@ -939,7 +938,7 @@
 
     // ⭐ 顺带修④：会话过期 → 界面静默死掉（Joe 撞过：点「发信设置」毫无反应）
     //
-    // 根因：admin.tejoy.com 走 Cloudflare Access，**在边缘拦截**。会话一过期，fetch 拿到的不是
+    // 根因：crm 域走 Cloudflare Access，**在边缘拦截**。会话一过期，fetch 拿到的不是
     // 401 而是**登录页 HTML**（fetch 默认跟随重定向）→ 调用方 `.then(r=>r.json())` 抛错 →
     // 整个 handler 当场死掉 → 弹窗永远不出现，**屏幕上什么都没有**。
     //
@@ -1064,7 +1063,7 @@
       return items.length ? `<span style="margin-left:2px;white-space:nowrap">${items.join("")}</span>` : "";
     }
     // ===== 一键开聊（click-to-chat deep link，纯前端，无自动发送/API）=====
-    const DEFAULT_CHAT = "Hi {company} team — TEJOY supplies wholesale Starlink accessories (mounts, cables, enclosures, power kits) to dealers & installers. May I send you our dealer price list?";
+    const DEFAULT_CHAT = "Hi {company} team — AirSonde builds air quality monitors (CO2, PM2.5, TVOC) factory-direct, with OEM/private-label options for brands, distributors & HVAC integrators. May I send you our trade price list?";
     let _chatScript = DEFAULT_CHAT;
     function buildChatMsg(company){ return (_chatScript||DEFAULT_CHAT).replace(/\{company\}/g, (company||"there").trim()||"there"); }
     // 从 whatsapp 链接或 phone 提取纯数字号（wa.me 需纯数字，去 + 空格 括号 -）
@@ -1845,7 +1844,7 @@
 
 `
           + `其中 <60分／退订／黑名单／已发过的 还会再跳过一些。
-**发出不可撤**（发件 hello@tejoy.net）`;
+**发出不可撤**（发件 hello@airsonde.net）`;
       }); };
     // 「已联系」：跟进选中。点过链接的由**后端**自动用「趁热」暖变体（/api/followup/run 里判 has_click）。
     //
@@ -2339,7 +2338,7 @@
                   ${/* 没草稿时「确认发送」照样可点 —— 发送路径自己会先生成再发（ensureDraft），不是坏按钮 */''}
                   <button class="btn-chat" data-company="${esc(lead.company_name)||''}" onclick="copyScript(this)">📋 复制话术</button>
                   <button class="dp-copy" id="tr-btn" onclick="translateEmail(${lead.id})">🌐 翻译</button>
-                  ${preSend ? `<span class="hint">发出不可撤（发件 hello@tejoy.net）。</span>` : `<span class="hint">已发送，如需再触达请用下方「安排跟进」。</span>`}<span class="hint" id="send-msg"></span>
+                  ${preSend ? `<span class="hint">发出不可撤（发件 hello@airsonde.net）。</span>` : `<span class="hint">已发送，如需再触达请用下方「安排跟进」。</span>`}<span class="hint" id="send-msg"></span>
                 </div>
                 <div id="tr-panel" style="display:none;margin-top:8px"></div>
               </div>` : `<div class="dp-card"><div class="hint">尚无 AI 分析。点底部「AI 分析」抓官网+打分+写信${!lead.email?"（无邮箱可先「找邮箱」）":""}。</div></div>`}
@@ -2446,7 +2445,7 @@
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px">
           <button class="btn-green" onclick="sendWarm(${id})">✅ 确认发送</button>
           <button class="btn-ghost" onclick="draftWarm(${id})">↻ 重新生成</button>
-          <span class="hint">发出不可撤，确认无误再发（发件 hello@tejoy.net）。</span><span class="hint" id="warm-send-msg"></span>
+          <span class="hint">发出不可撤，确认无误再发（发件 hello@airsonde.net）。</span><span class="hint" id="warm-send-msg"></span>
         </div>`;
     };
     window.sendWarm = async (id) => {
@@ -2776,7 +2775,7 @@
 
     // 单条立即发送
     window.sendOne = async (id) => {
-      if (!(await uiConfirm({ title:'确认发送开发信', body:'确认用 hello@tejoy.net 给这条线索发送开发信？\n发出不可撤。', confirmText:'确认发送' }))) return;
+      if (!(await uiConfirm({ title:'确认发送开发信', body:'确认用 hello@airsonde.net 给这条线索发送开发信？\n发出不可撤。', confirmText:'确认发送' }))) return;
       const res = await fetch(`/api/leads/${id}/send`, { method:"POST" }).then(r=>r.json()).catch(e=>({error:String(e)}));
       if (res.error) { alert("发送失败: " + res.error); return; }
       if (res.skipped) { alert("已跳过: " + res.skipped); return; }
@@ -3277,8 +3276,8 @@
           ? `昨日冷发 ${c.yesterday_cold ?? 0} × ${c.send_ramp_factor ?? 1.5} → 今日爬坡上限 <b>${c.send_ramp_cap ?? "-"}</b>（地板 ${c.send_ramp_floor ?? 30}）· 关掉即直接用天花板 ${lim} · <b>不影响手动单条发送</b>`
           : `已关闭 —— 批量通道直接用天花板 ${lim}。新发件域一天暴增易被判垃圾发信，建议保持开启。`;
       }
-      $("#cfg-wanew-today").textContent = `今日已发 ${c.wanew_sent_today ?? 0}`;
-      $("#cfg-tejoy-today").textContent = `今日已发 ${c.tejoy_sent_today ?? 0}`;
+      $("#cfg-primary-today").textContent = `今日已发 ${c.primary_sent_today ?? 0}`;
+      $("#cfg-legacy-today").textContent = `今日已发 ${c.legacy_sent_today ?? 0}`;
       _chatScript = c.chat_script || DEFAULT_CHAT;
       const fu = await fetch("/api/settings/followup").then(r=>r.json());
       $("#fu-enabled").checked = !!fu.enabled;
@@ -3971,7 +3970,7 @@ ${esc(d.ours.body||'')}</div></details>`
 
     function esc(s){ return (s==null?"":String(s)).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 
-    // 显示当前登录用户（admin.tejoy.com 经 Cloudflare Access 登录时有邮箱）
+    // 显示当前登录用户（crm.airsonde.com 经 Cloudflare Access 登录时有邮箱）
     fetch("/api/me").then(r=>r.json()).then(m=>{
       if (m && m.email) $("#whoami").innerHTML = `👤 ${esc(m.email)} · <a href="/cdn-cgi/access/logout">退出</a>`;
       // 左栏账号菜单的收起态文案。**取不到邮箱也要给一个可点的标签** ——

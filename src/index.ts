@@ -8,7 +8,7 @@ import { parseCsv, mapRowToLead } from "./csv";
 import { analyzeLead, getProfile, DEFAULT_PROFILE, ensureDraft } from "./service";
 import { writeReplyDraft, writeWarmFollowup, DEFAULT_SELLING_POINTS, translateToChinese, isTrustedDirectorySource, getAiUsage } from "./openrouter";
 import { scrapeSite } from "./scrape";
-import { sendLead, sendApprovedBatch, sendFollowupBatch, sendWarmFollowupNow, unsubscribeByToken, getSetting, setSetting, addSuppressedEmail, isEmailSuppressed, autoSentToday, sentToday, sentTodayBreakdown, failedTodayBreakdown, getBreakerStatus, BREAKER_WINDOW, BREAKER_THRESHOLD, deliverEmail, brandForLead, senderSentToday, SENDER_WANEW, SENDER_LEGACY, systemDailySendLimit, coldSentToday, SYSTEM_LIMIT_DEFAULT, RAMP_FLOOR, RAMP_FACTOR, autoSendDailyLimit } from "./send";
+import { sendLead, sendApprovedBatch, sendFollowupBatch, sendWarmFollowupNow, unsubscribeByToken, getSetting, setSetting, addSuppressedEmail, isEmailSuppressed, autoSentToday, sentToday, sentTodayBreakdown, failedTodayBreakdown, getBreakerStatus, BREAKER_WINDOW, BREAKER_THRESHOLD, deliverEmail, brandForLead, senderSentToday, SENDER_PRIMARY, SENDER_LEGACY, systemDailySendLimit, coldSentToday, SYSTEM_LIMIT_DEFAULT, RAMP_FLOOR, RAMP_FACTOR, autoSendDailyLimit } from "./send";
 
 // 系统发信上限可设的最大值。Joe 拍板 1000 → 老的 500 clamp 会静默截断，故放宽到 2000 留余量。
 // （不设无穷：手滑多打一个 0 就把域名烧了，这类不可逆代价才值得一个上限。）
@@ -35,7 +35,7 @@ export interface Env {
   SENDER_EMAIL: string;
   SENDER_NAME: string;
   APP_URL: string;
-  API_HOST?: string;        // #53 公开 API 正门主机名（api.wanew.com）；未配=该分支不激活，行为回退旧逻辑
+  API_HOST?: string;        // #53 公开 API 正门主机名（AirSonde 未配=该分支不激活，全部留在 Access 门后）
   PUBLIC_API_URL?: string;  // #53 新邮件退订链接 base（send.ts 优先于 APP_URL 用它）
   ADMIN_HOST: string;   // 团队后台自定义域名（受 Cloudflare Access 保护）
   ADMIN_URL: string;    // 后台完整地址，用于飞书“打开后台”按钮
@@ -47,7 +47,7 @@ export interface Env {
   LARK_IMAP_HOST: string;
   LARK_IMAP_PORT: string;
   LARK_IMAP_USER: string;
-  LARK_IMAP_USER2?: string;   // 批㉘ 双收件箱：hello@wanew.net（未配=单箱运行不报错）
+  LARK_IMAP_USER2?: string;   // 上游批㉘ 双收件箱第二账户（未配=单箱运行不报错；AirSonde 单箱）
   LARK_IMAP_PASS2?: string;
   LARK_IMAP_PASS: string;
   LARK_WEBHOOK_URL: string;      // 飞书群「自定义机器人」webhook（可选，配了才推送）
@@ -57,7 +57,7 @@ export interface Env {
   LARK_WEBHOOK_SECRET: string;   // 飞书机器人签名密钥（可选，开了签名校验才需要）
   RESEND_WEBHOOK_SECRET: string; // Resend webhook 签名密钥（whsec_...，可选但强烈建议配）
   DEV_BYPASS_AUTH?: string;      // 仅本地 .dev.vars：跳过登录鉴权（生产无此变量）
-  // 批㉔ Lark 应用（Wanew CRM，国际版 open.larksuite.com）：多维表格镜像 + 应用机器人卡片。
+  // 上游批㉔ Lark 应用（AirSonde 需另建自己的 Lark 应用，绝不复用 Wanew 的；国际版 open.larksuite.com）：多维表格镜像 + 应用机器人卡片。
   LARK_APP_ID?: string;              // cli_...（secret + .dev.vars）
   LARK_APP_SECRET?: string;          // 应用密钥（secret + .dev.vars）
   LARK_VERIFICATION_TOKEN?: string;  // 事件订阅 Verification Token（卡片回调校验，fail-closed：没配=拒收）
@@ -68,7 +68,7 @@ const app = new Hono<{ Bindings: Env }>();
 // ---- 登录保护 ----
 // - /u/ 退订页：对收件人公开（任何域名都不拦，合规必须）
 // - localhost：本地开发免登录
-// - 团队域名（admin.tejoy.com / crm.wanew.com —— 批㉕a 迁域并行）：走 Cloudflare Access（每人邮箱验证码登录）。
+// - 团队域名（crm.airsonde.com）：走 Cloudflare Access（每人邮箱验证码登录）。
 //   Access 在边缘拦截未登录请求，只有登录后的请求才到 Worker，并带 Cf-Access-Authenticated-User-Email。
 // - 其余（workers.dev）：保留 Basic Auth 作为应急/管理入口
 app.use("*", async (c, next) => {
@@ -76,10 +76,11 @@ app.use("*", async (c, next) => {
   if (c.req.path.startsWith("/api/webhooks/")) return next(); // webhook 需公开（自带签名校验）
   if (c.req.path === "/catalog" || c.req.path === "/api/inbound") return next(); // Landing 落地页 + 询盘写端点：公开
   // ⚠️ 批㉔ 修正顺序：DEV_BYPASS 必须在 301 **之前**。
-  //   ㉕a 第二刀曾把 301 放最前（理由"本地能测 301"）——被实测证伪：wrangler dev 把**所有**本地请求的
-  //   Host 钉成 routes 第一条 custom_domain（admin.tejoy.com），于是本地一切后台 API 全被 301 打去生产 crm，
+  //   上游㉕a 第二刀曾把旧域 301 放最前（理由"本地能测 301"）——被实测证伪：wrangler dev 把**所有**本地请求的
+  //   Host 钉成 routes 第一条 custom_domain，于是本地一切后台 API 全被 301 打去生产，
   //   本地开发直接瘫痪；而那个"本地 301 测试"因为 host-pin 本来就证明不了 host 分支（它对谁都 301）。
-  //   301 的真验证在生产（真 Host）。DEV_BYPASS 只存在于 .dev.vars → 生产此行恒为假，语义零变化。
+  //   （AirSonde 无旧域，301 块已随迁移删除；此教训保留——host-pin 语义不变。）
+  //   DEV_BYPASS 只存在于 .dev.vars → 生产此行恒为假，语义零变化。
   // ⭐ H13（安全审计）：这一条以前是 **fail-open** —— `DEV_BYPASS_AUTH` 一旦被误设进生产，
   //   整个后台**静悄悄地全面免登录**，而且没有任何迹象。
   //   **一个被误配的后门，应该让服务停，而不是让服务安静地敞着。**
@@ -105,40 +106,35 @@ app.use("*", async (c, next) => {
     );
   }
   const host = (c.req.header("host") || "").split(":")[0].toLowerCase();
-  // 批㉕a 第二刀：老域名 admin.tejoy.com 一律 301 → crm.wanew.com（域名迁移，与登录状态无关，
-  //   放在 Access/basic 判断之前）。保留原路径+查询串。/u/ 等公开豁免在本函数最前，不被此 301 拦截。
-  if (host === "admin.tejoy.com") {
-    const u = new URL(c.req.url);
-    return c.redirect(`https://crm.wanew.com${u.pathname}${u.search}`, 301);
-  }
+  // （上游此处有旧域 301 迁移块；AirSonde 无旧域，随迁移删除。）
   // ⛔ H12（安全审计）：这里原来是 `if (host === "localhost" || host === "127.0.0.1") return next();`
   //   —— **一律免登录**。它的安全性完全押在一个平台语义上：「Cloudflare 不会把 `Host: localhost`
   //   路由进 Worker」。**那条从来没被测过**，而我们不控制它。
   //
-  //   ✅ 2026-07-29 实测（生产，三台主机）：
-  //        crm.wanew.com  裸请求 → 302（Access 登录）  ·  加 `Host: localhost` → **403（Cloudflare 边缘）**
-  //        wanew-crm.zq8345.workers.dev 裸请求 → 401（Basic）·  加 `Host: localhost` → **403**
+  //   ✅ 2026-07-29 上游实测（生产，三台主机）：
+  //        crm 域  裸请求 → 302（Access 登录）  ·  加 `Host: localhost` → **403（Cloudflare 边缘）**
+  //        workers.dev 裸请求 → 401（Basic）·  加 `Host: localhost` → **403**
   //      → 今天**不是可利用的洞**；请求根本到不了 Worker。
   //   ❌ 但这不构成保留它的理由：**把认证押在一个我们不控制、且今天才第一次测的边缘行为上**，
   //      等于给自己留一个只要平台行为变化就立刻敞开的门。
   //
   //   删掉而不是加开关（方案 B）的依据是**代码本身**，不是偏好：
   //     · 本地开发走的是上面那条 `DEV_BYPASS_AUTH`（它在**这一行之前**短路）；
-  //     · 且 `wrangler dev` 把本地请求的 Host **钉成 routes 第一条 custom_domain**（admin.tejoy.com），
-  //       所以这一行在本地**根本不会命中**（命中的是上面那条 301）。
+  //     · 且 `wrangler dev` 把本地请求的 Host **钉成 routes 第一条 custom_domain**（crm.airsonde.com），
+  //       所以这一行在本地**根本不会命中**。
   //   ⇒ 它对本地开发是**死代码**，只对生产是风险面。留着两条并行放行路径，迟早会漂。
 
-  // #53 公开 API 正门 api.wanew.com：公开端点（/u · /api/webhooks/* · /catalog · /api/inbound）
-  //   已在本函数最前的路径豁免里 return next()、与域名无关 → 能走到这里的、api.wanew.com 上的都是**非公开路径**。
+  // #53 公开 API 正门：公开端点（/u · /api/webhooks/* · /catalog · /api/inbound）
+  //   已在本函数最前的路径豁免里 return next()、与域名无关 → 能走到这里的、API_HOST 上的都是**非公开路径**。
   //   在公开正门上一律 404，绝不把 admin API/后台面暴露出去（这台主机没有 Access/Basic 保护）。
-  //   API_HOST 未配 = 分支惰性（零行为变化，纯 additive）。真 Host 分支只在生产生效
-  //   （本地 wrangler dev 把 Host 钉成 routes 第一条 + DEV_BYPASS 已在前短路，测不到——与既有 admin.tejoy.com 301 同理）。
+  //   API_HOST 未配 = 分支惰性（AirSonde C1 未配 → 无公开面）。真 Host 分支只在生产生效
+  //   （本地 wrangler dev 把 Host 钉成 routes 第一条 + DEV_BYPASS 已在前短路，测不到）。
   const apiHost = (c.env.API_HOST || "").trim().toLowerCase();
   if (apiHost && host === apiHost) return c.notFound();
 
-  // 批㉕a 迁域：ADMIN_HOST 逗号分隔多值 → 列表判断，新(crm.wanew.com)旧(admin.tejoy.com)域名并行，
-  //   两者都要求 cf-access-authenticated-user-email（Access 头）。
-  const adminHosts = (c.env.ADMIN_HOST || "admin.tejoy.com,crm.wanew.com")
+  // ADMIN_HOST 逗号分隔多值 → 列表判断（上游迁域并行的机制保留；AirSonde 单值 crm.airsonde.com），
+  //   每个都要求 cf-access-authenticated-user-email（Access 头）。
+  const adminHosts = (c.env.ADMIN_HOST || "crm.airsonde.com")
     .split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
   if (adminHosts.includes(host)) {
     const email = c.req.header("cf-access-authenticated-user-email");
@@ -152,7 +148,7 @@ app.use("*", async (c, next) => {
     return c.text("后台密码未配置（ADMIN_PASSWORD）。请管理员设置 secret 后再访问。", 503);
   }
   return basicAuth({
-    username: c.env.ADMIN_USER || "tejoy",
+    username: c.env.ADMIN_USER || "airsonde",
     password: c.env.ADMIN_PASSWORD,
   })(c, next);
 });
@@ -1530,8 +1526,9 @@ app.post("/api/followup/run", async (c) => {
 });
 
 // 一键开聊默认话术（英文，{company} 占位；渲染时替换为公司名）
+// ⚠️ AirSonde 话术占位草稿（C1），待 Joe 审定
 const DEFAULT_CHAT_SCRIPT =
-  "Hi {company} team — Wanew supplies wholesale Starlink accessories (mounts, cables, enclosures, power kits) to dealers & installers. May I send you our dealer price list?";
+  "Hi {company} team — AirSonde builds air quality monitors (CO2, PM2.5, TVOC) factory-direct, with OEM/private-label options for brands, distributors & HVAC integrators. May I send you our trade price list?";
 
 // ---- 发信设置（每日上限 + 公司名 + 合规地址 + 卖点 + 一键开聊话术）----
 app.get("/api/settings/sending", async (c) => {
@@ -1555,17 +1552,18 @@ app.get("/api/settings/sending", async (c) => {
     effective_send_limit: sysLimit.effective,
     // 系统闸只卡冷发(initial+followup)；事务信(确认/回真人)豁免但在用量里显示，见 send.ts coldSentToday
     cold_sent_today: await coldSentToday(c.env),
-    company_name: await getSetting(c.env, "company_name", "Wanew Starlink Accessories"),
+    company_name: await getSetting(c.env, "company_name", "AirSonde"),
     company_address: await getSetting(c.env, "company_address", ""),
-    company_website: await getSetting(c.env, "company_website", c.env.SITE_URL || "https://tejoy.com"),
+    company_website: await getSetting(c.env, "company_website", c.env.SITE_URL || "https://airsonde.com"),
     selling_points: await getSetting(c.env, "selling_points", DEFAULT_SELLING_POINTS),
     chat_script: await getSetting(c.env, "chat_script", DEFAULT_CHAT_SCRIPT),
-    // L4(#54)：BCC 存档地址（空=关）。填 outbox@wanew.net 后所有外发自动密送。
+    // L4(#54)：BCC 存档地址（空=关）。填 outbox 公共邮箱（域待定）后所有外发自动密送。
     bcc_archive: await getSetting(c.env, "bcc_archive", ""),
     // `wanew_daily_limit` 已退役（按发件域命名/计数=Joe 否掉的设计），字段不再返回。
     // 各发件域今日发量仍带出——纯**观察**用（看发件域切换是否干净），不再是任何闸。
-    wanew_sent_today: await senderSentToday(c.env, SENDER_WANEW),
-    tejoy_sent_today: await senderSentToday(c.env, SENDER_LEGACY),
+    // （键名随 fork 改为 primary/legacy_sent_today——上游按新旧发件域命名，index.html 同步改）
+    primary_sent_today: await senderSentToday(c.env, SENDER_PRIMARY),
+    legacy_sent_today: await senderSentToday(c.env, SENDER_LEGACY),
     // 自动化三开关 + 熔断状态（前端要能看能关；熔断后必须显眼告诉 Joe 为什么停了）
     auto_approve_enabled: (await getSetting(c.env, "auto_approve_enabled", "1")) === "1",
     auto_send_enabled: (await getSetting(c.env, "auto_send_enabled", "1")) === "1",
@@ -1682,7 +1680,7 @@ app.post("/u/:token", async (c) => {
   return c.text("Unsubscribed", 200);
 });
 
-// 退订页四语 —— 与官网 wanew.com 的语言一致（根=en 外加 /es /pt /zh 三个目录）。
+// 退订页四语 —— 上游按官网语言集配的（en/es/pt/zh）；AirSonde 官网纯英文，多语退订页无害保留（客户可见页面，多语只多不少）。
 // ⚠️ 开发信目前是**纯英文**，但收信人所在地未必；退订页是**客户可见**页面，
 //    让人看不懂的退订页 = 变相刁难。文案一律直给：一句说明 + 一个按钮 + 一句"误点可关"。
 //    绝不做"确定要走吗/再想想"这类挽留话术 —— 想退订的人多受一道刁难，换来的是投诉而不是留存。
@@ -1741,7 +1739,7 @@ function pickUnsubLang(explicit: string, acceptLanguage: string): string {
 //   · 邮件正文里的链接现在指向确认页，人点一下按钮即退订。这是行业标准做法。
 app.get("/u/:token", async (c) => {
   const token = c.req.param("token");
-  const brand = (await getSetting(c.env, "company_name", "Wanew Starlink Accessories"))
+  const brand = (await getSetting(c.env, "company_name", "AirSonde"))
     .replace(/[&<>]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[ch]!));
   // token 只回填进 form action，转义防注入（它来自 URL，一律当不可信输入）
   const safeToken = encodeURIComponent(token);
@@ -2319,7 +2317,7 @@ app.post("/api/replies/:id/draft", async (c) => {
     original = a?.recommended_email || "";
   }
   try {
-    const brand = reply.lead_id ? await brandForLead(c.env, { id: reply.lead_id }, "reply") : "Wanew";
+    const brand = reply.lead_id ? await brandForLead(c.env, { id: reply.lead_id }, "reply") : "AirSonde";
     const draft = await writeReplyDraft(c.env, brand, reply.company_name || reply.from_email || "", profile, original, reply.content || "");
     return c.json({ ok: true, draft });
   } catch (e: any) {
@@ -2474,13 +2472,13 @@ app.post("/api/replies/:id/link", async (c) => {
 app.get("/catalog", (c) => c.html(catalogHtml()));
 
 // ---- Landing 询盘写端点（公开）：honeypot + 频率限制 + 校验 + 去重 upsert + 推飞书 + 确认邮件 ----
-// #inbound CORS：wanew.com 产品详情页跨源 POST 询盘（wanew.com 与 api.wanew.com 不同源）。
-//   allowlist 回显 origin（不开 `*`）：wanew.com / www + *.pages.dev(W3 预览)。CORS 只管浏览器同源策略，
+// #inbound CORS：官网产品详情页跨源 POST 询盘（airsonde.com 与公开 API 域不同源）。
+//   allowlist 回显 origin（不开 `*`）：airsonde.com / www + *.pages.dev(Pages 预览)。CORS 只管浏览器同源策略，
 //   非浏览器客户端本就不受限——真正的防刷仍是下面的 throttle + honeypot + 压制名单。
 function inboundCorsOrigin(origin: string): string | null {
   const o = (origin || "").trim();
-  if (o === "https://wanew.com" || o === "https://www.wanew.com") return o;
-  if (/^https:\/\/[a-z0-9-]+\.pages\.dev$/i.test(o)) return o;   // feat/w3-redesign 的 Pages 预览
+  if (o === "https://airsonde.com" || o === "https://www.airsonde.com") return o;
+  if (/^https:\/\/[a-z0-9-]+\.pages\.dev$/i.test(o)) return o;   // Pages 预览
   return null;
 }
 function setInboundCors(c: any): void {
@@ -2513,7 +2511,7 @@ app.post("/api/inbound", async (c) => {
   const countryDb = country ? country.toUpperCase() : null;
   const whereSell = (b.where_sell || "").trim().slice(0, 300);
   const volume = (b.monthly_volume || "").trim().slice(0, 100);
-  // 产品询盘上下文（wanew.com 产品详情页表单）——product_title 或 product_id 有值即判为产品询盘
+  // 产品询盘上下文（官网产品详情页表单）——product_title 或 product_id 有值即判为产品询盘
   const productTitle = (b.product_title || "").trim().slice(0, 200);
   const productCategory = (b.product_category || "").trim().slice(0, 100);
   const productUrl = (b.product_url || "").trim().slice(0, 500);
@@ -2657,7 +2655,7 @@ app.post("/api/rescan/batch", async (c) => {
       try {
         if (larkConfigured(c.env)) {
           await larkSend(c.env, { msg_type: "text", content: { text:
-            `WANEW ✅ 全量重扫完成\n` +
+            `AIRSONDE ✅ 全量重扫完成\n` +
             `· ${stats.hi} 家 ≥${APPROVE_MIN_SCORE}（自动通道）\n` +
             `· ${stats.lo} 家 <${APPROVE_MIN_SCORE}（翻牌堆待复核）\n` +
             `· ${stats.nil} 家 官网抓不到（未打分，不是不合格）\n\n` +
@@ -2902,9 +2900,9 @@ async function alertReplyFailure(env: Env, why: string): Promise<void> {
     await setSetting(env, "reply_fail_alert_date", today);
     if (!larkConfigured(env)) return;
     await larkSend(env, { msg_type: "text", content: { text:
-      `WANEW ⚠️ 收客户回复失败\n${why}\n\n` +
+      `AIRSONDE ⚠️ 收客户回复失败\n${why}\n\n` +
       `**这意味着现在客户回信我们可能收不到。**\n` +
-      `已经收到的回复不受影响；但新回复要么延迟、要么丢。请尽快看一眼 hello@tejoy.net 的 IMAP。\n` +
+      `已经收到的回复不受影响；但新回复要么延迟、要么丢。请尽快看一眼收信箱（LARK_IMAP_USER）的 IMAP。\n` +
       `（同样的错一天只提醒一次，免得刷屏）` } });
   } catch (e) { console.error("alertReplyFailure:", e); }   // 告警失败不能反过来拖垮 cron
 }
@@ -2931,7 +2929,7 @@ async function alertSendLimitUnconfigured(env: Env, limit: number, source: strin
     console.log(`send-limit guard: source=${source} limit=${limit}（未显式配置，已提醒）`);
     if (!larkConfigured(env)) return;
     await larkSend(env, { msg_type: "text", content: { text:
-      `WANEW ⚠️ 每日发信上限**未配置**\n${why}\n\n` +
+      `AIRSONDE ⚠️ 每日发信上限**未配置**\n${why}\n\n` +
       `上次就是因为这个没人知道，出信量被静默砍到 10 封/天、三天后才发现。\n` +
       `请去后台「发信设置」把每日上限设成你要的数值，存一次即可（存完这条提醒自动消失）。\n` +
       `（一天只提醒一次）` } });
@@ -3002,7 +3000,7 @@ async function scheduled(event: ScheduledController, env: Env, ctx: ExecutionCon
       // ⭐ IMAP 小修①（已批）：**瞬时重试** —— 一次超时多半是网络抖动，立刻再试一次比等下一班
       //   （1 小时）便宜得多。先记第一次的原话（记录证据 ≠ 报告结论），重试成功就走成功分支。
       //   ⭐ 批（2026-07-27）：重试范围从"只超时"扩到**所有 transient**（超时 + Lark `NO internal server error`）——
-      //     实测这类间歇错大概率二次就过（wanew.net 4× 手点仅偶发抖动），立即重试省一小时延迟。
+      //     上游实测这类间歇错大概率二次就过（4× 手点仅偶发抖动），立即重试省一小时延迟。
       //     判定收在 isTransientImapError 一处；真故障（登录被拒/零正文/解析坏）仍不重试、照旧立刻吼。
       //   ⚠️ 重试**不碰游标**：失败不推进的零丢失底线在 replies.ts:310（仅成功批 setSetting），此处只多跑一次 fetch。
       if (r.error && isTransientImapError(r.error)) {
@@ -3289,7 +3287,7 @@ async function scheduled(event: ScheduledController, env: Env, ctx: ExecutionCon
       try {
         if (larkConfigured(env)) {
           await larkSend(env, { msg_type: "text", content: { text:
-            `WANEW ⚠️ 自动发送已熔断\n最近 ${br.window} 封自动开发信里 ${br.unsubs} 封退订 = ${(br.rate * 100).toFixed(1)}%（阈值 15%）。\n` +
+            `AIRSONDE ⚠️ 自动发送已熔断\n最近 ${br.window} 封自动开发信里 ${br.unsubs} 封退订 = ${(br.rate * 100).toFixed(1)}%（阈值 15%）。\n` +
             `已自动停止**自动发送**；自动批准与手动发送不受影响。\n请检查线索来源与开发信内容，确认后到后台手动重开（不会自动恢复）。` } });
         }
       } catch { /* 通知失败不影响熔断本身 */ }
@@ -3459,7 +3457,7 @@ async function scheduled(event: ScheduledController, env: Env, ctx: ExecutionCon
         ].filter(Boolean).map((s) => `· ${String(s).slice(0, 160)}`).join("\n")
           || "· （各通道都没记录到失败原文 —— 可能真的没活可干，也可能某一步静默跳过了）";
         const text =
-          `WANEW 🔴 获客机器连续 ${streak} 轮零产出（约 ${streak} 小时）\n` +
+          `AIRSONDE 🔴 获客机器连续 ${streak} 轮零产出（约 ${streak} 小时）\n` +
           `新线索 / 分析 / 回复 / 自动批准 / 自动发信 / 补邮箱 **全部为 0**。\n\n` +
           `最近记录到的原文：\n${why}\n\n` +
           `⚠️ 零产出未必等于故障（也可能确实没活可干），但连续 ${streak} 轮值得看一眼。\n` +
@@ -3475,7 +3473,7 @@ async function scheduled(event: ScheduledController, env: Env, ctx: ExecutionCon
         } catch (e) { console.error("stall-alert webhook 异常:", e); }
         try {
           if (larkAppConfigured(env)) await sendAppCard(env, { config: { wide_screen_mode: true },
-            header: { template: "red", title: { tag: "plain_text", content: "WANEW 🔴 获客机器停摆" } },
+            header: { template: "red", title: { tag: "plain_text", content: "AIRSONDE 🔴 获客机器停摆" } },
             elements: [{ tag: "div", text: { tag: "lark_md", content: text } }] });
         } catch (e) { console.error("stall-alert appbot:", e); }
         console.error(`stall-watch: 已告警（连续 ${streak} 轮零产出）`);

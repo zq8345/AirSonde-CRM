@@ -2,12 +2,12 @@
 import type { Env } from "./index";
 import { htmlToText } from "./scrape";
 
-const UA = "Mozilla/5.0 (compatible; WanewBot/0.1; +https://wanew.com)";
+const UA = "Mozilla/5.0 (compatible; AirSondeBot/0.1; +https://airsonde.com)";
 // ⚠️ 6000 → 15000。2026-07-28 抽样实测（12 家「已批准但无邮箱」的真线索）：
 //   **8/12 家的联系页响应超过 6 秒**（7.1 / 7.3 / 8.4 / 11.3 / 11.5 / 12.0s …），
 //   全部在我们看到页面之前就被自己的超时掐断 → 报"没找到"，而页面上其实有邮箱
 //   （手动验证：boemarine.com/contact 上就有 sales@boemarine.com）。
-//   排除过的干扰项（**都实测过，不是推测**）：UA 不是原因（WanewBot 与浏览器 UA 均返 200）、
+//   排除过的干扰项（**都实测过，不是推测**）：UA 不是原因（AirSondeBot 与浏览器 UA 均返 200）、
 //   跳转不是原因（fetchPage 已 redirect:"follow"）、本地出站闸门不是原因（拦截 0 次）。
 //   ⚠️ 生产实测同一批 12 家命中率同样是 2/12 —— 与本机一致，说明**不是我这边网络慢**，
 //      是这批 B2B 小站本身慢。8 个路径是**并行**抓的，放宽超时不会让单轮耗时线性增长。

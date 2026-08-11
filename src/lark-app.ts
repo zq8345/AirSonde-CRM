@@ -1,4 +1,4 @@
-// 批㉔：Lark 应用机器人（Wanew CRM）—— 多维表格镜像同步 + 带操作按钮的卡片 + 回调校验。
+// 批㉔：Lark 应用机器人（AirSonde CRM）—— 多维表格镜像同步 + 带操作按钮的卡片 + 回调校验。
 // 与 notify.ts（自定义机器人 webhook）**并行不替代**：老 webhook 通知照发，这里是应用能力层。
 // 国际版 Lark：所有 API 走 open.larksuite.com（本地联调需 DEV_EGRESS_ALLOW=open.larksuite.com）。
 import type { Env } from "./index";
@@ -23,7 +23,7 @@ async function bumpApiUsage(env: Env): Promise<void> {
     if (n >= 8000 && (await getSetting(env, "lark_api_alert_month", "")) !== month) {
       await setSetting(env, "lark_api_alert_month", month);   // 先记再吼：吼失败也不重复吼
       if (larkConfigured(env)) await larkSend(env, { msg_type: "text", content: { text:
-        `WANEW ⚠️ Lark 开放平台 API 本月已用 ${n}/10000 次（免费版硬顶）\n` +
+        `AIRSONDE ⚠️ Lark 开放平台 API 本月已用 ${n}/10000 次（免费版硬顶）\n` +
         `超限后镜像同步/卡片按钮会 429。省法：等下月额度、或减少同步频率、或升级套餐。\n（本提醒每月最多一次）` } });
     }
   } catch (e) { console.error("bumpApiUsage:", e); }
@@ -135,7 +135,7 @@ export function actionReplyCard(r: { leadId: number; company?: string; from?: st
     config: { wide_screen_mode: true },
     header: {
       template: r.category === "complaint" ? "red" : "green",
-      title: { tag: "plain_text", content: `WANEW 新回复 · ${CAT[r.category || "other"] || r.category}` },
+      title: { tag: "plain_text", content: `AIRSONDE 新回复 · ${CAT[r.category || "other"] || r.category}` },
     },
     elements,
   };
@@ -249,7 +249,7 @@ export function doneCard(txt: { title: string; company?: string; detail: string;
 export function testAppCard(appUrl?: string) {
   return {
     config: { wide_screen_mode: true },
-    header: { template: "turquoise", title: { tag: "plain_text", content: "WANEW 应用机器人 · 测试 ✅" } },
+    header: { template: "turquoise", title: { tag: "plain_text", content: "AIRSONDE 应用机器人 · 测试 ✅" } },
     elements: [
       { tag: "div", text: { tag: "lark_md", content: "这张卡来自**应用机器人**（非 webhook）。按钮回调链路可用下面的测试按钮验证——它不会碰任何真实线索。" } },
       { tag: "action", actions: [

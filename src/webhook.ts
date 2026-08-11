@@ -114,10 +114,10 @@ export async function handleResendEvent(env: Env, event: any): Promise<{ ok: boo
   if (type === "email.complained") {
     if (leadId) await env.DB.prepare("UPDATE leads SET status='blacklisted', updated_at=datetime('now') WHERE id=?").bind(leadId).run();
     await addSuppressedEmail(env, suppressTarget, "complaint");
-    // 投诉是高风险信号，推飞书提醒（标题含 WANEW 兼容自定义关键词）
+    // 投诉是高风险信号，推飞书提醒（标题含 AIRSONDE 兼容自定义关键词）
     try {
       if (larkConfigured(env)) {
-        await larkSend(env, { msg_type: "text", content: { text: `WANEW ⚠️ 收到垃圾邮件投诉(complaint)：${to || "?"}\n已自动加入黑名单、停止再发。请检查开发信内容/发送频率。` } });
+        await larkSend(env, { msg_type: "text", content: { text: `AIRSONDE ⚠️ 收到垃圾邮件投诉(complaint)：${to || "?"}\n已自动加入黑名单、停止再发。请检查开发信内容/发送频率。` } });
       }
     } catch { /* 通知失败不影响处理 */ }
     return { ok: true, action: "complained", lead: leadId };

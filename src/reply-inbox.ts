@@ -2,7 +2,7 @@
 //
 // 这个文件里的每条规则都来自**生产 15 封真回复**，不是设想出来的：
 //   · #13 正文 1105 字符，真实内容只有 "Yes, I would be interested."，其余全是
-//     "On Sat, Jul 25, 2026 at 5:01 AM Tejoy <hello@tejoy.net> wrote: > Hi team, > ..."
+//     "On Sat, Jul 25, 2026 at 5:01 AM AirSonde <hello@airsonde.net> wrote: > Hi team, > ..."
 //     —— 不剥引用，列表里全是我们自己发出去的信。
 //   · #10 长度 **4000**（撞上入库截断上限），真内容一句 "number 8 we would be interested in."
 //   · #1/#2 是 veritasvans 的自动回执，**同一封重复两次**；#15 是 gorgias 满意度调查机器人。

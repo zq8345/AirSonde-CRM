@@ -1,4 +1,4 @@
--- Wanew-CRM (原 TEJOY AI 获客) D1 表结构 —— 单一真源（#45：合并 14 个 schema_*.sql 迁移）
+-- AirSonde-CRM D1 表结构 —— 单一真源（fork 自 Wanew-CRM；上游 #45 已合并 14 个 schema_*.sql 迁移）
 --
 -- 这个文件现在**自足**：全新库跑 `npm run db:init:local` / `:remote` 一次即得完整结构，
 -- 不再需要再手动补跑各 schema_*.sql（旧的 db:init 只跑 base、会漏掉全部迁移列 = 结构不全的坑）。
