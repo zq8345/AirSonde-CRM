@@ -1,0 +1,671 @@
+// P5 自动找客户：关键词 → 搜索 API → 提取公司官网 → 去重入库
+import type { Env } from "./index";
+
+// 默认关键词池（E2：转向 经销/分销/集成/安装 渠道 + 配件×批发，避开亚马逊铺货红海）
+export const DEFAULT_KEYWORDS = [
+  // 渠道型 × Starlink
+  "Starlink dealer",
+  "Starlink distributor",
+  "Starlink wholesale supplier",
+  "Starlink reseller",
+  "Starlink authorized reseller",
+  "Starlink installer",
+  "satellite internet integrator",
+  // 垂直集成/安装
+  "marine satellite internet installer",
+  "marine electronics dealer",
+  "RV satellite internet installer",
+  "off-grid internet installer",
+  "off-grid solar installer",
+  "WISP wireless internet provider",
+  "wireless ISP Starlink",
+  "remote connectivity provider",
+  // 相邻品类 分销/批发
+  "satellite communication equipment distributor",
+  "marine electronics wholesaler",
+  "RV parts wholesale distributor",
+  // 配件意图 × 批发/经销
+  "Starlink mount dealer",
+  "Starlink mount wholesale",
+  "Starlink cable wholesale",
+  "Starlink enclosure wholesale",
+];
+
+// E2：每条搜索追加的排除串（滤掉中国铺货平台）。
+// ⚠️ 实测：Serper/Google 的 `-site:*.cn`/`-site:.cn`（TLD 级 -site）会把结果清零（Google 语法怪癖），故不用；
+// 中文站/.cn 改由结果侧 domain.endsWith('.cn') 兜底过滤（见 runDiscovery）。词级 -term 实测正常生效。
+export const EXCLUDE_QUERY = "-alibaba -aliexpress -made-in-china -dhgate -temu";
+
+interface SearchResult { title: string; url: string; }
+
+// ⭐⭐ 批㉑：目标国家（gl 代码 → 中文名），**覆盖 Starlink 已开放的全部市场**。
+//   Joe 拍板："把所有星链能辐射的国家和地区全部录入，我们又不挑客户。"
+//   —— 微市场"搜出来少"是结果不是门槛（cayelectronics.vg 英属维尔京群岛就是我们库里点过名的
+//      核心目标；船用/离网星链配件的客户密度和国家 GDP/人口不相关）。先跑，后按数据调。
+//   ⚠️ 这是 UI 下拉 + 国家名显示 + cron 搜索面的**唯一真源**（前端 countryName 从 /api/stats
+//      的 allCountries 动态填，不再各写一份）。
+//   ⚠️ Serper/Google 的 gl 参数接受所有 ISO 3166-1 alpha-2 码 → 没有"gl 不支持"的市场。
+//   ⚠️ 星链自己拉黑的 8 国（见 BLACKLIST_GL）不在此表，且 runDiscovery 里再硬挡一道。
+//   ⚠️ 伊朗(ir)/也门(ye) 虽在星链可用数据里，但制裁/冲突敏感，**故意不放进来**（发信更是雷区）；
+//      要加由总工显式决定。
+export const COUNTRIES: Record<string, string> = {
+  // 北美 / 中美 / 加勒比
+  us: "美国", ca: "加拿大", mx: "墨西哥", gt: "危地马拉", bz: "伯利兹", sv: "萨尔瓦多",
+  hn: "洪都拉斯", ni: "尼加拉瓜", cr: "哥斯达黎加", pa: "巴拿马",
+  do: "多米尼加", jm: "牙买加", tt: "特立尼达和多巴哥", bs: "巴哈马", bb: "巴巴多斯",
+  ht: "海地", ag: "安提瓜和巴布达", dm: "多米尼克", lc: "圣卢西亚", vc: "圣文森特和格林纳丁斯",
+  gd: "格林纳达", kn: "圣基茨和尼维斯", vg: "英属维尔京群岛", tc: "特克斯和凯科斯群岛",
+  ky: "开曼群岛", bm: "百慕大", aw: "阿鲁巴", cw: "库拉索", ai: "安圭拉", ms: "蒙特塞拉特",
+  // 南美
+  br: "巴西", ar: "阿根廷", cl: "智利", co: "哥伦比亚", pe: "秘鲁", ec: "厄瓜多尔",
+  py: "巴拉圭", uy: "乌拉圭", bo: "玻利维亚", gy: "圭亚那", sr: "苏里南", ve: "委内瑞拉",
+  // 欧洲
+  gb: "英国", ie: "爱尔兰", de: "德国", fr: "法国", nl: "荷兰", es: "西班牙", it: "意大利",
+  pt: "葡萄牙", pl: "波兰", at: "奥地利", be: "比利时", ch: "瑞士", se: "瑞典", no: "挪威",
+  dk: "丹麦", fi: "芬兰", gr: "希腊", ro: "罗马尼亚", cz: "捷克", sk: "斯洛伐克", hu: "匈牙利",
+  hr: "克罗地亚", si: "斯洛文尼亚", bg: "保加利亚", lt: "立陶宛", lv: "拉脱维亚", ee: "爱沙尼亚",
+  lu: "卢森堡", mt: "马耳他", cy: "塞浦路斯", is: "冰岛", ua: "乌克兰", md: "摩尔多瓦",
+  mk: "北马其顿", al: "阿尔巴尼亚", rs: "塞尔维亚", me: "黑山", ba: "波黑", ge: "格鲁吉亚",
+  // 非洲
+  ng: "尼日利亚", ke: "肯尼亚", zw: "津巴布韦", za: "南非", mz: "莫桑比克", zm: "赞比亚",
+  rw: "卢旺达", mw: "马拉维", bw: "博茨瓦纳", gh: "加纳", na: "纳米比亚", mg: "马达加斯加",
+  sl: "塞拉利昂", bj: "贝宁", ci: "科特迪瓦", sz: "斯威士兰", so: "索马里", ma: "摩洛哥",
+  // 中东
+  ae: "阿联酋", jo: "约旦",
+  // 亚太
+  au: "澳大利亚", nz: "新西兰", vn: "越南", id: "印尼", lk: "斯里兰卡", sg: "新加坡",
+  ph: "菲律宾", jp: "日本", kr: "韩国", my: "马来西亚", mn: "蒙古", kz: "哈萨克斯坦",
+  bd: "孟加拉", bt: "不丹", mv: "马尔代夫", in: "印度", tl: "东帝汶",
+  // 太平洋岛国
+  fj: "斐济", pg: "巴布亚新几内亚", ws: "萨摩亚", to: "汤加", vu: "瓦努阿图", sb: "所罗门群岛",
+  ki: "基里巴斯", fm: "密克罗尼西亚", mh: "马绍尔群岛", pw: "帕劳", nr: "瑙鲁", tv: "图瓦卢",
+  ck: "库克群岛", gu: "关岛", mp: "北马里亚纳群岛",
+};
+
+// ⭐ 永不搜的市场：runDiscovery 里硬挡，双保险。
+//   · 星链自己拉黑的 8 国：af by cn hk mo kp ru sy
+//   · cu(古巴)：制裁、无服务。 ir(伊朗)：政府定为重罪 + GPS 干扰，无合法经销市场。
+//     （判据：starlink.com/map 能正常下单才进 COUNTRIES；cu/ir 进不来，硬排除是双保险。）
+export const BLACKLIST_GL = new Set(["af", "by", "cn", "hk", "mo", "kp", "ru", "sy", "cu", "ir"]);
+
+// ⭐ 批㉑：默认搜索面 = **COUNTRIES 全量**（减去拉黑）。
+//   Joe 要"系统全包国家"，所以不再是"勾选子集"。配置缺失 = 全量（见 getSearchConfig），不是零。
+export const DEFAULT_COUNTRIES = Object.keys(COUNTRIES).filter((c) => !BLACKLIST_GL.has(c));
+
+// 遗留数据国家推断：按官网 ccTLD 后缀映射（最佳努力）。
+// 通用后缀（.com/.net/.org 等）+ 被当"通用短域名"卖的伪 ccTLD（.co/.io/.ai/.me/.tv/.cc，
+//   如 .co=哥伦比亚但大量美国公司在用）一律不当国家信号 → 返回 ""（保持 NULL，不猜、不默认美国）。
+// 只保留明确 ccTLD：多级更稳（.com.au/.co.nz/.com.br/.com.co/.co.uk/.co.za）+ 真国别单级（.us/.ca/.mx/.nz/.au/.ng/.ke/.cl/.pe/.ar 等）。
+//   （.us 是真 ccTLD，非美企基本不用；命中率低但命中即可靠，不违"绝不瞎猜"。）
+// 按后缀长度降序匹配（下方 .sort 保证），使 .co.za/.co.ke 等长后缀先于短后缀命中，避免误判。
+const CCTLD_MAP: [string, string][] = ([
+  [".com.au", "AU"], [".net.au", "AU"], [".org.au", "AU"], [".au", "AU"],
+  [".co.nz", "NZ"], [".net.nz", "NZ"], [".nz", "NZ"],
+  [".co.uk", "GB"], [".org.uk", "GB"], [".uk", "GB"],
+  [".com.br", "BR"], [".br", "BR"],
+  [".com.mx", "MX"], [".mx", "MX"],
+  [".com.ar", "AR"], [".ar", "AR"],
+  [".cl", "CL"], [".com.co", "CO"], [".com.pe", "PE"], [".pe", "PE"],
+  [".ca", "CA"], [".us", "US"],
+  [".co.za", "ZA"], [".za", "ZA"],
+  [".com.ng", "NG"], [".ng", "NG"], [".co.ke", "KE"], [".ke", "KE"], [".co.zw", "ZW"], [".zw", "ZW"],
+  [".com.vn", "VN"], [".vn", "VN"], [".co.id", "ID"], [".id", "ID"], [".lk", "LK"],
+  [".com.sg", "SG"], [".sg", "SG"], [".com.ph", "PH"], [".ph", "PH"],
+  [".de", "DE"], [".fr", "FR"], [".nl", "NL"], [".es", "ES"], [".it", "IT"], [".ae", "AE"],
+] as [string, string][]).sort((a, b) => b[0].length - a[0].length);
+export function inferCountryFromWebsite(website: string): string {
+  let host = "";
+  try { host = new URL(website).hostname.toLowerCase(); }
+  catch { host = (website || "").toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, ""); }
+  host = host.replace(/^www\./, "");
+  if (!host) return "";
+  for (const [suffix, cc] of CCTLD_MAP) {   // 已按后缀长度降序：最特异的先匹配
+    if (host.endsWith(suffix)) return cc;
+  }
+  return ""; // 通用后缀无法判定 → 保持 NULL（不猜、不默认美国）
+}
+
+// 搜索提供商（可插拔）：默认 Serper（Google 搜索 API，便宜，有免费额度）
+// gl = 国家定向（如 us/au/ca）
+export async function searchCompanies(env: Env, query: string, num = 10, gl = "us"): Promise<SearchResult[]> {
+  const provider = (env.SEARCH_PROVIDER || "serper").toLowerCase();
+  if (provider === "serper") return searchSerper(env, query, num, gl);
+  throw new Error(`未知搜索提供商: ${provider}（目前支持 serper）`);
+}
+
+async function searchSerper(env: Env, query: string, num: number, gl: string): Promise<SearchResult[]> {
+  if (!env.SEARCH_API_KEY) throw new Error("缺少 SEARCH_API_KEY（去 serper.dev 生成，免费额度即可）");
+  const q = `${query} ${EXCLUDE_QUERY}`.trim(); // E2：追加排除串，滤中国铺货平台/中文站
+  const res = await fetch("https://google.serper.dev/search", {
+    method: "POST",
+    headers: { "X-API-KEY": env.SEARCH_API_KEY, "content-type": "application/json" },
+    body: JSON.stringify({ q, num, gl }),
+  });
+  if (!res.ok) throw new Error(`Serper ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`);
+  const data: any = await res.json();
+  return (data.organic || [])
+    .map((o: any) => ({ title: o.title || "", url: o.link || "" }))
+    .filter((r: SearchResult) => r.url);
+}
+
+/**
+ * 每日 Serper 搜索次数的**默认**上限（settings.serper_daily_budget 没设时用它）。
+ *
+ * ⚠️ 它是**封顶**，不是油门。别指望调高它就能多搜 —— 真正决定每天搜多少次的是另外两个：
+ *   · `maxCombos`（cron 每轮只跑 20 个 keyword×country 组合，见 index.ts 的 runDiscovery 调用）
+ *   · `isDiscoveryRound`（hourUtc % 6 === 0 → 一天只有 4 轮）
+ *   → 4 轮 × 20 = **80 次/天**，生产实测正是 70-80/天，从来没撞到过 200 这个封顶。
+ * 所以 200→1000 只是把天花板抬高留出余量；要真的多找客户，得动 maxCombos / 轮次 / 词×国。
+ * 单一真源：discover.ts 和 index.ts 的兜底都引用这个常量，别再各写各的字面量。
+ */
+export const SERPER_DAILY_BUDGET_DEFAULT = 1000;
+
+// 找客户配置：目标国家 + 每关键词每国家取几条
+// ⭐⭐ 批㉑：cron 搜索面**永远是全量**（Joe 要"系统全包国家"）。
+//   旧的 `search_countries` / `country_list`（勾选墙写的）已**作废**：勾选墙删了，没人再写它们；
+//   这里也**不再读它们** —— 否则存量里那份 26 国旧清单会把新的全量搜索面**悄悄缩回 26**
+//   （正是总工提醒的"别让读不到/读到旧配置变成搜索面变窄"）。
+//   单国定向不走这里（它是 runDiscovery 的 opts.countries 一次性覆盖，不写配置）。
+export async function getSearchConfig(env: Env): Promise<{ countries: string[]; perKeyword: number }> {
+  const pRow = await env.DB.prepare("SELECT value FROM settings WHERE key='search_per_keyword'").first<{ value: string }>();
+  const perKeyword = Math.min(Math.max(Number(pRow?.value) || 8, 1), 100);   // #45 放开到 100，尊重滑块
+  return { countries: DEFAULT_COUNTRIES.slice(), perKeyword };   // 全量（已减去拉黑 8 国）
+}
+
+function domainOf(url: string): string {
+  try { return new URL(url).hostname.replace(/^www\./, "").toLowerCase(); } catch { return ""; }
+}
+
+// 过滤平台/目录/社媒/比价/大ISP/招聘/媒体等非目标公司域名
+const JUNK_DOMAINS = [
+  // 平台/社媒
+  "google.", "facebook.", "youtube.", "yelp.", "reddit.", "amazon.", "ebay.",
+  "wikipedia.", "linkedin.", "instagram.", "twitter.", "x.com", "tiktok.",
+  "pinterest.", "starlink.com", "spacex.com", "maps.google", "bbb.org",
+  "quora.", "medium.com", "apple.com", "play.google", "wa.me", "t.me",
+  "fandom.", "craigslist.",
+  // 招聘站
+  "indeed.", "glassdoor.", "ziprecruiter.", "simplyhired.", "monster.", "snagajob.",
+  // 比价/评测/聚合站（非采购方）
+  "broadbandsearch.", "highspeedinternet.", "satelliteinternet.", "broadbandnow.",
+  "whistleout.", "allconnect.", "comparitech.", "cnet.", "pcmag.", "tomsguide.",
+  "reviews.org", "broadbandmap.", "techradar.", "forbes.", "usnews.",
+  // 大 ISP / 卫星 ISP（非目标客户/竞争对手）
+  "spectrum.", "earthlink.", "xfinity.", "verizon.", "att.com", "t-mobile.",
+  "viasat.", "hughesnet.", "centurylink.", "frontier.com",
+  // 媒体/市场/大牌零售/文档/论坛
+  "yachtworld.", "boattrader.", "boats.com", "tripadvisor.",
+  "bestbuy.", "westmarine.", "readme.io", "inmyarea.", "irv2.",
+  "roadslesstraveled.", "walmart.", "homedepot.", "target.com",
+  // E2：中国铺货平台/批发站（避开价格战红海；-site:*.cn 之外的结果侧兜底）
+  "alibaba.", "aliexpress.", "made-in-china.", "dhgate.", "temu.", "1688.com", "globalsources.",
+];
+function isJunkDomain(d: string): boolean {
+  return !d || JUNK_DOMAINS.some((j) => d.includes(j));
+}
+
+function cleanTitle(t: string): string {
+  return (t || "").split(/\s*[|–—]\s*|\s+-\s+/)[0].trim().slice(0, 120) || "(unknown)";
+}
+
+// M1 公司名：优先用域名主标签推公司名（比搜索标题碎片可靠：域名一定是这家公司的站）。
+// betamarineusa.com → "Betamarineusa"；foo-bar.co.uk → "Foo Bar"。返回 "" 时调用方回落 cleanTitle。
+export function companyFromDomain(domain: string): string {
+  const host = (domain || "").replace(/^www\./, "").toLowerCase();
+  if (!host) return "";
+  const parts = host.split(".").filter(Boolean);
+  if (parts.length < 2) return "";
+  // 主标签 = TLD 前一段；若命中 co/com/net/org/gov/edu/ac（如 .com.au/.co.uk）再往前取一段
+  let label = parts[parts.length - 2];
+  if (parts.length >= 3 && ["co", "com", "net", "org", "gov", "edu", "ac"].includes(label)) label = parts[parts.length - 3];
+  label = label.replace(/[-_]+/g, " ").trim();
+  if (!label) return "";
+  return label.split(" ").map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w)).join(" ").slice(0, 80);
+}
+
+// ⭐ 顺带修③ 入库去重：以前三处都写 `WHERE website=? OR website=?`（原文比对 + 一个 www 变体）——
+//   **同一个缺陷复制了三份**，而且都漏：协议不同、大小写不同、尾部斜杠都能骗过它。
+//   生产实证（只读查出来的）：
+//     #163 https://2csyachtoutfitters.com   vs  #238 http://www.2CsYachtOutfitters.com  ← 同一个站，录了两次
+//     #165 https://alliancenav.com          vs  #241 http://www.alliancenav.com
+//   后果不只是列表里多几行：两行的**邮箱是同一个**，而发信幂等按 lead_id 判 → 同一个地址会收到两封冷邮件。
+//   （发信那一层我也加了按邮箱地址的兜底，见 send.ts；这里是堵源头。）
+//
+/** 规范化域名：去协议、去 www、转小写、去尾斜杠和路径 → 用它比对才认得出"同一个站" */
+export function normalizeHost(url: string): string {
+  const s = String(url || "").trim().toLowerCase();
+  if (!s) return "";
+  const noProto = s.replace(/^https?:\/\//, "");
+  const host = noProto.split("/")[0].split("?")[0].split("#")[0];
+  return host.replace(/^www\./, "").replace(/\.$/, "");
+}
+
+/** 这个网址是否已在库里（按规范化域名比对，认得出 http/https、www、大小写、尾斜杠的差异） */
+export async function findLeadByHost(env: Env, url: string): Promise<{ id: number } | null> {
+  const host = normalizeHost(url);
+  if (!host) return null;
+  // SQLite 没有正则；用 lower(...) + 四种常见前缀形态覆盖（比原来的两种全，且认大小写）
+  const row = await env.DB.prepare(
+    `SELECT id FROM leads
+      WHERE lower(replace(replace(replace(rtrim(website,'/'),'https://',''),'http://',''),'www.','')) = ?
+      LIMIT 1`
+  ).bind(host).first<{ id: number }>();
+  return row || null;
+}
+
+/**
+ * 邮箱规范化：去空白 + 转小写。
+ * （RFC 上邮箱本地部分是大小写敏感的，但现实里没有服务商这么用；
+ *   而"同一个人被当成两条线索、被发两封开发信"的代价，远大于这点理论正确性。）
+ */
+export function normalizeEmail(email: string | null | undefined): string {
+  return String(email || "").trim().toLowerCase();
+}
+
+/**
+ * 这个邮箱是否已在库里。
+ * ⚠️ **空邮箱绝不参与判重** —— 否则"所有没邮箱的线索"会彼此命中，一条都进不来。
+ *   这是批⑮ 派单里特意点名的那条（`email IS NOT NULL AND email != ''`）。
+ */
+export async function findLeadByEmail(env: Env, email: string | null | undefined): Promise<{ id: number } | null> {
+  const e = normalizeEmail(email);
+  if (!e) return null;
+  const row = await env.DB.prepare(
+    `SELECT id FROM leads WHERE email IS NOT NULL AND email != '' AND lower(trim(email)) = ? LIMIT 1`
+  ).bind(e).first<{ id: number }>();
+  return row || null;
+}
+
+/**
+ * ⭐⭐ 批⑮：**统一的"这条线索是不是已经在库里"** —— 三条 discover 管道 + CSV 导入共用这一个。
+ *
+ * 起因：Joe 点「发邮件」，16 家里 14 家被跳过，理由是"邮箱已收过开发信（同一家被重复录入）"。
+ * 发送闸是对的（同一个邮箱不发第二封），错在**录入时没判重**：同一家公司被 NMEA 又录了一遍，
+ * 因为两次的网址文本不同（`https://x.com` vs `http://www.X.com`），而当时只做原文比对。
+ *
+ * 为什么必须收敛成一个函数（不是各管道各写一份）：
+ *   盘点时发现网址归一化三条管道都调了 `findLeadByHost`，但**CSV 导入那条是原文比对**，
+ *   而且**四条路没有一条按邮箱判重**。各写各的 = 补一处漏三处，正是"连根拔"要防的。
+ *
+ * ⚠️ **不按状态过滤**（和既有的 findLeadByHost 保持一致）。派单原话是"非终态才判重"，
+ *   我做成了**全状态**，理由两条：
+ *   ① 安全不对称：一个 `unsubscribed` 的邮箱若能重新录进来，就等于给"再发一次"开了口子；
+ *      漏判的代价（合规）远大于误判的代价。
+ *   ② **判重不会丢掉这家公司** —— 它本来就还在库里（只是在已忽略/已退订格），
+ *      Joe 随时能「恢复到待审批」。所以全状态判重**没有任何机会成本**。
+ */
+export async function findDuplicateLead(
+  env: Env, lead: { website?: string | null; email?: string | null }
+): Promise<{ id: number; by: "website" | "email" } | null> {
+  if (lead.website) {
+    const hit = await findLeadByHost(env, lead.website);
+    if (hit) return { id: hit.id, by: "website" };
+  }
+  if (normalizeEmail(lead.email)) {
+    const hit = await findLeadByEmail(env, lead.email);
+    if (hit) return { id: hit.id, by: "email" };
+  }
+  return null;
+}
+
+/**
+ * 跨域名疑似同一家（总工点名的 SPACETEK .com.au/.co.nz 那类）：域名主体相同即疑似。
+ * **标记不合并** —— 它们可能真是同一家的多个区域站（生产实测：seasucker.com/.eu/.de、
+ * spacetek.com.au/.co.nz、datalake.ph/.id），也可能只是撞名。
+ * **合并是不可逆的，标记是可逆的**；由人决定。
+ */
+export async function findSiblingByRoot(env: Env, url: string): Promise<{ id: number; company_name: string; website: string } | null> {
+  const host = normalizeHost(url);
+  const label = companyFromDomain(host).toLowerCase().replace(/\s+/g, "");
+  if (!label || label.length < 4) return null;   // 太短的主体（如 abc）撞名概率高，不报疑似
+  const rows = (await env.DB.prepare(
+    "SELECT id, company_name, website FROM leads WHERE website IS NOT NULL AND website != '' LIMIT 2000"
+  ).all()).results as any[];
+  for (const r of rows) {
+    const h = normalizeHost(r.website);
+    if (h === host) continue;                     // 同一个站是"重复"不是"疑似同一家"，归 findLeadByHost 管
+    if (companyFromDomain(h).toLowerCase().replace(/\s+/g, "") === label) return r;
+  }
+  return null;
+}
+
+/**
+ * 入库后给"疑似同一家"打标记（写 notes，详情页可见）。
+ * 用 notes 而不是新加一列：不需要迁移，而且**这是给人看的提示不是机器的判据** ——
+ * 机器不该据此自动合并/跳过，它只是在 Joe 打开这条时告诉他"隔壁还有一个长得像的"。
+ */
+export async function markSibling(env: Env, leadId: number, website: string): Promise<void> {
+  if (!leadId) return;
+  try {
+    const sib = await findSiblingByRoot(env, website);
+    if (!sib) return;
+    await env.DB.prepare(
+      `UPDATE leads SET notes = substr(COALESCE(notes,'') || char(10) || '[' || datetime('now') || '] 疑似与 #' || ?
+              || '（' || ? || '）是同一家：域名主体相同、站点不同。**没有自动合并** —— 可能真是同一家的多个区域站，也可能只是撞名，你来判断。', -4000)
+        WHERE id = ?`
+    ).bind(sib.id, sib.website, leadId).run();
+  } catch (e) { console.error("markSibling:", e); }   // 打标记失败不该拖垮入库
+}
+
+// 快赢②：识别"文章/攻略/资讯页"而非真实经营的公司/买家，入库前过滤掉最明显的噪音。
+// 保守起见：URL 路径出现博客/攻略段，或标题呈明显文章句式，才判为内容页。
+const ARTICLE_URL_RE = /\/(blog|blogs|guide|guides|article|articles|news|wiki|resources?|how-?to|tutorials?|tips|diy|learn|magazine|stories|faq|glossary)(\/|$|\?)|\/20\d\d\//i;
+// 标题句式：how to / guide / tutorial / step-by-step / DIY / tips / best…20xx / listicle 等 → 内容页
+const ARTICLE_TITLE_RE = /^(what is|why |when to|where to|top \d+|best \d+|\d+ best|the \d+ )|\bhow[\s-]?to\b|step[\s-]?by[\s-]?step|\bguide\b|\btutorial\b|\bdiy\b|\btips\b|\bvs\.?\b|\bexplained\b|\breview:|\bcheat sheet\b|\bchecklist\b|\bbest\b.{0,25}\b20\d\d\b/i;
+export function isLikelyArticle(title: string, url: string): boolean {
+  const u = (url || "").toLowerCase();
+  if (ARTICLE_URL_RE.test(u)) return true;
+  if (ARTICLE_TITLE_RE.test((title || "").trim())) return true;
+  return false;
+}
+
+export interface DiscoverResult {
+  keywords: number;
+  searched: number;
+  inserted: number;
+  skipped: number;
+  contentSkipped: number; // 快赢②：被判为文章/攻略页而过滤掉的数量
+  errors: string[];
+  budgetStopped?: boolean;    // P0-c：本轮因触及今日 Serper 预算上限而提前停
+  serperUsedToday?: number;   // P0-c：今日累计 Serper 搜索次数
+  serperBudget?: number;      // P0-c：今日 Serper 预算上限
+  searchFailed?: number;      // 本轮有几次搜索直接失败（额度用尽/4xx）；原话记在 settings.serper_fail_last
+}
+
+// 主流程：对每个关键词 × 每个目标国家搜索 → 提取公司域名 → 去重 → 入库(status=new)
+export async function runDiscovery(env: Env, opts: { keywords?: string[]; perKeyword?: number; countries?: string[]; maxCombos?: number } = {}): Promise<DiscoverResult> {
+  const keywords = opts.keywords?.length ? opts.keywords : await getKeywords(env);
+  const cfg = await getSearchConfig(env);
+  const perKeyword = Math.min(Math.max(opts.perKeyword || cfg.perKeyword, 1), 100);   // #45 放开到 100，尊重滑块
+  // ⭐ 批㉑：拉黑 8 国**硬挡**（即使有人手动传进来/塞进配置也搜不了）。双保险，不只靠 COUNTRIES 不含它们。
+  const countries = (opts.countries?.length ? opts.countries : cfg.countries).filter((gl) => !BLACKLIST_GL.has(gl));
+
+  // 展平所有 keyword×country 组合（每组合 = 1 次 Serper 搜索）
+  let combos: { kw: string; gl: string }[] = [];
+  for (const kw of keywords) for (const gl of countries) combos.push({ kw, gl });
+
+  // ⭐ 批㉑：国家从 27 → 全量那一刻，combos 总数变了 → 旧 discovery_cursor 指向的 (kw,gl)
+  //   会错位（游标是 combos 的**平铺下标**）。上线首日一次性把游标归零，让轮转从头开始，
+  //   别从随机位置跳格。一次性：靠 settings 标记，之后不再动。
+  if ((await getS(env, "discovery_cursor_reset_batch21", "")) !== "1") {
+    await setS(env, "discovery_cursor", "0");
+    await setS(env, "discovery_cursor_reset_batch21", "1");
+  }
+
+  // P0-b 轮转窗口：cron 传 maxCombos 时，只跑一小批，用 discovery_cursor 环绕，下轮接着跑（别每轮全量 572）
+  if (opts.maxCombos && opts.maxCombos < combos.length) {
+    const totalC = combos.length;
+    let cursor = Number(await getS(env, "discovery_cursor", "0")) || 0;
+    cursor = ((cursor % totalC) + totalC) % totalC;
+    const window: { kw: string; gl: string }[] = [];
+    for (let i = 0; i < opts.maxCombos; i++) window.push(combos[(cursor + i) % totalC]);
+    const next = (cursor + opts.maxCombos) % totalC;
+    await setS(env, "discovery_cursor", String(next));
+    // 批㉑：轮转推进日志（游标是 combos 的平铺下标，"接着上次往下走"，环绕）——公平性实测靠它取证。
+    console.log(`discovery rotation: cursor ${cursor} → ${next}（共 ${totalC} 个 kw×国 组合，本轮取 ${opts.maxCombos} 个）`);
+    combos = window;
+  }
+
+  // P0-c Serper 积分：今日计数 + 硬预算上限（到顶自动停，别再失控烧免费额度）。注意用 isFinite 判定，允许预算=0（完全暂停）
+  const braw = Number(await getS(env, "serper_daily_budget", String(SERPER_DAILY_BUDGET_DEFAULT)));
+  const budget = Math.max(0, Number.isFinite(braw) ? braw : SERPER_DAILY_BUDGET_DEFAULT);
+  const usedKey = `serper_used_${new Date().toISOString().slice(0, 10)}`;
+  let usedToday = Number(await getS(env, usedKey, "0")) || 0;
+
+  let inserted = 0, skipped = 0, searched = 0, contentSkipped = 0, budgetStopped = false, searchFailed = 0;
+  const errors: string[] = [];
+  const seenThisRun = new Set<string>();
+
+  for (const { kw, gl } of combos) {
+    if (usedToday >= budget) { budgetStopped = true; break; }   // 触及今日预算 → 停
+    let results: SearchResult[];
+    try {
+      results = await searchCompanies(env, kw, perKeyword, gl);
+      searched++; usedToday++;
+      await setS(env, usedKey, String(usedToday));   // 每搜一次即记账，进程中断也不丢
+    } catch (e: any) {
+      const why = `${kw}/${gl}: ${e?.message || e}`;
+      errors.push(why);
+      searchFailed++;
+      // ⭐ **每次都记原话**（不去重、不等阈值、不看 streak）。
+      //   免费额度烧完那天 Serper 会开始返 4xx，而这条链路是"每次搜索各自 catch + continue"
+      //   —— 好处是砸不掉整轮 cron，坏处是**它会安安静静地一条线索都不产出，没人知道**。
+      //   「记录证据 ≠ 报告结论」：要不要吼是另一回事，先把服务器原话原样留下来。
+      try {
+        await setS(env, "serper_fail_last",
+          `${new Date().toISOString().slice(0, 19).replace("T", " ")} ${why}`.slice(0, 500));
+      } catch { /* 记录失败不能反过来拖垮找客户本身 */ }
+      continue;
+    }
+    for (const r of results) {
+      const domain = domainOf(r.url);
+      if (isJunkDomain(domain) || seenThisRun.has(domain)) { skipped++; continue; }
+      // E2：结果侧兜底滤中国站（.cn / .com.cn），以防 -site:*.cn 未完全生效
+      if (domain.endsWith(".cn")) { skipped++; continue; }
+      // 快赢②：明显的文章/攻略/资讯页不入库（非真实买家）
+      if (isLikelyArticle(r.title, r.url)) { contentSkipped++; continue; }
+      seenThisRun.add(domain);
+      const website = "https://" + domain;
+      // 按规范化域名去重（认得出 http/https、www、大小写、尾斜杠 —— 原来的原文比对全漏，见 normalizeHost 注释）
+      // 批⑮：统一走 findDuplicateLead（网址归一化 + 邮箱两把钥匙，全库唯一一条判重规则）。
+      // 这条管道插入时没有邮箱（邮箱是 analyzeLead 抓站时才回填的）→ 实际只有网址那把生效；
+      // 用共用函数是为了**以后谁给这条路加上邮箱时，判重自动跟上**，不用再想起来补一次。
+      const dup = await findDuplicateLead(env, { website });
+      if (dup) { skipped++; continue; }
+      const company = companyFromDomain(domain) || cleanTitle(r.title);   // M1 域名推名优先，回落标题
+      const country = inferCountryFromWebsite(website) || gl.toUpperCase(); // M2 ccTLD 推真实所在国优先，gl 仅兜底；统一大写
+      const ins = await env.DB.prepare(
+        "INSERT INTO leads (company_name, website, country, source, keyword, status) VALUES (?, ?, ?, 'search', ?, 'new')"
+      ).bind(company, website, country, kw).run();
+      await markSibling(env, Number(ins.meta.last_row_id), website);   // 跨域名疑似同一家 → 打标记，不合并
+      inserted++;
+    }
+  }
+  // 全军覆没（跑了但一次都没成功）多半是额度用尽/密钥失效 —— 这种最该在日志里一眼看见。
+  if (searchFailed && !searched) console.error(`discovery: ${searchFailed} 次搜索全部失败（额度用尽/密钥失效？）最近一条见 settings.serper_fail_last`);
+  return { keywords: keywords.length, searched, inserted, skipped, contentSkipped, errors: errors.slice(0, 10), budgetStopped, serperUsedToday: usedToday, serperBudget: budget, searchFailed };
+}
+
+// P0-c：读今日 Serper 用量 + 预算（供后台展示）
+export async function getSerperUsage(env: Env): Promise<{ usedToday: number; budget: number }> {
+  const usedKey = `serper_used_${new Date().toISOString().slice(0, 10)}`;
+  const usedToday = Number(await getS(env, usedKey, "0")) || 0;
+  const braw = Number(await getS(env, "serper_daily_budget", String(SERPER_DAILY_BUDGET_DEFAULT)));
+  const budget = Math.max(0, Number.isFinite(braw) ? braw : SERPER_DAILY_BUDGET_DEFAULT);
+  return { usedToday, budget };
+}
+
+// ===== 免费目录发现源（批B）：零 Serper 搜索费，抓公开会员目录入库，走现有去重+分析管道 =====
+export interface DirectoryResult {
+  affcode?: string; fetched: number; inserted: number; skipped: number; noSite: number; social: number; errors: string[];
+}
+// NMEA 会员目录：Learn More(slug+listingID) 与 Visit Site(官网) 相邻成对；一条正则配对抽取
+const NMEA_LISTING_RE = /\/Directory-Listing\/([^"]+?)-(\d+)"[^>]*>\s*Learn More\s*<\/a>\s*<\/span>\s*<span class="ListingResults_Level3_VISITSITE">\s*\|\s*<a href="([^"]+)"/g;
+const NMEA_AFFCODES = ["Dealer", "International"];   // Manufacturer(多为厂商非买家)默认不抓
+
+// 抓 NMEA 船舶电子经销商目录的**单个 affcode**（前端逐个调、间隔 10s 遵守 Crawl-delay），入库 source='nmea'
+export async function runNmeaDiscovery(env: Env, affcode: string): Promise<DirectoryResult> {
+  const aff = NMEA_AFFCODES.includes(affcode) ? affcode : "Dealer";
+  const out: DirectoryResult = { affcode: aff, fetched: 0, inserted: 0, skipped: 0, noSite: 0, social: 0, errors: [] };
+  let html = "";
+  try {
+    const res = await fetch(`https://web.nmea.org/directory/results/results.aspx?affcode=${encodeURIComponent(aff)}&ysort=true`, {
+      headers: { "user-agent": "WanewBot/1.0 (+https://wanew.com; contact hello@wanew.com)" },
+    });
+    if (!res.ok) { out.errors.push(`HTTP ${res.status}`); return out; }
+    html = await res.text();
+  } catch (e: any) { out.errors.push(String(e?.message || e)); return out; }
+
+  const seen = new Set<string>();
+  NMEA_LISTING_RE.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = NMEA_LISTING_RE.exec(html))) {
+    out.fetched++;
+    // ⚠️ 这个名字来自 URL slug，**里面是 URL 编码的**。不解码的话 Joe 在后台看到的是
+    //    `Philbrook%27s Boatyard`（`%27` = 撇号）—— 生产实测就有这么一条（#410，nmea 管道，07-14）。
+    //    decodeURIComponent 遇到坏序列（比如孤零零一个 `%`）会抛 URIError，所以兜一下：
+    //    解不开就用原文 —— **绝不因为一个名字没解码就把整家公司丢掉**。
+    let slug = m[1];
+    try { slug = decodeURIComponent(slug); } catch { /* 坏编码 → 用原文，名字丑总比丢线索强 */ }
+    const rawName = slug.replace(/-/g, " ").replace(/\s+/g, " ").trim();
+    const href = (m[3] || "").trim();
+    if (/^https?:\/\/NA\/?$/i.test(href)) { out.noSite++; continue; }                 // 占位无站
+    const low = href.toLowerCase();
+    if (low.includes("facebook.com") || low.includes("instagram.com")) { out.social++; continue; }  // 社媒不当官网
+    const domain = domainOf(href);
+    if (!domain || isJunkDomain(domain) || seen.has(domain)) { out.skipped++; continue; }
+    seen.add(domain);
+    const website = href.startsWith("http") ? href.replace(/\/+$/, "") : "https://" + domain;
+    const dup = await findDuplicateLead(env, { website });   // 批⑮：统一判重（网址归一化 + 邮箱）
+    if (dup) { out.skipped++; continue; }
+    const company = rawName || companyFromDomain(domain) || "(unknown)";
+    const country = inferCountryFromWebsite(website) || null;   // ccTLD 能推则填，否则留空由 AI 分析回填
+    // ⭐ 存 affcode（Dealer / International）到 keyword：以前只写 source='nmea'，把这条丢了 →
+    //    入库后再也分不清哪条来自哪个分支，来源背书也就没法分级、没法追溯。
+    //    （存量那 196 条的 keyword 全是 NULL，无法回溯，统一按泛称 "NMEA 目录" 处理。）
+    const ins = await env.DB.prepare("INSERT INTO leads (company_name, website, country, source, keyword, status) VALUES (?, ?, ?, 'nmea', ?, 'new')").bind(company, website, country, aff).run();
+    await markSibling(env, Number(ins.meta.last_row_id), website);   // 跨域名疑似同一家 → 打标记，不合并
+    out.inserted++;
+  }
+  return out;
+}
+
+// rvwithtito RV 离网/太阳能安装商名单：URL + 黑名单单一真源（端点与 cron 自动刷新共用，避免两处漂移）
+export const RVWITHTITO_URL = "https://rvwithtito.com/rv-solar-installers/";
+export const RVWITHTITO_BLACKLIST = [
+  "rvwithtito", "google", "facebook", "instagram", "surecart", "mailerlite", "youtube", "twitter", "amazon",
+  "wp.com", "gravatar", "w.org", "gmpg.org", "w3.org", "schema.org", "googleapis", "gstatic", "jquery",
+  "bootstrapcdn", "cloudflare", "wordpress.org",   // 滤 WP <head> 样板域
+];
+
+// 队列⑦：免费目录源「每周自动刷新」——零 Serper。cron 每 6h 调一次，内部判 >7 天才真跑。
+// 遵守 robots：affcode 之间 + rvwithtito 之前各停 10s（Crawl-delay 10）、礼貌 UA（在各抓取函数里）。
+// 抓到的新公司走现有去重 + 分析管道（cron 的 analyze 步骤会自动按 H3 打分）。
+export async function runDirectoryRefresh(env: Env, opts: { force?: boolean } = {}): Promise<{
+  ran: boolean; reason?: string; inserted: number; detail: Record<string, number>;
+}> {
+  const detail: Record<string, number> = {};
+  if (!opts.force && (await getS(env, "directory_autorefresh_enabled", "1")) !== "1") {
+    return { ran: false, reason: "autorefresh disabled", inserted: 0, detail };
+  }
+  const last = (await getS(env, "directory_last_refresh", "")).trim();
+  if (!opts.force && last) {
+    const ts = Date.parse(last);
+    if (Number.isFinite(ts) && Date.now() - ts < 7 * 24 * 3600 * 1000) {
+      return { ran: false, reason: `last refresh ${last}, <7d`, inserted: 0, detail };
+    }
+  }
+  let inserted = 0;
+  for (let i = 0; i < NMEA_AFFCODES.length; i++) {
+    if (i > 0) await new Promise((r) => setTimeout(r, 10000));   // Crawl-delay 10
+    const r = await runNmeaDiscovery(env, NMEA_AFFCODES[i]);
+    detail[`nmea:${NMEA_AFFCODES[i]}`] = r.inserted;
+    inserted += r.inserted;
+  }
+  await new Promise((r) => setTimeout(r, 10000));                // 换站也停 10s
+  const rv = await runLinkHarvest(env, RVWITHTITO_URL, "rvwithtito", RVWITHTITO_BLACKLIST);
+  detail["rvwithtito"] = rv.inserted;
+  inserted += rv.inserted;
+  await setS(env, "directory_last_refresh", new Date().toISOString());
+  return { ran: true, inserted, detail };
+}
+
+// 通用「网页链接采集」免费源：抓一个页面正文里的外链域名，黑名单第三方域后入库（rvwithtito 等 RV 安装商名单用）
+export async function runLinkHarvest(env: Env, url: string, source: string, blacklist: string[]): Promise<DirectoryResult> {
+  const out: DirectoryResult = { fetched: 0, inserted: 0, skipped: 0, noSite: 0, social: 0, errors: [] };
+  let html = "";
+  try {
+    const res = await fetch(url, { headers: { "user-agent": "WanewBot/1.0 (+https://wanew.com; contact hello@wanew.com)" } });
+    if (!res.ok) { out.errors.push(`HTTP ${res.status}`); return out; }
+    html = await res.text();
+  } catch (e: any) { out.errors.push(String(e?.message || e)); return out; }
+  const seen = new Set<string>();
+  const bl = blacklist.map((b) => b.toLowerCase());
+  const re = /href="(https?:\/\/[^"]+)"/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html))) {
+    out.fetched++;
+    const href = m[1].trim(); const low = href.toLowerCase();
+    if (low.includes("facebook.com") || low.includes("instagram.com")) { out.social++; continue; }
+    const domain = domainOf(href);
+    if (!domain || isJunkDomain(domain) || bl.some((b) => domain.includes(b)) || seen.has(domain)) { out.skipped++; continue; }
+    seen.add(domain);
+    const website = "https://" + domain;
+    const dup = await findDuplicateLead(env, { website });   // 批⑮：统一判重（网址归一化 + 邮箱）
+    if (dup) { out.skipped++; continue; }
+    const ins = await env.DB.prepare("INSERT INTO leads (company_name, website, country, source, status) VALUES (?, ?, ?, ?, 'new')").bind(companyFromDomain(domain) || "(unknown)", website, inferCountryFromWebsite(website) || null, source).run();
+    await markSibling(env, Number(ins.meta.last_row_id), website);   // 跨域名疑似同一家 → 打标记，不合并
+    out.inserted++;
+  }
+  return out;
+}
+
+// 本地 settings 读写（避免 discover→send 循环依赖）
+async function getS(env: Env, key: string, def = ""): Promise<string> {
+  const row = await env.DB.prepare("SELECT value FROM settings WHERE key=?").bind(key).first<{ value: string }>();
+  return row?.value ?? def;
+}
+async function setS(env: Env, key: string, value: string): Promise<void> {
+  await env.DB.prepare("INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(key, value).run();
+}
+
+// 关键词池：优先 keywords 表，空则用默认；P0-a 尊重面板勾选（active_keywords 非空则只用勾选的）
+export async function getKeywords(env: Env): Promise<string[]> {
+  const rows = await env.DB.prepare("SELECT keyword FROM keywords ORDER BY weight DESC, id ASC").all();
+  const list = (rows.results as any[]).map((r) => r.keyword);
+  if (!list.length) return DEFAULT_KEYWORDS;
+  const akRaw = (await getS(env, "active_keywords", "")).trim();   // P0-a：面板"取消勾选"的关键词 cron 真的不跑
+  if (akRaw) {
+    const active = new Set(akRaw.split("\n").map((s) => s.trim()).filter(Boolean));
+    const filtered = list.filter((k) => active.has(k));
+    if (filtered.length) return filtered;   // 勾选集非空→只用勾选的；全没匹配上则回落全表（防误清空导致 0 词）
+  }
+  return list;
+}
+
+export async function seedDefaultKeywords(env: Env): Promise<void> {
+  for (const kw of DEFAULT_KEYWORDS) {
+    await env.DB.prepare("INSERT INTO keywords (keyword) VALUES (?) ON CONFLICT(keyword) DO NOTHING").bind(kw).run();
+  }
+}
+
+export interface KeywordStat { keyword: string; sent: number; replied: number; rate: number; weight: number; }
+
+// 关键词优化引擎：按各关键词真实回复率重算权重，让高回报词被搜得更多、低效词自然降权。
+// - sent    = 该 keyword 的 lead 中「有 status='sent' 邮件」的去重数
+// - replied = 该 keyword 的 lead 中「status='replied' 或 replies 表有记录」的去重数
+// - weight  = 拉普拉斯平滑：先验回复率 P0、伪计数 ALPHA，使 0 数据新词恰好落在默认 1.0（不惩罚），
+//             有数据后好词上浮、发多零回的词下沉；clamp 到 [WMIN,WMAX] 避免小样本噪音。
+// leads.keyword 可能为 NULL（CSV 导入的没有）——keyword=? 连接自然跳过。全部 SQL 参数化。
+export async function recomputeKeywordStats(env: Env): Promise<{ updated: number; stats: KeywordStat[] }> {
+  const P0 = 0.05, ALPHA = 10, K = 10, WMIN = 0.2, WMAX = 5;
+  const rows = await env.DB.prepare("SELECT id, keyword FROM keywords").all();
+  const kws = rows.results as { id: number; keyword: string }[];
+  const stats: KeywordStat[] = [];
+  let updated = 0;
+  for (const { id, keyword } of kws) {
+    if (!keyword) continue;
+    const sentRow = await env.DB.prepare(
+      "SELECT COUNT(DISTINCT l.id) AS n FROM leads l JOIN emails e ON e.lead_id = l.id WHERE l.keyword = ? AND e.status = 'sent'"
+    ).bind(keyword).first<{ n: number }>();
+    const repRow = await env.DB.prepare(
+      "SELECT COUNT(DISTINCT l.id) AS n FROM leads l WHERE l.keyword = ? AND (l.status = 'replied' OR EXISTS (SELECT 1 FROM replies r WHERE r.lead_id = l.id))"
+    ).bind(keyword).first<{ n: number }>();
+    const sent = sentRow?.n || 0;
+    const replied = repRow?.n || 0;
+    let weight: number;
+    if (sent === 0) {
+      weight = 1.0; // 0 数据的新词：保持默认权重，不惩罚
+    } else {
+      const smoothed = (replied + ALPHA * P0) / (sent + ALPHA);
+      weight = Math.max(WMIN, Math.min(WMAX, 1 + (smoothed - P0) * K));
+      weight = Math.round(weight * 1000) / 1000;
+    }
+    await env.DB.prepare(
+      "UPDATE keywords SET sent_count = ?, reply_count = ?, weight = ? WHERE id = ?"
+    ).bind(sent, replied, weight, id).run();
+    updated++;
+    stats.push({ keyword, sent, replied, rate: sent > 0 ? replied / sent : 0, weight });
+  }
+  return { updated, stats };
+}

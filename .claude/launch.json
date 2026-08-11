@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 8787
+    },
+    {
+      "name": "admin-local",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "C:/开发/.trees/wanew-admin-deploy", "exec", "--", "wrangler", "dev", "-c", "C:/开发/.trees/wanew-admin-deploy/wrangler.local.jsonc", "--port", "8790"],
+      "port": 8790
+    }
+  ]
+}
