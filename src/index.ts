@@ -2103,8 +2103,18 @@ app.post("/api/settings/notify", async (c) => {
 //   所以换成**一个布尔**：只回答"是不是指向本地 sink"，信息量从 32 字符降到 1 bit，
 //   既留住那个安全用途，又不泄露任何可定位的东西。
 app.get("/api/_whoami", (c) => c.json({
+  // C1 进程身份（验收判据）：repo/db 与 wrangler.jsonc 同一次部署单元，改绑定必改这里。
+  repo: "airsonde-crm",
+  db: "airsonde_crm",
   marker: BUILD_MARKER,
   guard: devGuardOn(c.env),
+  // 能力面全部只报有无（布尔），绝不报值。C1 锁死态：以下应全为 false。
+  canSend: !!c.env.RESEND_API_KEY,
+  canNotifyWebhook: !!c.env.LARK_WEBHOOK_URL,
+  canNotifyAppBot: !!(c.env.LARK_APP_ID && c.env.LARK_APP_SECRET),
+  canImap: !!c.env.LARK_IMAP_PASS,
+  canSearch: !!c.env.SEARCH_API_KEY,
+  canAi: !!c.env.OPENROUTER_API_KEY,
   larkIsLocalSink: /^https?:\/\/(localhost|127\.0\.0\.1)\b/i.test(String(c.env.LARK_WEBHOOK_URL || "")),
 }));
 
