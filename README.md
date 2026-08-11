@@ -43,6 +43,11 @@ npm run deploy            # 前置 typecheck 是部署闸，别绕
 - `migrations/0001_emails_error.sql` — 晚于 #45 合并的唯一增量（emails.error），新库需补跑
 - `schema_*.sql` — 上游历史增量，仅作留档与旧库补列用，**新库不要跑**（会 duplicate column）
 
+## 不在本仓的上游资产（要用去上游 `C:\开发\AI云端获客` 取）
+
+- `fix_*.sql` ×5 —— Wanew 生产库的一次性数据修复脚本，描述的是**另一个库**的事故，留在本仓会误导，故删（总工裁定，C1 关单）
+- `shim-tejoy-ai-getke/` —— 给 Wanew 已发邮件老退订链接续命的独立 worker，AirSonde 零历史邮件用不上
+
 ## 目录
 
 - `src/index.ts` — Worker + Hono API（主路由与 auth 中间件）
