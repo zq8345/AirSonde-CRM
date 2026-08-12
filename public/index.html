@@ -2,6 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
+  <meta name="color-scheme" content="light">
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AIRSONDE 获客后台</title>
   <!-- favicon 自托管进 public/（不依赖官网部署时序/跨域）；五件套拷自 airsonde-web（品牌 mark，几何总工冻结）；?v=5 破缓存 -->
@@ -10,8 +11,9 @@
   <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=5">
 
   <style>
-    :root { --bg:#0f1115; --panel:#181b22; --surface-2:#171a21; --border:#2a2f3a; --text:#e6e8ee; --muted:#9aa3b2;
-            --green:#2f9e6d; --red:#c0392b; --amber:#c9820a; --blue:#2f6fd6; }
+    :root { /* W3 浅色系（Joe 拍板纯浅色唯一主题，2026-08-12） */
+            --bg:#ffffff; --panel:#f4f5f7; --surface-2:#f4f5f7; --border:#e6e9ed; --text:#101418; --muted:#4d5762;
+            --green:#1e7a4f; --red:#c0392b; --amber:#8a5a00; --blue:#2f6fd6; }
     * { box-sizing: border-box; }
     body { margin:0; font:14px/1.5 -apple-system,Segoe UI,Roboto,"Microsoft YaHei",sans-serif;
            background:var(--bg); color:var(--text); }
@@ -43,14 +45,14 @@
     .acct-pop { position:absolute; bottom:calc(100% + 6px); left:0; right:0; background:var(--panel);
       border:1px solid var(--border); border-radius:8px; padding:6px; box-shadow:0 8px 24px rgba(0,0,0,.45); z-index:40; }
     .acct-logout { display:block; padding:8px 10px; border-radius:6px; color:var(--text); text-decoration:none; font-size:13px; }
-    .acct-logout:hover { background:#3a2a2a; color:#ffb4a8; }
+    .acct-logout:hover { background:#f5ecea; color:#a83a2e; }
     .dd-menu.dd-up { top:auto; bottom:calc(100% + 4px); left:0; right:auto; }   /* 左栏底部→菜单向上弹 */
     .tab { padding:7px 10px; border-radius:6px; cursor:pointer; display:flex; align-items:center; gap:5px; color:var(--muted); }
     .tab:hover { background:var(--panel); }
-    .tab.active { background:#17314e; color:#bcdcff; font-weight:600; box-shadow:inset 3px 0 0 var(--blue); }
-    .tab.active:hover { background:#1b3a5c; }
+    .tab.active { background:#dce9f8; color:#245a9e; font-weight:600; box-shadow:inset 3px 0 0 var(--blue); }
+    .tab.active:hover { background:#dce9f8; }
     .tab .cnt { color:var(--muted); font-size:12px; }
-    .tab.active .cnt { color:#9fc6ee; }
+    .tab.active .cnt { color:#3a6ea8; }
     .main { flex:1; overflow:auto; padding:16px 20px; background:var(--surface-2); border:.5px solid var(--border); border-radius:12px; }
     .toolbar { display:flex; gap:10px; margin-bottom:10px; align-items:center; flex-wrap:wrap; }
     input,select,textarea,button { font:inherit; }
@@ -58,7 +60,7 @@
                          padding:7px 10px; border-radius:6px; width:240px; }
     button { background:var(--panel); border:1px solid var(--border); color:var(--text);
              padding:7px 12px; border-radius:6px; cursor:pointer; }
-    button:hover { border-color:#3d4351; }
+    button:hover { border-color:#d5dae1; }
     button:disabled { opacity:.5; cursor:not-allowed; }
     button.primary { background:var(--blue); border-color:var(--blue); color:#fff; }
     button.mini { padding:5px 10px; font-size:13px; }
@@ -72,38 +74,38 @@
     .col-resizer:hover, .col-resizer.drag { background:var(--blue); opacity:.5; width:3px; right:-1px; }
     tr.row:hover { background:var(--panel); cursor:pointer; }
     .pill { padding:2px 8px; border-radius:10px; font-size:12px; white-space:nowrap; }
-    .s-new,.s-analyzed,.s-pending { background:#33383f; color:#cfd6e2; }
-    .s-approved,.s-queued,.s-sent,.s-replied { background:#1e3a2c; color:#7fddac; }
-    .s-won { background:#123a2a; color:#4be3a5; font-weight:600; }
-    .s-followup { background:#1d2b3a; color:#8fc7ff; }
-    .s-ignored { background:#3a2f1e; color:#e0b56a; }
-    .s-blacklisted,.s-unsubscribed,.s-bounced { background:#3a1f1e; color:#e39089; }
-    button.btn-won { background:#1f9d57; border-color:#1f9d57; color:#fff; }
+    .s-new,.s-analyzed,.s-pending { background:#e9ebee; color:#3f4a56; }
+    .s-approved,.s-queued,.s-sent,.s-replied { background:#e3f2e9; color:#1e6b45; }
+    .s-won { background:#e3f2e9; color:#17724a; font-weight:600; }
+    .s-followup { background:#e8f0fa; color:#1f5fae; }
+    .s-ignored { background:#f7efdd; color:#7a5410; }
+    .s-blacklisted,.s-unsubscribed,.s-bounced { background:#fbeae8; color:#b03a2e; }
+    button.btn-won { background:#1a7f47; border-color:#1a7f47; color:#fff; }
     /* 联系渠道按钮 */
     .chan-row { display:flex; flex-wrap:wrap; gap:6px; margin:6px 0 4px; }
     .chan { display:inline-flex; align-items:center; gap:5px; padding:5px 10px; border-radius:6px; font-size:12px;
             text-decoration:none; border:1px solid var(--border); background:var(--bg); color:var(--text); }
-    .chan:hover { border-color:#3d4351; }
+    .chan:hover { border-color:#d5dae1; }
     .chan-whatsapp { color:#25d366; } .chan-linkedin { color:#4a9fe0; } .chan-telegram { color:#3aa9e0; }
-    .chan-facebook { color:#6a8fd6; } .chan-instagram { color:#e08bb0; } .chan-youtube { color:#e0736a; }
+    .chan-facebook { color:#3a5fa8; } .chan-instagram { color:#a5527d; } .chan-youtube { color:#b03a2e; }
     /* 时间线 */
     .tl-row { display:flex; gap:8px; padding:5px 0; border-bottom:1px solid var(--border); }
     .tl-time { color:var(--muted); white-space:nowrap; font-size:12px; min-width:96px; }
-    .due-flag { color:#e0b56a; }
+    .due-flag { color:#7a5410; }
     button.tgl-on { background:var(--amber); border-color:var(--amber); color:#fff; }
     /* 销售漏斗阶段徽章 */
     .stg { display:inline-block; padding:2px 8px; border-radius:10px; font-size:12px; white-space:nowrap; }
-    .st-bad { background:#3a1f1e; color:#e39089; }
-    .st-won { background:#123a2a; color:#4be3a5; font-weight:600; }
-    .st-talk { background:#1e3a2c; color:#7fddac; }
-    .st-mute { background:#33383f; color:#9aa3b2; }
-    .st-hot { background:#3a2a12; color:#e0a85a; }
+    .st-bad { background:#fbeae8; color:#b03a2e; }
+    .st-won { background:#e3f2e9; color:#17724a; font-weight:600; }
+    .st-talk { background:#e3f2e9; color:#1e6b45; }
+    .st-mute { background:#e9ebee; color:#4d5762; }
+    .st-hot { background:#f7efdd; color:#7a5410; }
     /* 批⑱ 副标记：参与度/回复情绪/抓不到官网 —— 从属于格名，不能抢主词的位置 */
     .stg-sub { margin-left:6px; font-size:11px; opacity:.72; white-space:nowrap; }
     /* 批⑲ 分组视图 + 灰按钮原因 */
     /* 批㉓ 组头吸顶：滚到某组中段时该组头贴顶，组头自带的主要动作按钮永远够得着（Joe：②组78行把③组头埋沉底）。
-       .main 是滚动容器（overflow:auto）→ top:0 贴其视口顶；背景 #161b22 不透穿、z-index 压住下滚的行。 */
-    .grp-head td { background:#161b22; border-top:2px solid var(--border); padding:9px 10px; position:sticky; top:0; z-index:2; }
+       .main 是滚动容器（overflow:auto）→ top:0 贴其视口顶；背景 #ffffff 不透穿、z-index 压住下滚的行。 */
+    .grp-head td { background:#ffffff; border-top:2px solid var(--border); padding:9px 10px; position:sticky; top:0; z-index:2; }
     .grp-head b { font-size:13px; }
     /* 批㉓ 组间跳转条：工具栏下一行，链接直达各组头（scrollIntoView），数字用真值 */
     .grp-jump { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:10px; font-size:12.5px; }
@@ -111,31 +113,31 @@
     .gj-lnk { color:var(--blue); cursor:pointer; }
     .gj-lnk:hover { text-decoration:underline; }
     .grp-jump .gj-sep { color:var(--muted); }
-    .grp-n { display:inline-block; margin:0 9px; padding:1px 8px; border-radius:9px; background:#2b3240; font-size:12px; }
-    .grp-empty { color:#7b8494; font-size:12px; padding:11px; font-style:italic; }
+    .grp-n { display:inline-block; margin:0 9px; padding:1px 8px; border-radius:9px; background:#e9ebee; font-size:12px; }
+    .grp-empty { color:#5b6470; font-size:12px; padding:11px; font-style:italic; }
     .row-sub { margin-left:22px; margin-top:4px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
     /* 批㉖：抓取失败=一个小徽章（全文挂 title、点行进详情处理）。铁律：行内元素不随数据量膨胀。 */
-    .fail-badge { display:inline-block; padding:1px 7px; border-radius:8px; background:#3a1d1d; color:#f0876f; font-size:11px; white-space:nowrap; vertical-align:1px; }
-    .fail-badge.fail-retry { background:#2b3240; color:#8b93a5; }
-    .reason-sm { color:#9aa3b2; font-size:12px; max-width:520px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .fail-badge { display:inline-block; padding:1px 7px; border-radius:8px; background:#fbeae8; color:#b0452e; font-size:11px; white-space:nowrap; vertical-align:1px; }
+    .fail-badge.fail-retry { background:#e9ebee; color:#5b6470; }
+    .reason-sm { color:#4d5762; font-size:12px; max-width:520px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     /* 批⑲b：阶段列里的紧凑「他回了」——同一行、不占新行、不增加行高 */
     .stgcol { white-space:nowrap; }   /* 徽章 + 他回了 同一行不换行（否则 ②组行会高一截）*/
     .stg-reply { margin-left:8px; padding:1px 7px; font-size:11px; vertical-align:middle; }
     /* 批⑲b：脏渠道值（拼不出合法链接）显示原文但不可点，灰 + ⚠️ 一眼可辨 */
-    .chbad { color:#8a929e; cursor:default; opacity:.8; }
+    .chbad { color:#5b6470; cursor:default; opacity:.8; }
     /* 批⑲b 追加：整页加载失败横幅（可见 + 可重试，别让登录过期看着像系统坏了）*/
     .load-error { margin:10px 0; padding:10px 14px; border:1px solid #7a5a1e; border-radius:8px;
-                  background:#2a2212; color:#f0c674; font-size:13px; }
+                  background:#f7efdd; color:#7a5410; font-size:13px; }
     /* 灰按钮必须写明原因（批⑲ 硬要求）——没有它，灰按钮就退回成"摆着更困惑" */
     .btn-why { margin-left:5px; font-size:11px; opacity:.75; font-weight:400; }
-    .st-sent { background:#12202f; color:#8fc7ff; }
-    .st-send { background:#1d2b3a; color:#8fc7ff; }
-    .st-new { background:#33383f; color:#cfd6e2; }
+    .st-sent { background:#e8f0fa; color:#1f5fae; }
+    .st-send { background:#e8f0fa; color:#1f5fae; }
+    .st-new { background:#e9ebee; color:#3f4a56; }
     /* 待分析：机器还没处理完，人不用做什么 → 比「待审核」(等你审) 更暗、更安静，别抢注意力 */
-    .st-todo { background:#2b2f36; color:#8c94a3; }
+    .st-todo { background:#eef1f4; color:#5b6470; }
     /* 顺带修④ 会话过期横幅：钉在顶部，因为此刻**页面上的每个数字都可能是旧的** */
     #sess-expired { position:fixed; top:0; left:0; right:0; z-index:9999; padding:10px 16px;
-      background:#3a1f1e; border-bottom:1px solid #7a3b36; color:#ffb3ab; font-size:13px;
+      background:#fbeae8; border-bottom:1px solid #ecc4be; color:#a83a2e; font-size:13px;
       display:flex; align-items:center; gap:12px; }
     #sess-expired button { margin-left:auto; padding:5px 12px; border-radius:6px; cursor:pointer;
       background:var(--blue); border:none; color:#fff; font-size:12.5px; }
@@ -146,15 +148,15 @@
     /* 批⑥A 重扫进度：428 家要跑 1-2 小时，**绝不能是黑盒** —— 必须实时看得见在动 */
     .rescan-bar { margin-top:9px; padding:9px 11px; border:1px solid var(--border); border-radius:7px;
       background:var(--bg); font-size:13px; line-height:1.7; }
-    .rescan-bar.rescan-err { border-color:#7a3b36; background:#2b1b1a; color:#ffb3ab; }
-    .rescan-track { height:6px; background:#2a2f36; border-radius:3px; overflow:hidden; margin:6px 0 4px; }
-    .rescan-fill { height:100%; background:linear-gradient(90deg,#3a5a86,#4be3a5); transition:width .3s; }
+    .rescan-bar.rescan-err { border-color:#ecc4be; background:#fbeae8; color:#a83a2e; }
+    .rescan-track { height:6px; background:#eef1f4; border-radius:3px; overflow:hidden; margin:6px 0 4px; }
+    .rescan-fill { height:100%; background:linear-gradient(90deg,#9dbfe4,#17724a); transition:width .3s; }
     /* 批⑤B 翻牌堆：组名要能一眼扫，证据摘要要能一行看懂 */
     .fp-intro { font-size:13px; color:var(--text); margin:8px 0 12px; line-height:1.7; }
     .fp-intro .hint { display:block; margin-top:2px; }
     .fp-group { border:1px solid var(--border); border-radius:8px; margin-bottom:8px; overflow:hidden; }
     .fp-head { display:flex; align-items:center; gap:9px; padding:10px 12px; cursor:pointer; background:var(--panel2,#22262c); }
-    .fp-head:hover { background:#282d34; }
+    .fp-head:hover { background:#eef1f4; }
     .fp-caret { width:10px; color:var(--muted); flex-shrink:0; }
     .fp-label { font-weight:600; font-size:13px; flex-shrink:0; }
     .fp-count { font-size:12px; color:var(--muted); flex-shrink:0; }
@@ -168,7 +170,7 @@
     .fp-acts { display:flex; gap:6px; align-items:center; flex-shrink:0; }
     .mini { padding:3px 9px; font-size:12px; }
     /* 熔断横幅：自动发送被停了而 Joe 不知道，比不停还糟 → 这里要抢注意力 */
-    .brk-banner { background:#3a1f1e; border:1px solid #7a3b36; color:#ffb3ab; border-radius:8px;
+    .brk-banner { background:#fbeae8; border:1px solid #ecc4be; color:#a83a2e; border-radius:8px;
       padding:10px 12px; margin:10px 0; font-size:13px; line-height:1.6; }
     .brk-banner b { color:#ff8a7d; }
     .auto-box { border:1px solid var(--border); border-radius:8px; padding:10px 12px; margin:10px 0; }
@@ -187,38 +189,38 @@
     th.filt .fcaret { color:var(--muted); margin-left:6px; display:inline-flex; vertical-align:middle; }
     th.filt .fcaret svg { display:block; }
     th.filt .fcaret.fcaret-score { margin-left:12px; padding-left:10px; border-left:1px solid var(--border); }
-    th.filt .sortarrow { color:#8fc7ff; font-size:10px; }
+    th.filt .sortarrow { color:#1f5fae; font-size:10px; }
     /* A3 高分待发横幅 */
-    .hs-banner { background:#123a2a; border:1px solid #1f5a38; color:#7fddac; border-radius:8px;
+    .hs-banner { background:#e3f2e9; border:1px solid #1f5a38; color:#1e6b45; border-radius:8px;
                  padding:9px 14px; margin-bottom:10px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
-    .hs-banner b { color:#4be3a5; }
+    .hs-banner b { color:#17724a; }
     /* B1 批量操作条 */
     .bulk-bar { background:var(--panel); border:1px solid var(--blue); border-radius:8px; padding:8px 12px;
                 margin-bottom:10px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-    .bulk-bar b { color:#8fc7ff; }
+    .bulk-bar b { color:#1f5fae; }
     .rowchk { cursor:pointer; }
-    .bulk-bar.analyzing { border-color:var(--amber); background:#2a2412; color:#e0b56a; }
-    .bulk-bar.analyzing b { color:#f0c66a; }
+    .bulk-bar.analyzing { border-color:var(--amber); background:#f7efdd; color:#7a5410; }
+    .bulk-bar.analyzing b { color:#7a5410; }
     .bulk-prog { display:inline-block; width:130px; height:7px; background:var(--bg); border:1px solid var(--border); border-radius:4px; overflow:hidden; vertical-align:middle; margin-left:8px; }
     .bulk-prog-fill { display:block; height:100%; background:var(--amber); transition:width .3s; }
     th.filt:hover .fcaret { color:var(--text); }
-    th.filt.on { color:#8fc7ff; }
-    th.filt.on .fcaret { color:#8fc7ff; }
+    th.filt.on { color:#1f5fae; }
+    th.filt.on .fcaret { color:#1f5fae; }
     .hdrmenu { position:fixed; display:none; z-index:50; background:var(--panel); border:1px solid var(--border);
                border-radius:8px; box-shadow:0 8px 28px rgba(0,0,0,.5); padding:5px; min-width:150px; max-height:340px; overflow:auto; }
     .hdrmenu.show { display:block; }
     .hdrmenu .mi { padding:7px 10px; border-radius:6px; cursor:pointer; font-size:13px; display:flex; justify-content:space-between; gap:10px; }
     .hdrmenu .mi:hover { background:var(--bg); }
-    .hdrmenu .mi.sel { color:#8fc7ff; }
+    .hdrmenu .mi.sel { color:#1f5fae; }
     .hdrmenu .mi .cnt { color:var(--muted); font-size:12px; }
     /* 一键开聊按钮 */
     .chat-row { display:flex; flex-wrap:wrap; gap:8px; margin:6px 0 2px; }
     .btn-chat { display:inline-flex; align-items:center; gap:5px; padding:8px 12px; border-radius:8px; font-size:13px;
                 text-decoration:none; border:1px solid var(--border); background:var(--bg); color:var(--text); cursor:pointer; }
-    .btn-chat:hover { border-color:#3d4351; }
-    .ptype { background:#1d2b3a; color:#8fc7ff; }
-    .miss { color:#e39089; font-size:12px; background:#3a1f1e; padding:2px 7px; border-radius:10px; }
-    .wsite { display:block; font-size:12px; color:#6fa8ff; margin-top:2px; text-decoration:none; }
+    .btn-chat:hover { border-color:#d5dae1; }
+    .ptype { background:#e8f0fa; color:#1f5fae; }
+    .miss { color:#b03a2e; font-size:12px; background:#fbeae8; padding:2px 7px; border-radius:10px; }
+    .wsite { display:block; font-size:12px; color:#2361c4; margin-top:2px; text-decoration:none; }
     .muted { color:var(--muted); }
     /* 弹层 */
     .overlay { position:fixed; inset:0; background:rgba(0,0,0,.55); display:none; align-items:center; justify-content:center; }
@@ -257,29 +259,29 @@
     .cd-overlay { position:fixed; inset:0; background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center; z-index:9999; padding:20px; animation:cdFade .12s ease; }
     @keyframes cdFade { from{opacity:0} to{opacity:1} }
     .cd-card { background:var(--surface-2); border:1px solid var(--border); border-radius:12px; max-width:460px; width:100%; padding:18px 20px; box-shadow:0 14px 44px rgba(0,0,0,.5); }
-    .cd-card-danger { border-color:#7a3128; }                                  /* 破坏性操作：边框先示警 */
+    .cd-card-danger { border-color:#ecc4be; }                                  /* 破坏性操作：边框先示警 */
     .cd-title { font-size:15px; font-weight:700; margin-bottom:10px; display:flex; align-items:center; gap:7px; }
     .cd-ticon { font-size:15px; line-height:1; }
     .cd-body { font-size:13px; color:var(--text); line-height:1.65; margin-bottom:16px; }
-    .cd-body b { color:#bcdcff; font-weight:600; }                             /* 把"对哪 N 条做什么"顶出来 */
+    .cd-body b { color:#245a9e; font-weight:600; }                             /* 把"对哪 N 条做什么"顶出来 */
     .cd-li { padding-left:2px; color:var(--muted); font-size:12.5px; line-height:1.75; }   /* 「· 」次要说明降一级 */
     .cd-warn { color:var(--amber); font-weight:600; margin-top:4px; }
     /* 批⑥C uiPick 单选：每项一行、点了就是选中（不需要再点确认——多一步没意义） */
     .cd-picks { display:flex; flex-direction:column; gap:6px; margin:10px 0 14px; }
     .cd-pick { text-align:left; padding:9px 12px; border-radius:7px; font-size:13px; cursor:pointer;
       background:var(--bg); border:1px solid var(--border); color:var(--text); transition:border-color .15s, background .15s; }
-    .cd-pick:hover, .cd-pick:focus { border-color:var(--blue); background:#20262e; outline:none; }
+    .cd-pick:hover, .cd-pick:focus { border-color:var(--blue); background:#eef1f4; outline:none; }
     .cd-actions { display:flex; justify-content:flex-end; gap:10px; align-items:center; }
     .cd-actions button { padding:7px 16px; border-radius:7px; font-size:13px; cursor:pointer; transition:filter .15s ease, border-color .15s ease; }
     .cd-cancel { background:var(--bg); border:1px solid var(--border); color:var(--text); }
-    .cd-cancel:hover { border-color:#3d4351; }
+    .cd-cancel:hover { border-color:#d5dae1; }
     .cd-ok { background:var(--blue); border:none; color:#fff; }
     .cd-ok:hover { filter:brightness(1.12); }
     .cd-ok.cd-danger { background:#c0392b; }
     /* 批④ 详情页顶部「打开/点击」状态徽章（列表有 🔥/👀，详情页也要有） */
     .dp-eng { font-size:11px; padding:3px 8px; border-radius:7px; border:1px solid var(--border); white-space:nowrap; }
-    .dp-eng-hot { background:#3a1f1e; color:#ff9c8f; border-color:#7a3128; }
-    .dp-eng-warm { background:#33280f; color:#e0b56a; border-color:#7a5f2f; }
+    .dp-eng-hot { background:#fbeae8; color:#ff9c8f; border-color:#ecc4be; }
+    .dp-eng-warm { background:#f7efdd; color:#7a5410; border-color:#e6d3a3; }
     .dp-eng-none { background:var(--bg); color:var(--muted); }
     /* #46b 底部决策条：一条淡边框 surface 簇（去掉全宽间隔，按钮聚成一块） */
     .dp-bottom { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:14px; padding:10px 12px; background:var(--surface-2); border:1px solid var(--border); border-radius:10px; }
@@ -287,7 +289,7 @@
     /* #46 底部决策条：主操作突出、破坏性弱化最右防误点、次要靠左 */
     .dp-bottom .dp-primary { font-size:14px; padding:9px 18px; font-weight:600; }
     .dp-bottom .dp-danger-weak { background:transparent; border:1px solid var(--border); color:var(--muted); margin-left:14px; }
-    .dp-bottom .dp-danger-weak:hover { border-color:#c0392b; color:#e39089; }
+    .dp-bottom .dp-danger-weak:hover { border-color:#c0392b; color:#b03a2e; }
     .dp-bottom .dp-label { font-size:11px; color:var(--muted); margin-right:2px; align-self:center; }
     @media(max-width:820px){ .dp-body { grid-template-columns:1fr; } }
     /* 整页视图共用头 */
@@ -332,7 +334,7 @@
     .ms-ic { width:20px; flex-shrink:0; text-align:center; }
     .ms-lb { color:var(--muted); width:100px; flex-shrink:0; }
     .ms-vl { color:var(--text); }
-    .ms-on { color:#4caf7d; } .ms-off { color:var(--muted); }
+    .ms-on { color:#1e7a4f; } .ms-off { color:var(--muted); }
     /* 批⑳ 层3 末 · 维护折叠（全量重扫降位收敛，不再占页顶黄金位） */
     .fc-maint { border-top:1px dashed var(--border); margin-top:16px; padding-top:10px; }
     /* 批⑳ 客户画像折叠：默认收起（大 textarea 不再常驻占屏），点标题展开 */
@@ -341,13 +343,13 @@
     .tri-list { display:flex; flex-direction:column; gap:10px; }
     .tri-row { display:flex; align-items:center; gap:12px; background:var(--panel); border:1px solid var(--border);
                border-left:3px solid var(--border); border-radius:10px; padding:13px 15px; transition:border-color .15s ease; }
-    .tri-row:hover { border-color:#3d4351; }
+    .tri-row:hover { border-color:#d5dae1; }
     .tri-row.tri-hot  { border-left-color:#c0392b; }   /* 🔥 最急：有人回你了 */
     .tri-row.tri-warm { border-left-color:var(--amber); }
-    .tri-row.tri-warn { border-left-color:var(--amber); background:#2a2114; }
+    .tri-row.tri-warn { border-left-color:var(--amber); background:#f7efdd; }
     .tri-icon { font-size:19px; line-height:1; flex-shrink:0; }
     .tri-text { flex:1; min-width:0; font-size:14px; display:flex; flex-direction:column; gap:2px; }
-    .tri-text b { color:#bcdcff; font-size:15px; }
+    .tri-text b { color:#245a9e; font-size:15px; }
     .tri-sub { font-size:12px; color:var(--muted); }
     .tri-go { flex-shrink:0; background:var(--blue); border:none; color:#fff; font-size:12.5px; padding:7px 14px;
               border-radius:7px; cursor:pointer; white-space:nowrap; transition:filter .15s ease; }
@@ -363,9 +365,9 @@
     .act-btn { flex-shrink:0; background:var(--blue); border:none; color:#fff; font-size:12px; padding:5px 12px; border-radius:6px; cursor:pointer; white-space:nowrap; transition:filter .15s ease; }
     .act-btn:hover { filter:brightness(1.12); }
     /* 批④ 看板：样本量门槛 + 收件箱切片（.sd-* 状态分布已随该块删除） */
-    .db-note { background:#1b2430; border:1px solid #2f4a63; border-left:3px solid var(--blue); color:#cfd6e2;
+    .db-note { background:#eef1f5; border:1px solid #c3d7ee; border-left:3px solid var(--blue); color:#3f4a56;
                border-radius:10px; padding:11px 14px; margin-bottom:14px; font-size:12.5px; line-height:1.7; }
-    .db-note b { color:#bcdcff; }
+    .db-note b { color:#245a9e; }
     .kpi-muted { opacity:.92; }
     .kpi-den { font-size:13px; color:var(--muted); font-weight:400; margin-left:2px; }
     .kpi-note { display:block; font-size:10.5px; color:var(--muted); margin-top:2px; line-height:1.4; }
@@ -390,14 +392,14 @@
     .fc-card { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:14px 16px; margin-bottom:12px; }
     .fc-cc { display:flex; flex-wrap:wrap; gap:6px; }
     .fc-chip { background:var(--bg); border:1px solid var(--border); border-radius:14px; padding:3px 10px; font-size:12px; cursor:pointer; display:inline-flex; align-items:center; gap:5px; user-select:none; }
-    .fc-chip.on { background:#12233c; border-color:var(--blue); color:#8fc7ff; }
+    .fc-chip.on { background:#e8f0fa; border-color:var(--blue); color:#1f5fae; }
     .fc-cta { font-size:15px; padding:11px 22px; }
     @media(max-width:820px){ .td-grid,.db-cols{ grid-template-columns:1fr; } .kpi-row{ grid-template-columns:repeat(2,1fr); } }
     .d-company { font-size:18px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding-right:34px; }
     .d-scorebar { display:flex; gap:14px; align-items:stretch; margin:12px 0 8px; }
     .d-scoreblock { border-radius:10px; padding:8px 16px; min-width:118px; text-align:center; display:flex; flex-direction:column; justify-content:center; }
-    .d-scoreblock.sc-green { background:#123a2a; color:#4be3a5; } .d-scoreblock.sc-amber { background:#3a2f12; color:#e0b56a; }
-    .d-scoreblock.sc-red { background:#3a1f1e; color:#e39089; } .d-scoreblock.sc-none { background:transparent; border:1px dashed var(--border); color:var(--muted); }
+    .d-scoreblock.sc-green { background:#e3f2e9; color:#17724a; } .d-scoreblock.sc-amber { background:#f7efdd; color:#7a5410; }
+    .d-scoreblock.sc-red { background:#fbeae8; color:#b03a2e; } .d-scoreblock.sc-none { background:transparent; border:1px dashed var(--border); color:var(--muted); }
     .d-scorelabel { font-size:11px; opacity:.85; } .d-scorenum { font-size:32px; font-weight:800; line-height:1.05; }
     .d-scorenum span { font-size:14px; font-weight:400; opacity:.7; }
     .d-scoremeta { flex:1; display:flex; flex-direction:column; justify-content:center; gap:5px; font-size:13px; min-width:0; }
@@ -419,7 +421,7 @@
     .btn-red { background:var(--red); border-color:var(--red); color:#fff; }
     .hint { color:var(--muted); font-size:12px; margin-top:6px; }
     .empty { color:var(--muted); text-align:center; padding:40px; }
-    a { color:#6fa8ff; }
+    a { color:#2361c4; }
     /* 找客户面板 */
     .sec-title { font-size:13px; color:var(--text); margin:16px 0 4px; font-weight:600; }
     .cc-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(124px,1fr)); gap:6px; margin:8px 0; }  /* 批A#2 加宽容 4 个中文字 */
@@ -427,31 +429,31 @@
     label.cc input { margin:0; }
     .kwchip { display:inline-flex; align-items:center; gap:5px; background:var(--bg); border:1px solid var(--border); border-radius:14px; padding:3px 10px; margin:3px 3px 0 0; font-size:13px; }
     .kwchip i { cursor:pointer; color:var(--muted); font-style:normal; font-size:15px; line-height:1; }
-    .kwchip i:hover { color:#e39089; }
+    .kwchip i:hover { color:#b03a2e; }
     /* #45 找客户配置：区块标题+全选/全不选、国家/关键词 勾选框标签+删除 */
     .sec-row { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:12px; }
     .sec-tools { display:flex; gap:6px; flex-shrink:0; }
     .mini { font-size:11px; padding:2px 9px; border-radius:6px; }
-    .mini.mini-on { background:#12233c; border-color:var(--blue); color:#8fc7ff; }  /* 管理态高亮 */
+    .mini.mini-on { background:#e8f0fa; border-color:var(--blue); color:#1f5fae; }  /* 管理态高亮 */
     .fc-warn { color:var(--amber); font-weight:600; }  /* #45 大批量预估醒目提醒 */
     #fc-profile { min-height:96px; }  /* 客户画像·打分标准（全局，不折叠） */
     /* 批① IA 徽章 + 子块标题 */
     .fc-badge { font-size:11px; font-weight:600; padding:2px 8px; border-radius:10px; margin-left:8px; vertical-align:middle; }
-    .fc-badge-free { background:#12331f; color:#5fd08a; border:1px solid #2f7a4d; }
-    .fc-badge-cost { background:#33280f; color:#e0b56a; border:1px solid #7a5f2f; }
+    .fc-badge-free { background:#e3f2e9; color:#1e7a4f; border:1px solid #2f7a4d; }
+    .fc-badge-cost { background:#f7efdd; color:#7a5410; border:1px solid #e6d3a3; }
     .fc-subhead { font-size:12px; font-weight:700; color:var(--muted); text-transform:none; letter-spacing:.3px; margin:2px 0 6px; padding-bottom:4px; border-bottom:1px solid var(--border); }
     .fc-add-sel { min-width:200px; max-width:260px; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:6px 10px; border-radius:6px; font-size:13px; cursor:pointer; }  /* #45 添加国家选择器：够宽、不再被 .fld 的 80px 压成 glitch */
     .ccitem, .kwitem { display:inline-flex; align-items:center; gap:6px; background:var(--bg); border:1px solid var(--border); border-radius:14px; padding:4px 11px; margin:5px 7px 0 0; font-size:13px; }  /* #45 chip 间距加大 */
     .ccitem label, .kwitem label { display:inline-flex; align-items:center; gap:5px; cursor:pointer; margin:0; white-space:nowrap; }  /* 批A#2 国家名不折行 */
     .ccitem input, .kwitem input { margin:0; }
-    .ccitem.on, .kwitem.on { background:#12233c; border-color:var(--blue); }
+    .ccitem.on, .kwitem.on { background:#e8f0fa; border-color:var(--blue); }
     .ccitem i, .kwitem i { cursor:pointer; color:var(--muted); font-style:normal; font-size:15px; line-height:1; margin-left:2px; }
-    .ccitem i:hover, .kwitem i:hover { color:#e39089; }
-    .transparency { background:#12202f; border:1px solid #1d3a52; border-radius:6px; padding:9px 11px; font-size:13px; margin:12px 0; }
+    .ccitem i:hover, .kwitem i:hover { color:#b03a2e; }
+    .transparency { background:#e8f0fa; border:1px solid #c3d7ee; border-radius:6px; padding:9px 11px; font-size:13px; margin:12px 0; }
     .prog { margin-top:14px; display:none; }
     .prog-track { height:8px; background:var(--bg); border-radius:5px; overflow:hidden; border:1px solid var(--border); }
     .prog-bar { height:100%; width:0; background:var(--blue); transition:width .35s; }
-    .prog-log { font-size:13px; color:#cfd6e2; margin-top:8px; min-height:20px; white-space:pre-line; }
+    .prog-log { font-size:13px; color:#3f4a56; margin-top:8px; min-height:20px; white-space:pre-line; }
     .fld { width:80px; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:6px 8px; border-radius:6px; }
     .inlinput { flex:1; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:7px 10px; border-radius:6px; }
     /* 数据看板 */
@@ -495,8 +497,8 @@
     .hdr-right-zone { flex:1; min-width:0; display:flex; align-items:center; gap:12px; }  /* 正对主列表：按钮+搜索+设置 */
     .side-nav { padding:7px 10px; border-radius:6px; cursor:pointer; color:var(--text); font-size:13px; display:flex; align-items:center; gap:6px; }
     .side-nav:hover { background:var(--panel); }
-    .side-nav.active { background:#17314e; color:#bcdcff; font-weight:600; box-shadow:inset 3px 0 0 var(--blue); }  /* #42 与漏斗 tab 选中态一致 */
-    .side-nav.active:hover { background:#1b3a5c; }
+    .side-nav.active { background:#dce9f8; color:#245a9e; font-weight:600; box-shadow:inset 3px 0 0 var(--blue); }  /* #42 与漏斗 tab 选中态一致 */
+    .side-nav.active:hover { background:#dce9f8; }
     /* #41 全站 hover 交互统一：可点元素加平滑过渡 + 细腻反馈（贴合 CDS 深色后台，不浮夸） */
     button, .tab, tr.row, .side-nav, .dp-copy, .td-act, .fc-chip, label.cc,
     .gear-btn, .tb-more, .dd-item, .dd-menu .dd-item, .btn-ghost, th.filt .fcaret, .hdr-left img, .kwchip i, .ccitem, .kwitem, .ccitem i, .kwitem i {
@@ -504,7 +506,7 @@
     .hdr-left img { cursor:pointer; }
     .hdr-left img:hover { opacity:.72; }
     .btn-ghost:hover { background:var(--panel); }
-    .fc-chip:hover { border-color:var(--blue); color:#8fc7ff; }
+    .fc-chip:hover { border-color:var(--blue); color:#1f5fae; }
     label.cc:hover { border-color:var(--blue); }
   </style>
 </head>
@@ -515,7 +517,7 @@
          群发→待发送页「发送选中」（批⑩B：全部发送已删，要发全部点表头全选框）；回复箱→已回复页；批量分析→待分析页；批量找邮箱/Hunter→待审批页；导入CSV→找客户页。 -->
     <!-- #55b：logo 按宽约束（Joe：宽度不要超下方左栏容器 178px）。原 height:22px → 等比宽≈190px 溢出；
          改 max-width:150px（≈左栏内容宽）等比缩，高分屏用原图 1604px 源缩放不糊。 -->
-    <div class="hdr-left"><span title="回待办事项首页" onclick="openToday()" style="cursor:pointer;font-weight:700;letter-spacing:.14em;font-size:15px;color:#fff">AIRSONDE</span></div>
+    <div class="hdr-left"><span title="回待办事项首页" onclick="openToday()" style="cursor:pointer;font-weight:700;letter-spacing:.14em;font-size:15px;color:var(--text)">AIRSONDE</span></div>
     <div class="hdr-right-zone">
       <input type="search" id="q" placeholder="搜索公司 / 邮箱 / 域名…" />
       <!-- 左栏导航的隐藏代理按钮（左栏 side-nav 的 handler 靠它们，勿删） -->
@@ -636,7 +638,7 @@
 
       <div class="kv" style="grid-template-columns:110px 1fr">
         <div class="k">每日发信上限</div><div><input id="cfg-limit" type="number" min="1" style="width:100px;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:6px"><span class="hint" style="margin-left:8px">系统级总闸：手动+自动+跟进 全部共用，<b>与发件邮箱无关</b></span>
-          <span id="cfg-limit-badge" class="pill" style="display:none;margin-left:8px;background:#3a2a1d;color:#f0b866"></span>
+          <span id="cfg-limit-badge" class="pill" style="display:none;margin-left:8px;background:#f7efdd;color:#7a5410"></span>
           <div class="hint" id="cfg-limit-usage" style="margin-top:4px"></div>
           <div style="margin-top:6px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
             <label style="display:flex;gap:6px;align-items:center;cursor:pointer"><input id="cfg-ramp" type="checkbox"><span class="hint">新域爬坡保护</span></label>
@@ -651,11 +653,11 @@
       <p class="hint" style="margin:2px 0 0">开发信/跟进/回信全部密送到这个邮箱留档。建好公共邮箱再填。</p>
       <div class="k muted" style="margin-top:8px">发件域（只读观察）</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        <span class="pill" style="background:#1d3a2a;color:#7fd6a2">hello@airsonde.net · 唯一发件人(占位,发信域待定)</span>
+        <span class="pill" style="background:#e3f2e9;color:#1e6b45">hello@airsonde.net · 唯一发件人(占位,发信域待定)</span>
         <span class="hint" id="cfg-primary-today"></span>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:4px">
-        <span class="pill" style="background:#3a2d1d;color:#d6b27f">(无退役旧域)</span>
+        <span class="pill" style="background:#f7efdd;color:#7a5410">(无退役旧域)</span>
         <span class="hint" id="cfg-legacy-today"></span>
       </div>
       <p class="hint" style="margin:2px 0 0">全部出站(首触/跟进/确认/回信)一律走主发件域(占位 airsonde.net,待定);AirSonde 无退役旧域。<b>日限不按发件域分</b>——见上面的系统级总闸。</p>
@@ -1665,7 +1667,7 @@
       //   这 5 条是什么、为什么在这儿**。工具栏是这一格唯一能说话的地方，让它说清楚。
       //   （这是我自己想到的 —— 一个"能进去但不知道进了哪"的页面，跟死胡同只差一步。）
       const banner = current === 'noscore'
-        ? `<div style="width:100%;margin-bottom:6px;color:var(--amber,#f0b849);font-weight:600">
+        ? `<div style="width:100%;margin-bottom:6px;color:var(--amber,#8a5a00);font-weight:600">
              ⚠️ 这些公司的官网抓不到 —— 机器判不了分，所以它们不在「待审批」里
              <span class="hint" style="font-weight:400">（可能网址错了/换了。改对网址再分析，里面可能有真客户）</span>
            </div>` : "";
@@ -2011,7 +2013,7 @@
       // 阶段列取代原公司名旁的状态徽章（更信息量：漏斗阶段+下一步）；保留 🔔待跟进 + 🔥/👀参与标记
       const rowHtml = (l) => { const stg = stageOf(l); return `
         <tr class="row" data-id="${l.id}">
-          <td><div style="display:flex;align-items:center;gap:6px"><input type="checkbox" class="rowchk" ${selectedIds.has(String(l.id))?'checked':''} onclick="event.stopPropagation()" onchange="toggleSel(${l.id},this.checked)"><div class="co-name" title="${esc(l.company_name)||''}">${isDue(l)?`<span class="due-flag" title="该跟进了：${esc(l.next_action)||''} (${esc(l.next_action_date)})">🔔 </span>`:""}${esc(l.company_name)||"<span class='muted'>—</span>"}${l.has_click?`<span title="点击过开发信（强意向）" style="margin-left:4px">🔥</span>`:(l.has_open?`<span title="打开过开发信" style="margin-left:4px">👀</span>`:"")}</div></div>${(()=>{const fb=unscoredRowExtra(l);if(l.website){const w=safeHref(l.website);const inner=w?`<a class="wsite" href="${esc(w)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="margin:0;display:inline-block;max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(hostOf(l.website))}</a>`:`<span class="wsite" title="链接协议不合法，已按纯文本显示" style="margin:0;display:inline-block;max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(hostOf(l.website))}</span>`;return `<span style="display:flex;align-items:center;gap:6px;margin-left:22px;min-width:0">${inner}${fb}</span>`;}return fb?`<span style="display:flex;margin-left:22px">${fb}</span>`:"";})()}${(current==='replied'&&(l.latest_reply_cat||l.latest_reply_summary))?`<div style="margin-left:22px;margin-top:3px;display:flex;align-items:center;gap:6px;min-width:0">${l.latest_reply_cat?`<span class="pill" style="background:${catColor[l.latest_reply_cat]||'#555'};color:#fff;flex-shrink:0">${esc(catLabel[l.latest_reply_cat]||l.latest_reply_cat)}</span>`:''}${l.latest_reply_summary?`<span class="co-name muted" style="font-size:12px" title="${esc(l.latest_reply_summary)}">🤖 ${esc(l.latest_reply_summary)}</span>`:''}</div>`:''}${reviewRowExtra(l)}</td>
+          <td><div style="display:flex;align-items:center;gap:6px"><input type="checkbox" class="rowchk" ${selectedIds.has(String(l.id))?'checked':''} onclick="event.stopPropagation()" onchange="toggleSel(${l.id},this.checked)"><div class="co-name" title="${esc(l.company_name)||''}">${isDue(l)?`<span class="due-flag" title="该跟进了：${esc(l.next_action)||''} (${esc(l.next_action_date)})">🔔 </span>`:""}${esc(l.company_name)||"<span class='muted'>—</span>"}${l.has_click?`<span title="点击过开发信（强意向）" style="margin-left:4px">🔥</span>`:(l.has_open?`<span title="打开过开发信" style="margin-left:4px">👀</span>`:"")}</div></div>${(()=>{const fb=unscoredRowExtra(l);if(l.website){const w=safeHref(l.website);const inner=w?`<a class="wsite" href="${esc(w)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="margin:0;display:inline-block;max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(hostOf(l.website))}</a>`:`<span class="wsite" title="链接协议不合法，已按纯文本显示" style="margin:0;display:inline-block;max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(hostOf(l.website))}</span>`;return `<span style="display:flex;align-items:center;gap:6px;margin-left:22px;min-width:0">${inner}${fb}</span>`;}return fb?`<span style="display:flex;margin-left:22px">${fb}</span>`:"";})()}${(current==='replied'&&(l.latest_reply_cat||l.latest_reply_summary))?`<div style="margin-left:22px;margin-top:3px;display:flex;align-items:center;gap:6px;min-width:0">${l.latest_reply_cat?`<span class="pill" style="background:${catColor[l.latest_reply_cat]||'#6b7480'};color:#fff;flex-shrink:0">${esc(catLabel[l.latest_reply_cat]||l.latest_reply_cat)}</span>`:''}${l.latest_reply_summary?`<span class="co-name muted" style="font-size:12px" title="${esc(l.latest_reply_summary)}">🤖 ${esc(l.latest_reply_summary)}</span>`:''}</div>`:''}${reviewRowExtra(l)}</td>
           <td>${scoreBadge(l.match_score)}</td>
           <td class="stgcol"><span class="stg ${stg.cls}">${stg.badge}</span>${stg.sub?`<span class="stg-sub">${stg.sub}</span>`:""}${readyReplyBtn(l)}</td>
           <td>${l.email?esc(l.email):"<span class='miss'>缺邮箱</span>"}</td>
@@ -2194,7 +2196,7 @@
     //   琥珀色整个退役：两档制下没有"中间态"这回事。
     const SCORE_LINE = 60;   // 与后端 APPROVE_MIN_SCORE 对齐；后端返回 scoreBuckets.min 时以后端为准
     function detailScoreClass(s){ if(s==null) return "sc-none"; return s>=SCORE_LINE ? "sc-green" : "sc-red"; }
-    function detailScoreBorder(s){ if(s==null) return "var(--border)"; return s>=SCORE_LINE ? "#2f9e6d" : "#c0392b"; }
+    function detailScoreBorder(s){ if(s==null) return "var(--border)"; return s>=SCORE_LINE ? "#1e7a4f" : "#c0392b"; }
     function emailSubjectOf(rec){ const m=(rec||"").match(/^\s*subject:\s*(.+)$/im); return m?m[1].trim():""; }
     window.toggleEmailSec = () => { const b=$("#email-body"); if(!b) return; const open=b.style.display==="none"; b.style.display=open?"block":"none"; const c=$("#email-caret"); if(c)c.textContent=open?"▴":"▾"; };
     // 批④：已发过的线索，「已发出的开发信」默认折叠，点标题展开
@@ -2311,8 +2313,8 @@
           <div class="dp-body">
             <div class="dp-left">
               ${/* 批㉖：列表上的三按钮墙收进这里 —— 抓取失败线索的**唯一**处理块（错误全文+改网址+人工批准+忽略）。 */''}
-              ${(['analyzed','pending'].includes(lead.status) && a.match_score == null) ? `<div class="dp-card" style="border:1px solid #5a2e2e">
-                <div class="k" style="color:#f0876f">⚠️ 抓取失败处理</div>
+              ${(['analyzed','pending'].includes(lead.status) && a.match_score == null) ? `<div class="dp-card" style="border:1px solid #ecc4be">
+                <div class="k" style="color:#b0452e">⚠️ 抓取失败处理</div>
                 <div class="hint" style="margin:4px 0 8px;white-space:pre-wrap">${esc(a.reason || '官网抓不到（原因未记录）')}</div>
                 <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
                   <input id="ff-url" class="inlinput" style="flex:1;min-width:220px" placeholder="改成正确的官网地址" value="${esc(lead.website)||''}">
@@ -3164,7 +3166,7 @@
 
     // 回复箱
     const catLabel = { interested:"有意向", inquiry:"询价", not_interested:"无兴趣", complaint:"投诉", other:"其他" };
-    const catColor = { interested:"var(--green)", inquiry:"var(--blue)", not_interested:"#666", complaint:"var(--red)", other:"#555" };
+    const catColor = { interested:"var(--green)", inquiry:"var(--blue)", not_interested:"#666", complaint:"var(--red)", other:"#6b7480" };
     // ===== 批③追加2：回复箱并入「已回复」页（顺带结掉 #37 回复箱 UX 重设计）=====
     // 原来的 #replies-overlay 弹层已删。页面数据源 = /api/leads?group=replied（每行一个线索），
     // 最新回复摘要 + AI 分类徽章直接长在行里；完整往来看线索详情的时间线。
@@ -3202,10 +3204,10 @@
         if (tbl && tbl.parentNode) tbl.parentNode.insertBefore(el, tbl);
       }
       if (!orphans.length){ el.style.display='none'; return; }
-      el.style.display=''; el.style.cssText += ";margin:0 0 10px;border:1px solid #6b4a1a;background:#2a1f10;border-radius:8px;padding:10px 12px";
-      el.innerHTML = `<div style="font-weight:600;color:#f0b849;margin-bottom:6px">⚠️ ${orphans.length} 封回复没匹配到线索 —— 这是真人给你回的信，别让它烂在这</div>`
-        + orphans.map(o=>`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid #3a2d18">
-            <span class="pill" style="background:${catColor[o.category]||'#555'};color:#fff;flex-shrink:0">${esc(catLabel[o.category]||o.category||'未分类')}</span>
+      el.style.display=''; el.style.cssText += ";margin:0 0 10px;border:1px solid #e6d3a3;background:#f7efdd;border-radius:8px;padding:10px 12px";
+      el.innerHTML = `<div style="font-weight:600;color:#8a5a00;margin-bottom:6px">⚠️ ${orphans.length} 封回复没匹配到线索 —— 这是真人给你回的信，别让它烂在这</div>`
+        + orphans.map(o=>`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid #e6d3a3">
+            <span class="pill" style="background:${catColor[o.category]||'#6b7480'};color:#fff;flex-shrink:0">${esc(catLabel[o.category]||o.category||'未分类')}</span>
             <b style="flex-shrink:0">${esc(o.from_email)}</b>
             <span class="muted" style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(o.content||'')}">${esc(o.summary||o.subject||'')}</span>
             <span style="flex:1"></span>
@@ -3264,7 +3266,7 @@
         // ⚠️ 剩余量必须按 **effective** 算，不能按天花板 —— 显示 1000 而后端按 45 发，
         //    就是我们刚修完的那种"界面说谎"。爬坡在压着时要**明说是它在压**。
         const rampNote = (c.send_ramp_enabled && c.send_ramp_cap != null && c.send_ramp_cap < lim)
-          ? `<br><span style="color:#f0b866">⚠️ 爬坡保护生效中：今天实际能发 <b>${eff}</b>（天花板 ${lim}，爬坡上限 ${c.send_ramp_cap}）</span>` : "";
+          ? `<br><span style="color:#7a5410">⚠️ 爬坡保护生效中：今天实际能发 <b>${eff}</b>（天花板 ${lim}，爬坡上限 ${c.send_ramp_cap}）</span>` : "";
         $("#cfg-limit-usage").innerHTML =
           `今日冷发 <b>${cold}</b> / 生效上限 <b>${eff}</b>（剩 ${Math.max(0, eff - cold)}）` +
           (eff !== lim ? ` <span class="muted">· 天花板 ${lim}</span>` : "") +
@@ -3305,7 +3307,7 @@
       const base = `系统产能：每小时一班 × 每班最多约 ${perRound} 封 ≈ <b>${perDay} 封/天</b>`
         + (raw > 0 ? "" : `（自动闸跟随系统闸 = ${want}）`);
       if (want > perDay) {
-        el.innerHTML = `⚠️ <span style="color:var(--red,#e5534b)">你填的 <b>${want}</b> 封/天 <b>发不到</b></span> —— ${base}。`
+        el.innerHTML = `⚠️ <span style="color:var(--red,#c0392b)">你填的 <b>${want}</b> 封/天 <b>发不到</b></span> —— ${base}。`
           + `<br>超出的部分会顺延到之后的班次，<b>不会丢</b>，但当天发不完。`;
       } else {
         el.innerHTML = `${base}。你填的 ${want} 封/天 <b>能发到</b> ✓`;
@@ -3345,7 +3347,7 @@
         ? `<span class="muted">跟随系统闸（当前 ${_sysEffective}）· 留 0 保持跟随</span>`
         : (_autoLim < _sysEffective
             // 只有"比系统闸更紧"时它才真在卡人 —— 那时才该报警；反之是系统闸更紧，别把话说反
-            ? `<span style="color:#f0b866">单独设定 ${_autoLim}，比系统闸 ${_sysEffective} 更紧 → 自动通道实际按 <b>${_autoLim}</b> 发；填 0 回到跟随</span>`
+            ? `<span style="color:#7a5410">单独设定 ${_autoLim}，比系统闸 ${_sysEffective} 更紧 → 自动通道实际按 <b>${_autoLim}</b> 发；填 0 回到跟随</span>`
             : `<span class="muted">单独设定 ${_autoLim}，宽于系统闸 ${_sysEffective} → 实际按 <b>${_sysEffective}</b> 发（系统闸更紧）</span>`);
       $("#cfg-auto-min").textContent = c.auto_approve_min || 70;
       $("#cfg-auto-used").textContent = `（今日已自动发 ${c.auto_sent_today || 0} 封）`;
@@ -3363,13 +3365,13 @@
       if (!cost.ok) {
         // ⚠️ **绝不显示 $0** —— "今天真没花钱"和"我们没问到"长得一模一样，
         //   而 $0 会让 Joe 以为是前者。这跟批⑧ 那个"没有新邮件 vs 取不到"是同一个病。
-        costLine = `<span style="color:var(--red,#e5534b)">⚠️ AI 用量读取失败</span>`
+        costLine = `<span style="color:var(--red,#c0392b)">⚠️ AI 用量读取失败</span>`
                  + `<span class="muted">（${esc(String(cost.error||'').slice(0,70))}）—— 不是 $0，是没问到</span>`;
       } else {
         const lim = (cost.limit === null || cost.limit === undefined) ? "未设置" : $m(cost.limit);
         costLine = `AI 用量：今日 <b>${$m(cost.daily)}</b> · 本月 <b>${$m(cost.monthly)}</b> · 限额：<b>${lim}</b>`
           + (cost.stale
-              ? `<span style="color:var(--amber,#f0b849)">（这次没问到，显示 ${Math.round((cost.ageMs||0)/60000)} 分钟前的数）</span>`
+              ? `<span style="color:var(--amber,#8a5a00)">（这次没问到，显示 ${Math.round((cost.ageMs||0)/60000)} 分钟前的数）</span>`
               : "");
       }
       const u = c.ai_today || {};
@@ -3415,10 +3417,10 @@
       //   老代码把 1000 静默截成 500 还回 ok:true —— "接受了请求、存了另一个数、什么都不说"
       //   正是本项目一路在修的那种病，UI 这一层同样不许犯。
       const clampNote = res.daily_send_limit_clamped
-        ? `<br><span style="color:#f0b866">⚠️ 你输入的是 ${esc(String($("#cfg-limit").value))}，超过系统上限 ${res.daily_send_limit_max}，已按 <b>${res.daily_send_limit}</b> 存入。</span>`
+        ? `<br><span style="color:#7a5410">⚠️ 你输入的是 ${esc(String($("#cfg-limit").value))}，超过系统上限 ${res.daily_send_limit_max}，已按 <b>${res.daily_send_limit}</b> 存入。</span>`
         : "";
       $("#sendcfg-result").innerHTML = (bad.length
-        ? `<span style="color:var(--danger,#e5534b)">⚠️ 有 ${bad.length} 段没存上：${esc(bad.join("；"))}</span>`
+        ? `<span style="color:var(--danger,#c0392b)">⚠️ 有 ${bad.length} 段没存上：${esc(bad.join("；"))}</span>`
         : "✅ 已保存（发信 + 跟进 + 飞书通知）") + clampNote;
       if (!bad.length) renderAutomation(await fetch("/api/settings/sending").then(r=>r.json()).catch(()=>({})));   // 熔断/已发数回读，别让页面停在旧值
     };
@@ -3449,11 +3451,11 @@
 
     // ===== 数据看板 =====
     const FUNNEL_STAGES = [
-      ["new","新导入","#3d4351"], ["analyzed","已分析","#3a5a86"], ["pending","待审核","#3a5a86"],
-      ["approved","已批准","#2f9e6d"], ["queued","待发","#2f9e6d"], ["sent","已发送","#2f6fd6"],
-      ["replied","已回复","#37c98a"], ["no_reply","无回复","#7a6a3a"],
-      ["unsubscribed","已退订","#8a4a44"], ["bounced","退信","#8a4a44"], ["blacklisted","黑名单","#c0392b"],
-      ["ignored","已忽略","#555"],
+      ["new","新导入","#d5dae1"], ["analyzed","已分析","#9dbfe4"], ["pending","待审核","#9dbfe4"],
+      ["approved","已批准","#1e7a4f"], ["queued","待发","#1e7a4f"], ["sent","已发送","#2f6fd6"],
+      ["replied","已回复","#1e7a4f"], ["no_reply","无回复","#7a6a3a"],
+      ["unsubscribed","已退订","#ecc4be"], ["bounced","退信","#ecc4be"], ["blacklisted","黑名单","#c0392b"],
+      ["ignored","已忽略","#6b7480"],
     ];
     const pct = (x) => (x*100).toFixed(x>=0.1?0:1) + "%";
 
@@ -3490,12 +3492,12 @@
         const md = d.date.slice(5);
         const sx = cx - bw - 1, rx = cx + 1;
         if (d.sent>0)    bars += `<rect x="${sx.toFixed(1)}" y="${yOf(d.sent).toFixed(1)}" width="${bw.toFixed(1)}" height="${(y0-yOf(d.sent)).toFixed(1)}" fill="#2f6fd6" rx="1"><title>${md} 发送 ${d.sent}</title></rect>`;
-        if (d.replied>0) bars += `<rect x="${rx.toFixed(1)}" y="${yOf(d.replied).toFixed(1)}" width="${bw.toFixed(1)}" height="${(y0-yOf(d.replied)).toFixed(1)}" fill="#37c98a" rx="1"><title>${md} 回复 ${d.replied}</title></rect>`;
-        if (i%3===0 || i===n-1) bars += `<text x="${cx.toFixed(1)}" y="${H-7}" font-size="9" fill="#9aa3b2" text-anchor="middle">${md}</text>`;
+        if (d.replied>0) bars += `<rect x="${rx.toFixed(1)}" y="${yOf(d.replied).toFixed(1)}" width="${bw.toFixed(1)}" height="${(y0-yOf(d.replied)).toFixed(1)}" fill="#1e7a4f" rx="1"><title>${md} 回复 ${d.replied}</title></rect>`;
+        if (i%3===0 || i===n-1) bars += `<text x="${cx.toFixed(1)}" y="${H-7}" font-size="9" fill="#4d5762" text-anchor="middle">${md}</text>`;
       });
-      return `<div class="dash-legend"><span><i style="background:#2f6fd6"></i>每日发送</span><span><i style="background:#37c98a"></i>每日回复</span><span class="muted" style="margin-left:auto">峰值 ${maxV}</span></div>
+      return `<div class="dash-legend"><span><i style="background:#2f6fd6"></i>每日发送</span><span><i style="background:#1e7a4f"></i>每日回复</span><span class="muted" style="margin-left:auto">峰值 ${maxV}</span></div>
         <svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px;display:block">
-          <line x1="${padL}" y1="${y0}" x2="${W-padR}" y2="${y0}" stroke="#2a2f3a" stroke-width="1"/>
+          <line x1="${padL}" y1="${y0}" x2="${W-padR}" y2="${y0}" stroke="#e6e9ed" stroke-width="1"/>
           ${bars}
         </svg>`;
     }
@@ -3598,8 +3600,8 @@
       const s = (t && t.sent) || {}, f = (t && t.failed) || {};
       const sent = s.followup || 0, failed = f.followup || 0;
       if (sent > 0 && failed === 0) return `今天已发出 <b>${sent}</b> 封「无回复自动跟进」（那条路不受这个开关控制）。`;
-      if (sent > 0 && failed > 0)   return `今天「无回复自动跟进」发出 <b>${sent}</b> 封、<b style="color:#e07a6a">失败 ${failed} 封</b>（那条路不受这个开关控制）。`;
-      if (failed > 0)               return `⚠️ 今天「无回复自动跟进」<b style="color:#e07a6a">一封也没发出去（${failed} 次失败）</b> —— 那条路虽不受这个开关控制，但它现在是坏的。`;
+      if (sent > 0 && failed > 0)   return `今天「无回复自动跟进」发出 <b>${sent}</b> 封、<b style="color:#b03a2e">失败 ${failed} 封</b>（那条路不受这个开关控制）。`;
+      if (failed > 0)               return `⚠️ 今天「无回复自动跟进」<b style="color:#b03a2e">一封也没发出去（${failed} 次失败）</b> —— 那条路虽不受这个开关控制，但它现在是坏的。`;
       return `今天「无回复自动跟进」也是 <b>0 封</b>（没有失败记录 ⇒ 是今天没有到跟进时点的线索，不是它坏了）。`;
     }
 
@@ -3610,8 +3612,8 @@
       const u = H.unsub||{}, b = H.bounced||{}, r = H.replied||{}, t = H.today||{}, rp = H.ramp||{}, a = H.auto||{};
       // 🔴 自动发送关着 = 额度全是空转。Joe 现在根本不知道这件事，必须最显眼。
       const autoBanner = a.enabled
-        ? `<div class="db-note" style="border-left:3px solid #37c98a">✅ <b>自动发送：开</b> —— 每小时自动发已批准线索。今日自动已发 <b>${a.sent_today||0}</b> 封，自动闸 <b>${a.limit}</b>${a.source==='system'?'（跟随系统闸）':'（单独设定）'}。</div>`
-        : `<div class="db-note" style="border-left:3px solid #e07a6a;background:rgba(224,122,106,.08)">🔴 <b>自动发送：关</b> —— <b>机器现在不会自动发任何开发信</b>。
+        ? `<div class="db-note" style="border-left:3px solid #1e7a4f">✅ <b>自动发送：开</b> —— 每小时自动发已批准线索。今日自动已发 <b>${a.sent_today||0}</b> 封，自动闸 <b>${a.limit}</b>${a.source==='system'?'（跟随系统闸）':'（单独设定）'}。</div>`
+        : `<div class="db-note" style="border-left:3px solid #b03a2e;background:rgba(224,122,106,.08)">🔴 <b>自动发送：关</b> —— <b>机器现在不会自动发任何开发信</b>。
              今日上限设成多少都不会产生发信量。${followupTruth(t)}
              要让机器重新开始触达新客户，去「发信设置」把它打开。</div>`;
       const cell = (val, label, note, color) =>
@@ -3621,7 +3623,7 @@
         if (!ok) return `<div class="kpi-card kpi-muted"><div class="kpi-n" style="color:var(--muted)">${cnt}<span class="kpi-den">/${n}</span></div>`
           + `<div class="kpi-l">${label}<span class="kpi-note">样本不足，暂不下结论（n=${n}&lt;${N_MIN}）</span></div></div>`;
         const over = warnAt!=null && (pctVal/100) >= warnAt;
-        return `<div class="kpi-card"><div class="kpi-n" style="color:${over?'#e07a6a':color}">${p(pctVal)}</div>`
+        return `<div class="kpi-card"><div class="kpi-n" style="color:${over?'#b03a2e':color}">${p(pctVal)}</div>`
           + `<div class="kpi-l">${label}<span class="kpi-note">${cnt}/${n}${note?` · ${note}`:''}${over?' · ⚠️ 超警戒线':''}</span></div></div>`;
       };
       const rampNote = rp.enabled
@@ -3633,14 +3635,14 @@
         ${autoBanner}
         <div class="sec-title">📮 发信健康度<span class="hint" style="font-weight:400;margin-left:8px">分母 = 收到过<b>冷发信</b>（首触/跟进）的线索 <b>${n}</b> 家${(H.transactional_only||0)>0?`；另有 ${H.transactional_only} 家只收到过事务信（询盘确认/回信）<b>不计入</b> —— 这就是它与上方「已触达(家)」差额的来源`:'；只收到询盘确认信的不算在内'}</span></div>
         <div class="kpi-row">
-          ${rateCell(u.human_like||0, u.pct_human||0, '退订率（真人）', `另有 ${u.machine_like||0} 条疑似机器误退订已扣除`, '#e0946a', 0.05)}
-          ${rateCell(b.n||0, b.pct||0, '退信率', null, '#e07a6a', 0.03)}
-          ${rateCell(r.leads||0, r.pct||0, '线索回复率', `其中意向/询价 ${r.hot||0} 封`, '#37c98a', null)}
+          ${rateCell(u.human_like||0, u.pct_human||0, '退订率（真人）', `另有 ${u.machine_like||0} 条疑似机器误退订已扣除`, '#8a5225', 0.05)}
+          ${rateCell(b.n||0, b.pct||0, '退信率', null, '#b03a2e', 0.03)}
+          ${rateCell(r.leads||0, r.pct||0, '线索回复率', `其中意向/询价 ${r.hot||0} 封`, '#1e7a4f', null)}
           ${cell(`${t.cold_sent||0} / ${t.effective||0}`, '今日冷发 / 生效上限', `天花板 ${t.ceiling||0}${H.limit_source!=='configured'?' · ⚠️ 上限未配置':''}`)}
           ${(()=>{const p=H.pool||{};const s=p.sendable??0, st=p.stuck_no_email??0;
             // ⭐ 这一格是"机器今天还能发几封"的真正决定因素。2026-07-28 诊断时它只有 25，
             //    而日上限设的是 1000 —— **上限从来不是瓶颈，可发池才是**。
-            return cell(s, '可发池（已批准+有邮箱）', st>s?`⚠️ 另有 ${st} 家已批准但<b>没有邮箱</b>，发不出去`:`另有 ${st} 家缺邮箱`, st>s?'#e0946a':undefined);})()}
+            return cell(s, '可发池（已批准+有邮箱）', st>s?`⚠️ 另有 ${st} 家已批准但<b>没有邮箱</b>，发不出去`:`另有 ${st} 家缺邮箱`, st>s?'#8a5225':undefined);})()}
         </div>
         <div class="hint" style="margin:6px 0 2px">
           · <b>退订拆解</b>：共 ${u.total||0} 条 —— 首触后退 <b>${u.after_initial||0}</b> · 跟进后退 <b>${u.after_followup||0}</b>；
@@ -3649,7 +3651,7 @@
           · <b>爬坡保护</b>：${rampNote}<br>
           · <b>自动补邮箱</b>：${(H.pool||{}).find_email_enabled
               ? `已开（每轮免费抓公开联系页补进来，<b>不用 Hunter 积分</b>）${(H.pool||{}).find_email_last?` · 最近：${esc((H.pool||{}).find_email_last)}`:` · 还没补到过`}`
-              : `<span style="color:#e0946a">已关</span> —— 已批准但缺邮箱的线索将一直卡着，机器发不出去`}<br>
+              : `<span style="color:#8a5225">已关</span> —— 已批准但缺邮箱的线索将一直卡着，机器发不出去`}<br>
           · <b>开信率不显示</b>：Apple 隐私保护与安全网关会伪造开信，冷发场景下这个数不可信，给了只会让人做错决定。
         </div>`;
     }
@@ -3679,8 +3681,8 @@
         <div onclick="openReplyDetail(${it.id})" style="cursor:pointer;padding:10px 12px;border-bottom:1px solid var(--border)">
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             <b>${esc(it.company_name||it.from_email||'(未知)')}</b>
-            ${it.category?`<span class="pill" style="background:${catColor[it.category]||'#555'};color:#fff">${esc(catLabel[it.category]||it.category)}</span>`:''}
-            ${it.handled_at?`<span class="pill" style="background:#2c4a35;color:#7fd6a2">已处理</span>`:''}
+            ${it.category?`<span class="pill" style="background:${catColor[it.category]||'#6b7480'};color:#fff">${esc(catLabel[it.category]||it.category)}</span>`:''}
+            ${it.handled_at?`<span class="pill" style="background:#d3e9dc;color:#1e6b45">已处理</span>`:''}
             <span class="hint">${esc((it.received_at||'').slice(0,16))}</span>
           </div>
           <div class="hint" style="margin-top:3px;color:var(--text)">${esc(it.preview||'(空)')}</div>
@@ -3717,7 +3719,7 @@ ${esc(d.ours.body||'')}</div></details>`
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             <b>${esc(d.company_name||d.from_email||'(认不出主人)')}</b>
             <span class="hint">${esc(d.from_email||'')} · ${esc((d.received_at||'').slice(0,16))}</span>
-            ${d.handled_at?`<span class="pill" style="background:#2c4a35;color:#7fd6a2">已处理 ${esc(String(d.handled_at).slice(0,16))}</span>`:''}
+            ${d.handled_at?`<span class="pill" style="background:#d3e9dc;color:#1e6b45">已处理 ${esc(String(d.handled_at).slice(0,16))}</span>`:''}
           </div>
           <div class="sec-title" style="margin-top:10px">客户这次说的</div>
           <div style="white-space:pre-wrap">${esc(d.clean||'(空)')}</div>
@@ -3797,7 +3799,7 @@ ${esc(d.ours.body||'')}</div></details>`
         if (!enoughN) return `<div class="kpi-card kpi-muted"><div class="kpi-n" style="color:var(--muted)">${cnt}<span class="kpi-den">/${denom}</span></div>`
           + `<div class="kpi-l">${label}<span class="kpi-note">样本不足，暂不下结论（n=${denom}<${N_MIN}）</span></div></div>`;
         const rate = denom ? cnt/denom : 0, over = warnAt!=null && rate>=warnAt;
-        return `<div class="kpi-card"><div class="kpi-n" style="color:${over?'#e07a6a':color}">${pct(rate)}</div>`
+        return `<div class="kpi-card"><div class="kpi-n" style="color:${over?'#b03a2e':color}">${pct(rate)}</div>`
           + `<div class="kpi-l">${label}<span class="kpi-note">${cnt}/${denom}${over?` · ⚠️ 超警戒线 ${pct(warnAt)}`:''}</span></div></div>`;
       };
       // #47 6 级转化漏斗：后端累计口径（funnelLevels，单调递减、转化%≤100、条宽用累计值/顶端基数）
@@ -3826,17 +3828,17 @@ ${esc(d.ours.body||'')}</div></details>`
       const dl = d.daily||[]; const tmax = Math.max(1, ...dl.map(x=>Math.max(x.neu||0,x.sent||0,x.replied||0)));
       const trend = `<div style="display:flex;align-items:flex-end;gap:3px;height:84px">${dl.map(x=>`<div title="${x.date} 新增${x.neu||0}·发信${x.sent}·回复${x.replied}" style="flex:1;display:flex;align-items:flex-end;gap:1px;height:100%">
         <div style="flex:1;background:#2f6fd6;height:${((x.neu||0)/tmax*100).toFixed(0)}%;min-height:1px"></div>
-        <div style="flex:1;background:#c9820a;height:${(x.sent/tmax*100).toFixed(0)}%;min-height:1px"></div>
-        <div style="flex:1;background:#37c98a;height:${(x.replied/tmax*100).toFixed(0)}%;min-height:1px"></div></div>`).join('')}</div>
+        <div style="flex:1;background:#8a5a00;height:${(x.sent/tmax*100).toFixed(0)}%;min-height:1px"></div>
+        <div style="flex:1;background:#1e7a4f;height:${(x.replied/tmax*100).toFixed(0)}%;min-height:1px"></div></div>`).join('')}</div>
         <div style="display:flex;gap:3px;margin-top:3px">${dl.map((x,i)=>`<div style="flex:1;text-align:center;font-size:8px;color:var(--muted)">${i%2===0?esc(x.date.slice(5)):''}</div>`).join('')}</div>
-        <div class="hint" style="margin-top:5px"><span style="color:#2f6fd6">■</span> 新增　<span style="color:#c9820a">■</span> 发信　<span style="color:#37c98a">■</span> 回复</div>`;
+        <div class="hint" style="margin-top:5px"><span style="color:#2f6fd6">■</span> 新增　<span style="color:#8a5a00">■</span> 发信　<span style="color:#1e7a4f">■</span> 回复</div>`;
       // 批④ 数据看板 = 体检报告：只回答"系统健康吗、哪里漏水"，不告诉你今天干嘛（那是待办事项的活）。
       // 已删：「现在最该做」（与待办事项完全重复）、「线索状态分布」（与左栏漏斗同数据两套叫法且口径打架）。
       $("#v-page").innerHTML = pageHeader('📊 数据看板','系统健康 · 哪里漏水（今天干嘛去「待办事项」）') + healthHtml(H, N_MIN) + `
         ${enoughN?'':`<div class="db-note">📐 已发 <b>${denom}</b> 家，未达统计门槛 <b>${N_MIN}</b> —— 下面的比率只给<b>计数</b>，不下结论。
           样本太小的比率会骗人（如 5/20 = 25% 退订，置信区间约 9%–49%，纯噪音）。先把量发上去，到 ${N_MIN}+ 再看。</div>`}
-        <div class="kpi-row">${kpi(d.total,'线索总数')}${kpi(d.analyzedCount||0,'已分析')}${kpi(d.sentLeads||0,'已触达(家)')}${kpi(d.noEmailCount||0,'缺邮箱','#e0946a')}
-          ${rateKpi(c.replied||0,'回复率','#37c98a',null)}${rateKpi(c.unsubscribed||0,'退订率','#e0946a',0.05)}${rateKpi(c.bounced||0,'退信率','#e07a6a',0.03)}${kpi(flipPending,`翻牌堆待复核(&lt;${sLine})`,'#e0946a')}</div>
+        <div class="kpi-row">${kpi(d.total,'线索总数')}${kpi(d.analyzedCount||0,'已分析')}${kpi(d.sentLeads||0,'已触达(家)')}${kpi(d.noEmailCount||0,'缺邮箱','#8a5225')}
+          ${rateKpi(c.replied||0,'回复率','#1e7a4f',null)}${rateKpi(c.unsubscribed||0,'退订率','#8a5225',0.05)}${rateKpi(c.bounced||0,'退信率','#b03a2e',0.03)}${kpi(flipPending,`翻牌堆待复核(&lt;${sLine})`,'#8a5225')}</div>
         <div class="db-cols">
           <div class="db-card"><div class="k muted" style="margin-bottom:8px">转化漏斗（累计口径）</div>${fnHtml}${worst?`<div class="hint" style="margin-top:8px">掉点最狠：<b style="color:var(--amber)">${worst}</b>（转化 ${worstP}%）</div>`:''}</div>
           <div class="db-card"><div class="k muted" style="margin-bottom:8px">近 14 天趋势</div>${trend}</div>
@@ -3844,7 +3846,7 @@ ${esc(d.ours.body||'')}</div></details>`
         <div class="db-card" style="margin-top:12px"><div class="k muted" style="margin-bottom:8px">按收件箱类型</div>${inboxHtml}</div>
         <div class="db-cols" style="margin-top:12px">
           <div class="db-card"><div class="k muted" style="margin-bottom:8px">按国家 Top10</div>${miniBars((d.byCountry||[]).slice(0,10), i=>esc(countryName(i.v)), "#2f6fd6")}</div>
-          <div class="db-card"><div class="k muted" style="margin-bottom:8px">按分类</div>${miniBars((d.byCategory||[]).slice(0,8), i=>esc(i.v), "#2f9e6d")}</div>
+          <div class="db-card"><div class="k muted" style="margin-bottom:8px">按分类</div>${miniBars((d.byCategory||[]).slice(0,8), i=>esc(i.v), "#1e7a4f")}</div>
         </div>`;
     }
     // #47 行动建议：数据看板 + 今日待办共用的渲染 + 跳转
