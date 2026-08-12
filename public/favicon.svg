@@ -1,1 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="AirSonde"><rect width="64" height="64" rx="12" fill="#0f2740"/><text x="32" y="44" font-family="Arial,Helvetica,sans-serif" font-size="34" font-weight="700" fill="#7fd6ff" text-anchor="middle">A</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- AirSonde favicon — 降级版 mark (<=32px: outer ring dropped, strokes
+       thickened). Geometry frozen by 总工 2026-08-11. BRAND = #0C7A6B. -->
+  <circle cx="32" cy="32" r="9" fill="#0C7A6B"/>
+  <circle cx="32" cy="32" r="22" fill="none" stroke="#0C7A6B" stroke-width="7"
+          stroke-linecap="round" stroke-dasharray="115 24" transform="rotate(-56 32 32)"/>
+</svg>
