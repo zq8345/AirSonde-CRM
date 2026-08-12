@@ -7,9 +7,10 @@ const OR_URL = "https://openrouter.ai/api/v1/chat/completions";
 // 冲刺1a：社会证明/卖点（可信、匿名，不点名具体客户）。用户可在"发信设置"里改。
 // ⚠️ AirSonde 卖点**草稿**：故意只写保守的中性描述，上游那种"top-selling/100+ resellers"社会证明
 //   对 AirSonde 是**假 claim**，一条都没搬。真实卖点（认证/产能/案例）待 Joe 逐条核实后在发信设置里填。
+// ⚠️ claims 纪律（画像终稿 §5 + 总工裁定 2026-08-12）：认证名/协议名/技术能力断言在工厂书面确认前一律不写。
 export const DEFAULT_SELLING_POINTS =
-  "Factory-direct manufacturer of indoor air quality monitors (CO2, PM2.5, TVOC, temperature & humidity); " +
-  "OEM/ODM private-label support with flexible MOQs; integration options (WiFi, Modbus/BACnet, cloud/API).";
+  "Factory-direct supply of indoor air quality monitors (CO2, PM2.5, TVOC, temperature & humidity); " +
+  "OEM/ODM private-label support with flexible MOQs for growing brands and distributors.";
 async function getSellingPoints(env: Env): Promise<string> {
   try {
     const r = await env.DB.prepare("SELECT value FROM settings WHERE key = 'selling_points'").first<{ value: string }>();

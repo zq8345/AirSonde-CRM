@@ -15,16 +15,17 @@ const CATEGORIES = [
   ["Indoor Air Quality Monitors", "CO2, PM2.5/PM10, TVOC, temperature &amp; humidity"],
   ["Wall &amp; Panel Displays", "Wall-mount monitors, desktop units, LED panels"],
   ["Sensors &amp; Modules", "Replacement sensors, OEM modules, calibration"],
-  ["Connectivity &amp; Gateways", "WiFi, Modbus/BACnet, cloud &amp; API integration"],
+  ["Connected Monitoring", "Data-ready monitor options for building projects"],
   ["Commercial &amp; HVAC Integration", "BMS-ready units for buildings, schools &amp; offices"],
   ["Custom &amp; OEM/ODM", "Private-label &amp; custom-spec monitors at volume"],
 ].map(([t, d]) => `<div class="cat"><h3>${t}</h3><p>${d}</p></div>`).join("");
 
+// ⚠️ claims 纪律（画像终稿 §5 + 总工裁定 2026-08-12）：认证名/协议名/技术方案断言一律不出现，
+//    与官网同口径——有真证书/工厂书面确认才加回，不做"support on request"式保守暗示。
 const FAQS = [
   ["Do you do private label / ODM?", "Yes — your branding, your spec, no AirSonde marks. Private-label is our core business."],
   ["Is there a minimum order?", "Flexible MOQs for growing brands and distributors — we scale with you."],
-  ["Which certifications do you support?", "CE / FCC / RoHS on standard lines; certification support for custom builds."],
-  ["Can you integrate with our platform?", "Yes — Modbus/BACnet, WiFi and cloud/API options for BMS and app integration."],
+  ["How do we get pricing?", "Trade pricing is inquiry-based — tell us your models and volumes and we'll quote."],
 ].map(([q, a]) => `<div class="faq"><h4>${q}</h4><p>${a}</p></div>`).join("");
 
 export function catalogHtml(): string {
@@ -91,7 +92,7 @@ export function catalogHtml(): string {
       <p class="sub">CO2, PM2.5, TVOC &amp; multi-sensor IAQ monitors. Factory-direct supply, OEM/ODM private-label, and volume trade pricing for brands, distributors &amp; HVAC integrators worldwide.</p>
       <a class="btn" href="#request">Request Wholesale Price List</a>
       <div class="trust">
-        <span>Factory-direct</span><span>OEM/ODM ready</span><span>Flexible MOQs</span><span>CE / FCC / RoHS</span>
+        <span>Factory-direct</span><span>OEM/ODM ready</span><span>Flexible MOQs</span>
       </div>
     </div>
   </header>
@@ -111,8 +112,8 @@ export function catalogHtml(): string {
       <div class="grid4">
         <div class="card"><b>Factory-direct</b><p>Manufacturer supply, stable stock, and pricing that leaves you real margin.</p></div>
         <div class="card"><b>OEM/ODM ready</b><p>Private-label and custom-spec builds — your brand on proven hardware.</p></div>
-        <div class="card"><b>Integration-friendly</b><p>Modbus/BACnet, WiFi and cloud/API options for BMS and app ecosystems.</p></div>
-        <div class="card"><b>Certification support</b><p>CE / FCC / RoHS on standard lines; support for custom compliance needs.</p></div>
+        <div class="card"><b>Project-friendly</b><p>Custom specs and data options scoped per project — built for integrators.</p></div>
+        <div class="card"><b>Flexible engagement</b><p>From samples to volume — we scale with growing brands and project pipelines.</p></div>
       </div>
     </div>
   </section>
