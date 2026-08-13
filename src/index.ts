@@ -51,6 +51,9 @@ export interface Env {
   LARK_IMAP_PASS2?: string;
   LARK_IMAP_PASS: string;
   LARK_WEBHOOK_URL: string;      // 飞书群「自定义机器人」webhook（可选，配了才推送）
+  // 官网询盘管道：官网 Pages Function 服务端转发时带 x-inbound-token。**未配 = 机器通道 fail-closed**
+  //   （浏览器直投的老路径不受影响，见 /api/inbound 注释）。secret，绝不放 vars。
+  INBOUND_TOKEN?: string;
   // ↓ dev 出站闸门用。**只存在于 .dev.vars**（wrangler dev 才读），生产 secrets 里没有 → 生产零影响。
   DEV_LOCAL?: string;            // "1" = 本地进程，装出站闸门（只准出 localhost）
   DEV_EGRESS_ALLOW?: string;     // 逗号分隔：逐个点名放行的真实主机（点名 = 明知故犯，会打横幅）
@@ -2115,6 +2118,8 @@ app.get("/api/_whoami", (c) => c.json({
   canImap: !!c.env.LARK_IMAP_PASS,
   canSearch: !!c.env.SEARCH_API_KEY,
   canAi: !!c.env.OPENROUTER_API_KEY,
+  // 官网询盘机器通道：false = 带 token 来的一律 503（fail-closed），浏览器直投路径不受影响
+  canAcceptWebInquiry: !!c.env.INBOUND_TOKEN,
   larkIsLocalSink: /^https?:\/\/(localhost|127\.0\.0\.1)\b/i.test(String(c.env.LARK_WEBHOOK_URL || "")),
 }));
 
@@ -2502,16 +2507,44 @@ function setInboundCors(c: any): void {
 }
 app.options("/api/inbound", (c) => { setInboundCors(c); return c.body(null, 204); });
 
+// ---- 机器调用方（官网 Pages Function 服务端转发）的鉴权 ----------------------
+// ⭐ 为什么用共享密钥而不是"信 Origin/来源字段"：Origin 与 body 里的 source 都是**调用方自称**，
+//   任何人都能发。密钥是唯一能回答"这真是我们自己的官网后端吗"的东西 —— 与 openrouter.ts 那条
+//   「背书只认服务端白名单、不认正文自称」是同一条纪律。
+// ⚠️ 未配 INBOUND_TOKEN = 机器通道 **fail-closed**（带 token 来一律 503），不是"没闸放行"。
+// ⚠️ 浏览器直投路径（本 worker 自带的 /catalog 落地页）**行为一字不变**：不带 token → trusted=false，
+//   仍走 honeypot + 每 IP 限流 + 压制名单那套（上游原样）。两条路各判各的，不互相削弱。
+type InboundAuth = { trusted: boolean; deny?: { msg: string; code: 401 | 503 } };
+function authInbound(c: any): InboundAuth {
+  const tok = String(c.req.header("x-inbound-token") || "");
+  if (!tok) return { trusted: false };                       // 浏览器路径：老行为
+  const want = String(c.env.INBOUND_TOKEN || "");
+  if (!want) return { trusted: false, deny: { msg: "inbound channel not configured", code: 503 } };
+  // 定长比较：先比长度再逐字符累积异或，避免"第几位不同"从耗时上漏出去
+  let diff = tok.length ^ want.length;
+  for (let i = 0; i < Math.max(tok.length, want.length); i++) diff |= tok.charCodeAt(i % tok.length || 0) ^ want.charCodeAt(i % want.length || 0);
+  if (diff !== 0) return { trusted: false, deny: { msg: "bad inbound token", code: 401 } };
+  return { trusted: true };
+}
+/** 可信调用方才能声明的表单来源（**服务端白名单**，不收自由文本 —— 否则谁都能给自己贴"官网询盘"）。 */
+const INBOUND_SOURCE_FORMS = new Set(["website_contact"]);
+
 app.post("/api/inbound", async (c) => {
   setInboundCors(c);
-  const b = await jsonBody<{ company_name?: string; email?: string; country?: string; where_sell?: string; monthly_volume?: string; company_url?: string;
-    name?: string; phone?: string; message?: string; product_id?: string; product_title?: string; product_category?: string; product_url?: string; locale?: string }>(c);
+  const auth = authInbound(c);
+  if (auth.deny) {
+    console.log(JSON.stringify({ evt: "inbound_auth_denied", code: auth.deny.code }));   // 不回显 token，也不回显期望值
+    return c.json({ error: auth.deny.msg }, auth.deny.code);
+  }
+  const b = await jsonBody<{ company_name?: string; company?: string; email?: string; country?: string; where_sell?: string; monthly_volume?: string; company_url?: string;
+    name?: string; phone?: string; message?: string; inquiry_type?: string; source_form?: string; product_id?: string; product_title?: string; product_category?: string; product_url?: string; locale?: string }>(c);
   // honeypot：隐藏字段被填 → 判定 bot，假成功、不入库
   if ((b.company_url || "").trim()) return c.json({ ok: true });
 
   const email = (b.email || "").trim().toLowerCase();
   const person = (b.name || "").trim().slice(0, 200);
-  const company = ((b.company_name || "").trim() || person).slice(0, 200);   // 产品询盘常只有个人名 → 用 name 兜 company（leads 主展示字段）
+  // company_name（本 worker 落地页）与 company（官网表单）是同一字段的两个名字；产品询盘常只有个人名 → 用 name 兜底
+  const company = ((b.company_name || "").trim() || (b.company || "").trim() || person).slice(0, 200);
   if (!company) return c.json({ error: "Name or company is required" }, 400);
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) || email.length > 200) return c.json({ error: "A valid email is required" }, 400);
   // country 白名单：非法 → null（别信任意 POST 值）。cc 保持小写做白名单/展示查表；
@@ -2530,7 +2563,36 @@ app.post("/api/inbound", async (c) => {
   const message = (b.message || "").trim().slice(0, 2000);
   const locale = (b.locale || "").trim().slice(0, 10);
   const isProduct = !!(productTitle || productId);
-  const source = isProduct ? "product_inquiry" : "landing";   // 区分产品询盘 vs 落地页表单
+  // 来源标记：**可信调用方**才可声明 source_form（白名单内）；其余一律按老规则自行判定。
+  //   → 后台「来源」列因此能区分：website_contact（官网联系表单）/ product_inquiry / landing / search / csv…
+  const claimedForm = (b.source_form || "").trim().toLowerCase();
+  const trustedForm = auth.trusted && INBOUND_SOURCE_FORMS.has(claimedForm) ? claimedForm : "";
+  const source = trustedForm || (isProduct ? "product_inquiry" : "landing");
+  // 询盘类型（官网表单的 OEM/ODM · White-label · General）：只作展示，落进 notes，不进 source
+  const inquiryType = (b.inquiry_type || "").trim().slice(0, 60);
+
+  // ---- 幂等（**只对可信调用方，且强制**）----------------------------------
+  // 为什么强制而不是"给了就用"：官网 Function 转发失败重试是常态（网络抖动/超时），
+  //   没有幂等键的重试会给同一封询盘反复追加 notes、反复推飞书。而"可以缺席而不出声的输入，
+  //   迟早缺席"（规则 §3.4）—— 所以缺了直接 400 吼出来，不做静默降级。
+  // 实现：复用 inbound_throttle（k 是 TEXT PRIMARY KEY）→ INSERT OR IGNORE 拿**原子**判定，
+  //   changes=0 即"这键已处理过"。⛔ 不新建表：这张表的语义（短期去重标记 + Cron 清理）正好就是它。
+  // ⚠️ 抢先占键（在任何写入之前）：先做事后占键的话，两个并发重试会双双看到"没占过"。
+  let idempotent = false;
+  if (auth.trusted) {
+    const rawKey = String(c.req.header("x-idempotency-key") || "").trim();
+    if (!rawKey) return c.json({ error: "x-idempotency-key required for authenticated callers" }, 400);
+    const key = rawKey.replace(/[^A-Za-z0-9_.:-]/g, "").slice(0, 80);
+    if (!key) return c.json({ error: "x-idempotency-key invalid" }, 400);
+    const ins = await c.env.DB.prepare(
+      "INSERT OR IGNORE INTO inbound_throttle (k, last_at) VALUES (?, datetime('now'))"
+    ).bind(`idem:${key}`).run();
+    idempotent = (ins.meta?.changes ?? 0) === 0;
+    if (idempotent) {
+      console.log(JSON.stringify({ evt: "inbound_idempotent_replay", key: key.slice(0, 16) }));
+      return c.json({ ok: true, idempotent: true });   // 已处理过：不写库、不推飞书
+    }
+  }
 
   // 🔒 合规终极闸（复审加固）：命中持久压制名单(退订/退信/投诉) → 静默 ok，绝不入库/改状态/推飞书。
   // 不依赖可变 leads.status（那条会被"重复邮箱行 / 无 leads 行的压制条目"绕过），用与发信同一道 isEmailSuppressed。
@@ -2538,23 +2600,37 @@ app.post("/api/inbound", async (c) => {
 
   // 限流（原则：正常量绝不丢真单；限流按 IP、只惩罚那个刷的 IP，不波及别人——全局桶会让一个刷子 DoS 所有人）。
   // 计数 = 该 IP 近 1h 在 throttle 表的 req 行数（标记 key = req:<ip>:<uuid>；Cron 清理 >1 天旧记录）。
-  const ipRaw = c.req.header("cf-connecting-ip") || "0.0.0.0";
-  const ip = (ipRaw.replace(/[^0-9a-fA-F:.]/g, "").slice(0, 45)) || "0.0.0.0"; // 清洗，防 LIKE 通配(%/_)注入
-  const ipHourCount = (await c.env.DB.prepare(
-    "SELECT COUNT(*) AS n FROM inbound_throttle WHERE k LIKE ? AND last_at > datetime('now','-1 hour')"
-  ).bind(`req:${ip}:%`).first<{ n: number }>())?.n || 0;
-  // 硬背底：同 IP ≥30/hr → 该 IP 429 不入库（单 IP flood 本地化；30 远高于真买家，同 NAT 下几个买家也够不到）。
-  if (ipHourCount >= 30) return c.json({ error: "too many requests" }, 429);
-  // 软限：同 IP ≥10/hr → 该 IP 后续跳过飞书 inboundCard（仍入库、返 ok）；别的 IP 真询盘照常推。
-  // IP 轮换仍能绕(已知残留)→ 靠 Turnstile 根治(用户推广前配)；现无流量，per-IP + honeypot 先够。
-  const overSoftCap = ipHourCount >= 10;
-  await c.env.DB.prepare("INSERT OR IGNORE INTO inbound_throttle (k, last_at) VALUES (?, datetime('now'))").bind(`req:${ip}:${crypto.randomUUID()}`).run();
+  //
+  // 🔴 **可信调用方豁免每 IP 限流** —— 不是开特例，是这把尺子在服务端转发下量错了东西：
+  //   官网所有询盘都经同一个 Pages Function 出口，对 CRM 而言是**同一个 IP**。
+  //   照原规则，官网询盘一旦到 10 封/小时就开始**静默不推飞书**、30 封直接 429 丢单，
+  //   而 Joe 那边的现象是"没收到通知"、系统却一切正常 —— 正是最贵的那种故障。
+  //   可信调用方已由共享密钥认证，且官网侧自带 honeypot + Origin 校验，防刷在那一层做。
+  //   浏览器直投路径的限流**一字未动**。
+  let overSoftCap = false;
+  if (!auth.trusted) {
+    const ipRaw = c.req.header("cf-connecting-ip") || "0.0.0.0";
+    const ip = (ipRaw.replace(/[^0-9a-fA-F:.]/g, "").slice(0, 45)) || "0.0.0.0"; // 清洗，防 LIKE 通配(%/_)注入
+    const ipHourCount = (await c.env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM inbound_throttle WHERE k LIKE ? AND last_at > datetime('now','-1 hour')"
+    ).bind(`req:${ip}:%`).first<{ n: number }>())?.n || 0;
+    // 硬背底：同 IP ≥30/hr → 该 IP 429 不入库（单 IP flood 本地化；30 远高于真买家，同 NAT 下几个买家也够不到）。
+    if (ipHourCount >= 30) return c.json({ error: "too many requests" }, 429);
+    // 软限：同 IP ≥10/hr → 该 IP 后续跳过飞书 inboundCard（仍入库、返 ok）；别的 IP 真询盘照常推。
+    // IP 轮换仍能绕(已知残留)→ 靠 Turnstile 根治(用户推广前配)；现无流量，per-IP + honeypot 先够。
+    overSoftCap = ipHourCount >= 10;
+    await c.env.DB.prepare("INSERT OR IGNORE INTO inbound_throttle (k, last_at) VALUES (?, datetime('now'))").bind(`req:${ip}:${crypto.randomUUID()}`).run();
+  }
 
   // 按邮箱去重 upsert。合规：退订/黑名单/退信/已成交/已忽略 的线索，绝不改 next_action/notes、也不作为"新询盘"推送
   // （否则知道邮箱即可 POST 把已退订/黑名单的人捞回"待跟进"，诱导销售联系→合规雷）。
   const SUPPRESSED_INBOUND = new Set(["unsubscribed", "blacklisted", "bounced", "won", "ignored"]);
-  const nextAction = isProduct ? "跟进产品询盘" : "跟进落地页询盘";
-  const note = isProduct
+  const isWebsiteContact = source === "website_contact";
+  const nextAction = isWebsiteContact ? "跟进官网询盘" : isProduct ? "跟进产品询盘" : "跟进落地页询盘";
+  const note = isWebsiteContact
+    // 官网联系表单：字段与 airsonde-web/functions/api/contact.ts 一一对应（契约见 docs/官网询盘接入契约）
+    ? `官网询盘 | 姓名: ${person || "-"} | 电话: ${phone || "-"}${inquiryType ? " | 类型: " + inquiryType : ""}${locale ? " | " + locale : ""} | 留言: ${message || "-"}`
+    : isProduct
     ? `产品询盘 | 产品: ${productTitle || "-"}${productCategory ? " [" + productCategory + "]" : ""}${productId ? " #" + productId : ""}` +
       `${productUrl ? " | " + productUrl : ""} | 姓名: ${person || "-"} | 电话: ${phone || "-"}${locale ? " | " + locale : ""} | 留言: ${message || "-"}`
     : `落地页询盘 | 在哪卖: ${whereSell || "-"} | 月走量: ${volume || "-"}`;
