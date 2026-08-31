@@ -8,7 +8,7 @@ import { parseCsv, mapRowToLead } from "./csv";
 import { analyzeLead, getProfile, DEFAULT_PROFILE, ensureDraft } from "./service";
 import { writeReplyDraft, writeWarmFollowup, DEFAULT_SELLING_POINTS, translateToChinese, isTrustedDirectorySource, getAiUsage } from "./openrouter";
 import { scrapeSite } from "./scrape";
-import { sendLead, sendApprovedBatch, sendFollowupBatch, sendWarmFollowupNow, unsubscribeByToken, getSetting, setSetting, addSuppressedEmail, isEmailSuppressed, autoSentToday, sentToday, sentTodayBreakdown, failedTodayBreakdown, getBreakerStatus, BREAKER_WINDOW, BREAKER_THRESHOLD, deliverEmail, brandForLead, senderSentToday, SENDER_PRIMARY, SENDER_LEGACY, DEFAULT_COMPANY_ADDRESS, systemDailySendLimit, coldSentToday, SYSTEM_LIMIT_DEFAULT, RAMP_FLOOR, RAMP_FACTOR, autoSendDailyLimit } from "./send";
+import { sendLead, sendApprovedBatch, sendFollowupBatch, sendWarmFollowupNow, unsubscribeByToken, getSetting, setSetting, addSuppressedEmail, isEmailSuppressed, autoSentToday, sentToday, sentTodayBreakdown, failedTodayBreakdown, getBreakerStatus, BREAKER_WINDOW, BREAKER_THRESHOLD, deliverEmail, brandForLead, senderSentToday, SENDER_PRIMARY, SENDER_LEGACY, DEFAULT_COMPANY_ADDRESS, autoSendEnabled, autoApproveEnabled, systemDailySendLimit, coldSentToday, SYSTEM_LIMIT_DEFAULT, RAMP_FLOOR, RAMP_FACTOR, autoSendDailyLimit } from "./send";
 
 // 系统发信上限可设的最大值。Joe 拍板 1000 → 老的 500 clamp 会静默截断，故放宽到 2000 留余量。
 // （不设无穷：手滑多打一个 0 就把域名烧了，这类不可逆代价才值得一个上限。）
@@ -495,7 +495,7 @@ app.get("/api/health/sending", async (c) => {
     },
     ramp: { enabled: sys.rampEnabled, cap: sys.rampCap, yesterday_cold: sys.yesterdayCold },
     auto: {
-      enabled: (await getSetting(c.env, "auto_send_enabled", "1")) === "1",
+      enabled: await autoSendEnabled(c.env),
       limit: auto.limit, source: auto.source,
       sent_today: await autoSentToday(c.env),
     },
@@ -1584,8 +1584,8 @@ app.get("/api/settings/sending", async (c) => {
     primary_sent_today: await senderSentToday(c.env, SENDER_PRIMARY),
     legacy_sent_today: await senderSentToday(c.env, SENDER_LEGACY),
     // 自动化三开关 + 熔断状态（前端要能看能关；熔断后必须显眼告诉 Joe 为什么停了）
-    auto_approve_enabled: (await getSetting(c.env, "auto_approve_enabled", "1")) === "1",
-    auto_send_enabled: (await getSetting(c.env, "auto_send_enabled", "1")) === "1",
+    auto_approve_enabled: await autoApproveEnabled(c.env),
+    auto_send_enabled: await autoSendEnabled(c.env),
     // 自动闸默认跟随系统闸（走 resolver，不在这里自己 getSetting）——老写法的硬默认 15/生产 200
     // 就是把"系统闸 1000"悄悄压成 200 的那个隐形瓶颈。source: system=跟随 · configured=Joe 单独设过。
     auto_send_daily_limit: autoLimit.limit,
@@ -1658,7 +1658,7 @@ app.post("/api/settings/sending", async (c) => {
     else await setSetting(c.env, "auto_send_daily_limit", String(Math.min(LIMIT_MAX, v)));
   }
   if (b.auto_send_enabled != null) {
-    const was = (await getSetting(c.env, "auto_send_enabled", "1")) === "1";
+    const was = await autoSendEnabled(c.env);
     await setSetting(c.env, "auto_send_enabled", b.auto_send_enabled ? "1" : "0");
     // 手动重开 = Joe 说"我查过了、改过了" → 清熔断印记 + **把熔断窗口的起点挪到此刻**。
     // ⚠️ 不挪起点的话熔断**不可恢复**：停了之后窗口再也不进新数据、永远卡在那个超标率，
@@ -2128,10 +2128,17 @@ app.post("/api/settings/notify", async (c) => {
 //   ⚠️ 只报**钥匙名**，绝不报值（`_whoami` 类端点的老规矩）。
 app.get("/api/ignition", (c) => c.json(ignitionReport(c.env)));
 
+// C6/Y5：每个 isolate 启动时生成一次的短 id。
+// ⚠️ 它回答的是一个**别的字段都答不了**的问题：「我现在打到的，是不是我刚部署的那个进程？」
+//   这台机器上真发生过：8788 端口答话的是**另一个窗**的 worker，而仓名字段"看着也对"。
+//   boot id 变了 = 换进程了；没变 = 还是老的那个。
+const BOOT_ID = crypto.randomUUID().slice(0, 8);
+
 app.get("/api/_whoami", (c) => c.json({
   // C1 进程身份（验收判据）：repo/db 与 wrangler.jsonc 同一次部署单元，改绑定必改这里。
   repo: "airsonde-crm",
   db: "airsonde_crm",
+  bootId: BOOT_ID,
   marker: BUILD_MARKER,
   guard: devGuardOn(c.env),
   // 能力面全部只报有无（布尔），绝不报值。C1 锁死态：以下应全为 false。
@@ -2748,7 +2755,7 @@ app.get("/api/rescan/status", async (c) => {
 app.post("/api/rescan/start", async (c) => {
   // 安全闸：自动发送开着时不许开重扫 —— 重置会把 approved 打回 new，重扫过程中它们重新拿到 ≥60
   // 就会被立刻发出去，那正是"按刚被宣布作废的旧流程发信"。
-  if ((await getSetting(c.env, "auto_send_enabled", "1")) === "1") {
+  if (await autoSendEnabled(c.env)) {
     return c.json({ error: "请先关闭「自动发送」再开始重扫 —— 否则重扫过程中线索会边打分边被发出去（用的还是半新半旧的标准）" }, 409);
   }
   const startedAt = new Date().toISOString().replace("T", " ").slice(0, 19);
@@ -2857,8 +2864,8 @@ const RESCORE_LOW_MAX_PER_CALL = 20;
 /** 两个自动开关任一开着 → 返回拒绝理由；都关着 → null（放行）。 */
 async function rescoreLowGate(env: Env): Promise<string | null> {
   const on: string[] = [];
-  if ((await getSetting(env, "auto_send_enabled", "1")) === "1") on.push("「自动发送」");
-  if ((await getSetting(env, "auto_approve_enabled", "1")) === "1") on.push("「自动批准」");
+  if (await autoSendEnabled(env)) on.push("「自动发送」");
+  if (await autoApproveEnabled(env)) on.push("「自动批准」");
   if (!on.length) return null;
   return `拒绝启动：${on.join(" 和 ")} 还开着。低分重打会让一批线索升到 ≥${APPROVE_MIN_SCORE} 分，` +
     `这两个开关开着的话 cron 下一个整点就会把它们自动批准并发出去 —— 而升上来的**必须停在「待审批」等人工过目**。` +
@@ -3271,7 +3278,7 @@ async function scheduled(event: ScheduledController, env: Env, ctx: ExecutionCon
   //    **不再管邮箱**（闸分两条：批准=值得碰；能不能发邮件是发送那一刻的事，见 send.ts）。
   //  · <60 → **不动**：进翻牌堆等 Joe 复核，绝不替他做销毁性决定。
   try {
-    if ((await getSetting(env, "auto_approve_enabled", "1")) === "1") {
+    if (await autoApproveEnabled(env)) {
       const autoMin = await getAutoApproveMin(env);
       const cands = (await env.DB.prepare(
         // ⭐ 批⑨①：`AND l.email IS NOT NULL AND l.email != ''` 已删 —— 无邮箱但 ≥60 的
@@ -3416,7 +3423,7 @@ async function scheduled(event: ScheduledController, env: Env, ctx: ExecutionCon
   // 2.6) 熔断检查 → 自动发送。**熔断必须在发送之前**：先看伤口再决定要不要继续开枪。
   try {
     const br = await getBreakerStatus(env);
-    if (br.shouldTrip && (await getSetting(env, "auto_send_enabled", "1")) === "1") {
+    if (br.shouldTrip && await autoSendEnabled(env)) {
       // 只熔断自动发送：auto_approve 继续跑、手动发送不受影响。熔断后**不自动恢复**，必须 Joe 手动开——
       // 自动恢复会退化成"烧一轮停一下再烧一轮"。
       await setSetting(env, "auto_send_enabled", "0");
@@ -3431,7 +3438,7 @@ async function scheduled(event: ScheduledController, env: Env, ctx: ExecutionCon
         }
       } catch { /* 通知失败不影响熔断本身 */ }
     }
-    const autoOn = (await getSetting(env, "auto_send_enabled", "1")) === "1";
+    const autoOn = await autoSendEnabled(env);
     if (!autoOn) {
       console.log("auto-send skipped: auto_send_enabled=0" + (br.shouldTrip ? "（本轮刚熔断）" : ""));
     } else {

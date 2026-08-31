@@ -1,7 +1,8 @@
 // Landing 落地页 /catalog：公开、英文、面向经销/分销/集成/安装买家。索取批发价单表单 → POST /api/inbound。
 // 自包含 HTML（内联 CSS/JS，无外部资源）。不放任何价格。
 // ⚠️ AirSonde 文案为 C1 搬迁时的**占位草稿**（结构照上游，品类/卖点/FAQ 换成 IAQ 泛写），
-//    待 Joe 审定后重写；且 C1 未配 API_HOST → 本页无公开入口，纯留壳。
+//    待 Joe 审定后重写。⚠️ C1 那句"无公开入口"已过期：C2-F 开了公开正门 link.airsonde.net，
+//    但 /catalog **被刻意排除在公开面之外**（公开面只有退订/webhook/询盘三件）——所以它仍然只在 Access 门后可见。
 
 const COUNTRY_OPTIONS = [
   ["us", "United States"], ["ca", "Canada"], ["au", "Australia"], ["nz", "New Zealand"],
@@ -24,7 +25,8 @@ const CATEGORIES = [
 //    与官网同口径——有真证书/工厂书面确认才加回，不做"support on request"式保守暗示。
 const FAQS = [
   ["Do you do private label / ODM?", "Yes — your branding, your spec, no AirSonde marks. Private-label is our core business."],
-  ["Is there a minimum order?", "Flexible MOQs for growing brands and distributors — we scale with you."],
+  // C6/Y2：MOQ 承诺删除 —— 工厂问题清单三-9 未答，我们不知道真实 MOQ 是多少。
+  ["Is there a minimum order?", "Tell us the models and volumes you have in mind and we'll come back with what's workable."],
   ["How do we get pricing?", "Trade pricing is inquiry-based — tell us your models and volumes and we'll quote."],
 ].map(([q, a]) => `<div class="faq"><h4>${q}</h4><p>${a}</p></div>`).join("");
 
@@ -92,7 +94,8 @@ export function catalogHtml(): string {
       <p class="sub">CO2, PM2.5, TVOC &amp; multi-sensor IAQ monitors. Factory-direct supply, OEM/ODM private-label, and volume trade pricing for brands, distributors &amp; HVAC integrators worldwide.</p>
       <a class="btn" href="#request">Request Wholesale Price List</a>
       <div class="trust">
-        <span>Factory-direct</span><span>OEM/ODM ready</span><span>Flexible MOQs</span>
+        <!-- C6/Y2：「Flexible MOQs」撤下 —— 未经工厂确认的商务承诺，与卖点默认值同一处理 -->
+        <span>Factory-direct</span><span>OEM/ODM ready</span>
       </div>
     </div>
   </header>

@@ -23,10 +23,16 @@ discover（Serper 搜索/目录）→ scrape（抓官网）→ findemail → AI 
 
 ## 本地开发
 
+> ⚠️ **端口固定 8791 + inspector 9341，不用默认值。**
+> 这台机器上同时跑着多个窗口的 worker：8788 上曾经答话的是 **airsonde-admin**，而 `_whoami`
+> 的仓名字段"看着也对"，差点拿别人的进程当自己的验。inspector 端口不指定时也会撞，
+> 症状是 **dev 一声不吭地起不来（日志 0 字节）**。
+> ⇒ 任何联调的第一步都是 `curl /api/_whoami` 确认 `repo` **和 `bootId`**。
+
 ```bash
 npm install
 npm run db:init:local     # 建表（本地 D1，schema.sql 已是合并后的单一真源）
-npm run dev               # http://localhost:8787
+npm run dev -- --port 8791 --inspector-port 9341   # http://localhost:8791
 ```
 
 ## 部署

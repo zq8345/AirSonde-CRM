@@ -40,6 +40,25 @@ export async function setSetting(env: Env, key: string, value: string): Promise<
   ).bind(key, value).run();
 }
 
+// ---- 两个自动化开关：**单一真源** -------------------------------------------
+// 🔴 C6/R1（审计 2026-08-31）：默认值 "1" → **"0"**。
+//   全仓纪律都是 fail-closed（无 key 不发信、空名单拒绝全部、DEV_BYPASS 误配即停服），
+//   唯独**最不可逆的那个动作**（给真人发冷邮件）默认是开的。
+//   实况佐证：钥匙落地那天生产 settings 里**根本没有这一行** ⇒ 全靠代码默认 ⇒ 自动发信当时是**开着的**，
+//   只差一条已批准线索就会真发出去（当时靠抢写一行显式 0 拦住）。
+//   ⚠️ 而这仓刚刚经历过一次清库 —— **一行可删的数据不是安全边界。**
+//
+// ⚠️ 为什么做成函数而不是改那 10 个字面量：改 9 处漏 1 处，漏的那处照样会自动发信，
+//   **而且没有任何东西会报错**。这仓已为"多处各读各的"付过两次学费
+//   （daily_send_limit 静默砍到 10 封/天；模型 id 的 10 处兜底）。
+//   "默认开还是默认关"是**一个事实**，就该只有一个地方说了算。
+export async function autoSendEnabled(env: Env): Promise<boolean> {
+  return (await getSetting(env, "auto_send_enabled", "0")) === "1";
+}
+export async function autoApproveEnabled(env: Env): Promise<boolean> {
+  return (await getSetting(env, "auto_approve_enabled", "0")) === "1";
+}
+
 /**
  * 起草阶段（AI 写信）失败时**建一行失败记录**。
  *
@@ -777,7 +796,7 @@ export async function sendApprovedBatch(
 export async function sendInboundConfirmation(env: Env, lead: { id: number; email: string; company_name?: string }): Promise<SendOutcome> {
   if (!env.RESEND_API_KEY) return { ok: false, id: lead.id, error: "缺少 RESEND_API_KEY" };
   if (!lead.email) return { ok: false, id: lead.id, skipped: "无邮箱" };
-  // ⚠️ AirSonde 文案占位草稿（C1），待 Joe 审定；C1 无 RESEND_API_KEY，此信发不出
+  // ⚠️ AirSonde 文案占位草稿（C1），待 Joe 审定。（C1 那句"无 key 发不出"已过期：2026-08-31 起 RESEND_API_KEY 已配）
   const subject = "Your AirSonde wholesale price list request";
   const body =
     "Hi there,\n\n" +

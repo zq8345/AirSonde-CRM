@@ -27,7 +27,7 @@ export function emailModel(env: { EMAIL_MODEL?: string }): string { return env.E
 // ⚠️ claims 纪律（画像终稿 §5 + 总工裁定 2026-08-12）：认证名/协议名/技术能力断言在工厂书面确认前一律不写。
 export const DEFAULT_SELLING_POINTS =
   "Factory-direct supply of indoor air quality monitors (CO2, PM2.5, TVOC, temperature & humidity); " +
-  "OEM/ODM private-label support with flexible MOQs for growing brands and distributors.";
+  "OEM/ODM private-label support for growing brands and distributors.";   // C6/Y2：删 "flexible MOQs" —— MOQ 是工厂问题清单三-9 未答的**商务承诺**，第一封真信不会等人来核
 async function getSellingPoints(env: Env): Promise<string> {
   try {
     const r = await env.DB.prepare("SELECT value FROM settings WHERE key = 'selling_points'").first<{ value: string }>();
