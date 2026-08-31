@@ -50,8 +50,8 @@ export function categorizeCustomerType(raw?: string | null): CustomerCategory {
 export const KILL_REASONS = [
   // ⚠️ stale 排最前：这组是**已经被推翻的规则**杀的，几乎必然有错杀 —— Joe 该先看它
   { key: "stale",     label: "⚠️ 被旧规则按体量杀的", hint: "H3-v1 的「巨头/规模太大」一票压低 —— Joe 已明确推翻这条规则（Speedcast 就是这么被埋的）。这组大概率全是错杀，优先复核" },
-  { key: "content",   label: "📰 纯内容/攻略站",   hint: "只教怎么装、不卖硬件 —— 老 H3 病根，这类最会靠满篇 Starlink 骗高分" },
-  { key: "isp",       label: "📡 竞品运营商",       hint: "卖自家网络服务，星链是它的对手 —— 但装卫星硬件的集成商是目标客户，这组最容易杀错" },
+  { key: "content",   label: "📰 纯内容/攻略站",   hint: "只教怎么装、不卖硬件 —— 老 H3 病根，这类最会靠满篇行业词骗高分" },
+  { key: "isp",       label: "📡 竞品运营商",       hint: "只卖自家服务、不碰硬件 —— 但做集成/安装的服务商是目标客户，这组最容易杀错" },
   { key: "oem",       label: "🏗️ 自有品牌设备厂商", hint: "造自己的产品、通过经销商卖，不采购第三方配件" },
   { key: "china",     label: "🏭 中国同行铺货",     hint: "同质低价铺货，压毛利" },
   { key: "nohw",      label: "🔍 看不出卖/装硬件",  hint: "官网信息含糊 —— ⚠️ 也可能只是爬虫没抓到产品页，杀错重灾区" },

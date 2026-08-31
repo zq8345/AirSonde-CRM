@@ -1,33 +1,37 @@
 // P5 自动找客户：关键词 → 搜索 API → 提取公司官网 → 去重入库
 import type { Env } from "./index";
 
-// 默认关键词池（上游 E2 思路沿用：搜 渠道/集成/分销，避开铺货红海）
-// ⚠️ AirSonde 关键词**草稿**（C1 搬迁时改写，待 Joe 审 + 按搜索数据迭代；后台关键词页可随时改）
+// 默认关键词池 —— **Joe 定版（C4-A，2026-08-31）**。此清单是唯一真源。
+// ⚠️ 改这里**不会**改变生产：`keywords` 表里已有旧词，且播种是 `ON CONFLICT DO NOTHING`（只增不删）。
+//    要让生产对齐，必须走 `POST /api/admin/reset-keywords`（清表重灌）。
+//    ——「改了默认值以为就生效了」正是这一行注释要挡的那种错。
 export const DEFAULT_KEYWORDS = [
-  // 渠道型 × IAQ
+  // ── 渠道型 × IAQ ──
   "air quality monitor distributor",
   "air quality monitor wholesale",
   "IAQ monitor supplier",
   "air quality sensor distributor",
   "environmental monitoring equipment distributor",
-  // 品牌方 / 白牌
+  // ── 品牌方 / 白牌 ──
   "air quality monitor private label",
   "air quality monitor OEM",
-  "IAQ device brand",
-  // 垂直集成/安装
+  "smart home device brand",                              // C4-A 新增：白牌智能家居品牌方
+  // ── 垂直集成 / 安装 ──
   "HVAC controls integrator",
   "building automation systems integrator",
   "BMS integrator air quality",
   "indoor air quality services company",
   "ventilation systems installer",
-  "smart building solutions provider",
-  // 相邻品类 分销/批发
-  "HVAC parts wholesale distributor",
-  "test and measurement instruments distributor",
-  "electrical wholesale distributor sensors",
-  // 场景意图
+  // ── C4-A 新增：气体检测 / 职安健（与 IAQ 同一批买家、同一条渠道）──
+  "breathalyzer distributor",
+  "alcohol tester wholesale",
+  "carbon monoxide detector distributor",
+  "gas detection equipment distributor",
+  "safety equipment distributor",
+  "occupational health and safety equipment supplier",
+  "workplace safety compliance solutions",
+  // ── 场景意图 ──
   "school air quality monitoring provider",
-  "office air quality compliance",
   "CO2 monitor bulk supplier",
 ];
 
@@ -38,56 +42,37 @@ export const EXCLUDE_QUERY = "-alibaba -aliexpress -made-in-china -dhgate -temu"
 
 interface SearchResult { title: string; url: string; }
 
-// ⭐⭐ 上游批㉑：目标国家（gl 代码 → 中文名）。
-//   ⚠️ AirSonde 沿用上游国家表（当时按 Starlink 市场覆盖收录）作为 UI/校验真源；
-//     AirSonde 主攻欧美，搜索面收窄是数据配置（getSearchConfig）不是改表，待后续单定。
-//   Joe 拍板："把所有星链能辐射的国家和地区全部录入，我们又不挑客户。"
-//   —— 微市场"搜出来少"是结果不是门槛（cayelectronics.vg 英属维尔京群岛就是我们库里点过名的
-//      核心目标；船用/离网星链配件的客户密度和国家 GDP/人口不相关）。先跑，后按数据调。
-//   ⚠️ 这是 UI 下拉 + 国家名显示 + cron 搜索面的**唯一真源**（前端 countryName 从 /api/stats
-//      的 allCountries 动态填，不再各写一份）。
-//   ⚠️ Serper/Google 的 gl 参数接受所有 ISO 3166-1 alpha-2 码 → 没有"gl 不支持"的市场。
-//   ⚠️ 星链自己拉黑的 8 国（见 BLACKLIST_GL）不在此表，且 runDiscovery 里再硬挡一道。
-//   ⚠️ 伊朗(ir)/也门(ye) 虽在星链可用数据里，但制裁/冲突敏感，**故意不放进来**（发信更是雷区）；
-//      要加由总工显式决定。
+// ⭐ 目标市场（gl 代码 → 中文名）—— **Joe 定版（C4-A，2026-08-31）：27 国**
+//
+// 上游那份是按另一条产品线的市场覆盖收录的（100+ 国，含大量微市场），对 AirSonde 不成立：
+//   IAQ 检测仪的买家高度集中在**法规趋严 + 采购力强**的欧美与发达亚太，
+//   而多录 80 个国家不是"多一点机会"，是**把每天有限的搜索预算摊薄到搜不出东西的市场里**。
+//
+// 分级只表达优先级，不是硬门槛（都在同一张表里，搜索面由 settings.search_countries 决定）：
+//   一级 15：核心英语区 + 西欧北欧 —— 法规成熟、进口商密集、英文冷邮件不违和
+//   二级 12：南欧/中东欧/发达亚太/中东 —— 有量但渠道更分散，作第二梯队
+//
+// ⚠️ 这是 UI 下拉 + 国家名显示 + cron 搜索面的**唯一真源**（前端 countryName 从 /api/stats
+//    的 allCountries 动态填，不再各写一份）。
+// ⚠️ Serper/Google 的 gl 参数接受所有 ISO 3166-1 alpha-2 码 → 没有"gl 不支持"的市场。
 export const COUNTRIES: Record<string, string> = {
-  // 北美 / 中美 / 加勒比
-  us: "美国", ca: "加拿大", mx: "墨西哥", gt: "危地马拉", bz: "伯利兹", sv: "萨尔瓦多",
-  hn: "洪都拉斯", ni: "尼加拉瓜", cr: "哥斯达黎加", pa: "巴拿马",
-  do: "多米尼加", jm: "牙买加", tt: "特立尼达和多巴哥", bs: "巴哈马", bb: "巴巴多斯",
-  ht: "海地", ag: "安提瓜和巴布达", dm: "多米尼克", lc: "圣卢西亚", vc: "圣文森特和格林纳丁斯",
-  gd: "格林纳达", kn: "圣基茨和尼维斯", vg: "英属维尔京群岛", tc: "特克斯和凯科斯群岛",
-  ky: "开曼群岛", bm: "百慕大", aw: "阿鲁巴", cw: "库拉索", ai: "安圭拉", ms: "蒙特塞拉特",
-  // 南美
-  br: "巴西", ar: "阿根廷", cl: "智利", co: "哥伦比亚", pe: "秘鲁", ec: "厄瓜多尔",
-  py: "巴拉圭", uy: "乌拉圭", bo: "玻利维亚", gy: "圭亚那", sr: "苏里南", ve: "委内瑞拉",
-  // 欧洲
-  gb: "英国", ie: "爱尔兰", de: "德国", fr: "法国", nl: "荷兰", es: "西班牙", it: "意大利",
-  pt: "葡萄牙", pl: "波兰", at: "奥地利", be: "比利时", ch: "瑞士", se: "瑞典", no: "挪威",
-  dk: "丹麦", fi: "芬兰", gr: "希腊", ro: "罗马尼亚", cz: "捷克", sk: "斯洛伐克", hu: "匈牙利",
-  hr: "克罗地亚", si: "斯洛文尼亚", bg: "保加利亚", lt: "立陶宛", lv: "拉脱维亚", ee: "爱沙尼亚",
-  lu: "卢森堡", mt: "马耳他", cy: "塞浦路斯", is: "冰岛", ua: "乌克兰", md: "摩尔多瓦",
-  mk: "北马其顿", al: "阿尔巴尼亚", rs: "塞尔维亚", me: "黑山", ba: "波黑", ge: "格鲁吉亚",
-  // 非洲
-  ng: "尼日利亚", ke: "肯尼亚", zw: "津巴布韦", za: "南非", mz: "莫桑比克", zm: "赞比亚",
-  rw: "卢旺达", mw: "马拉维", bw: "博茨瓦纳", gh: "加纳", na: "纳米比亚", mg: "马达加斯加",
-  sl: "塞拉利昂", bj: "贝宁", ci: "科特迪瓦", sz: "斯威士兰", so: "索马里", ma: "摩洛哥",
-  // 中东
-  ae: "阿联酋", jo: "约旦",
-  // 亚太
-  au: "澳大利亚", nz: "新西兰", vn: "越南", id: "印尼", lk: "斯里兰卡", sg: "新加坡",
-  ph: "菲律宾", jp: "日本", kr: "韩国", my: "马来西亚", mn: "蒙古", kz: "哈萨克斯坦",
-  bd: "孟加拉", bt: "不丹", mv: "马尔代夫", in: "印度", tl: "东帝汶",
-  // 太平洋岛国
-  fj: "斐济", pg: "巴布亚新几内亚", ws: "萨摩亚", to: "汤加", vu: "瓦努阿图", sb: "所罗门群岛",
-  ki: "基里巴斯", fm: "密克罗尼西亚", mh: "马绍尔群岛", pw: "帕劳", nr: "瑙鲁", tv: "图瓦卢",
-  ck: "库克群岛", gu: "关岛", mp: "北马里亚纳群岛",
+  // ── 一级市场（15）──
+  us: "美国", ca: "加拿大", gb: "英国", ie: "爱尔兰", de: "德国", fr: "法国",
+  nl: "荷兰", be: "比利时", at: "奥地利", ch: "瑞士", se: "瑞典", no: "挪威",
+  dk: "丹麦", fi: "芬兰", au: "澳大利亚",
+  // ── 二级市场（12）──
+  nz: "新西兰", it: "意大利", es: "西班牙", pt: "葡萄牙", pl: "波兰", cz: "捷克",
+  jp: "日本", kr: "韩国", sg: "新加坡", ae: "阿联酋", lu: "卢森堡", gr: "希腊",
 };
 
+/** 一级市场（优先级用，不是过滤器）—— 供 UI 分组显示。 */
+export const TIER1_COUNTRIES = ["us","ca","gb","ie","de","fr","nl","be","at","ch","se","no","dk","fi","au"] as const;
+
 // ⭐ 永不搜的市场：runDiscovery 里硬挡，双保险。
-//   · 星链自己拉黑的 8 国：af by cn hk mo kp ru sy
-//   · cu(古巴)：制裁、无服务。 ir(伊朗)：政府定为重罪 + GPS 干扰，无合法经销市场。
-//     （判据：starlink.com/map 能正常下单才进 COUNTRIES；cu/ir 进不来，硬排除是双保险。）
+//   名单沿用上游，理由与产品线无关：制裁 / 出口管制 / 冷邮件合规雷区。
+//   af by cn hk mo kp ru sy cu ir
+//   ⚠️ 现在的 COUNTRIES（27 国）本来就不含这些 —— 这道硬挡是**第二层**：
+//      将来有人往表里加国家时它仍然拦得住。闸不能只有一层。
 export const BLACKLIST_GL = new Set(["af", "by", "cn", "hk", "mo", "kp", "ru", "sy", "cu", "ir"]);
 
 // ⭐ 批㉑：默认搜索面 = **COUNTRIES 全量**（减去拉黑）。
@@ -183,6 +168,9 @@ const JUNK_DOMAINS = [
   // 平台/社媒
   "google.", "facebook.", "youtube.", "yelp.", "reddit.", "amazon.", "ebay.",
   "wikipedia.", "linkedin.", "instagram.", "twitter.", "x.com", "tiktok.",
+  // ⚠️ starlink.com / spacex.com 是**上游垃圾域名黑名单**的遗留项。留着无害（AirSonde 的搜索
+  //    根本命中不到它们），删掉也无收益 —— 但**不能**把它们当成"星链文案残留"顺手清掉：
+  //    这一行是过滤器数据，不是给人看的文案。C4-A 要清的是 UI 文案，不是黑名单。
   "pinterest.", "starlink.com", "spacex.com", "maps.google", "bbb.org",
   "quora.", "medium.com", "apple.com", "play.google", "wa.me", "t.me",
   "fandom.", "craigslist.",

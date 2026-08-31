@@ -699,7 +699,9 @@
 
       <div class="sec-title">⭐ 卖点 / 社会证明</div>
       <p class="hint" style="margin:0 0 4px">AI 写开发信/跟进/回复时可引用的可信卖点（英文更佳，别夸大、别点名具体客户）。留空用内置默认。</p>
-      <textarea id="cfg-selling" style="min-height:70px" placeholder="e.g. Supplier behind many top-selling Amazon Starlink accessory listings; trusted by 100+ resellers; dropship-friendly wholesale pricing."></textarea>
+      <!-- C4-A：占位文案换成 AirSonde 的，且**故意只举站得住的例子** —— 原来那句
+           "trusted by 100+ resellers" 是上游的社会证明，照抄到这里就是假 claim（claims 纪律）。 -->
+      <textarea id="cfg-selling" style="min-height:70px" placeholder="e.g. Factory-direct IAQ monitors (CO2/PM2.5/TVOC); OEM & private-label; flexible MOQs.（只写站得住的事实：认证/产能/案例未经工厂书面确认前不要写）"></textarea>
 
       <div class="sec-title">💬 一键开聊话术</div>
       <p class="hint" style="margin:0 0 4px">详情弹层「一键开聊」按钮预填/复制的开场白（英文，用 {company} 占位公司名）。</p>
@@ -818,7 +820,7 @@
           <div class="fc-subhead" style="margin-top:10px">手动 · 跑一次 <span class="fc-badge fc-badge-cost">花 Serper 积分</span></div>
           <!-- 批㉑：国家勾选框墙删了。系统全包国家（Joe："我们又不挑客户"）→ 一行说明 + 单国定向。 -->
           <div class="sec-row"><span class="sec-title">搜索范围</span></div>
-          <p class="hint" id="fc-scope-line" style="margin:2px 0 8px">覆盖全部星链开放市场 · 自动轮换 · 预算封顶</p>
+          <p class="hint" id="fc-scope-line" style="margin:2px 0 8px">覆盖目标市场 · 自动轮换 · 预算封顶</p>
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
             <label style="display:flex;align-items:center;gap:6px;font-size:13px">🎯 只搜某国跑一次
               <select id="fc-one-country" class="fc-add-sel"><option value="">全部市场（默认）</option></select>
@@ -829,7 +831,7 @@
             <span class="sec-tools"><button class="mini" type="button" onclick="fcKwAll(true)">全选</button><button class="mini" type="button" onclick="fcKwAll(false)">全不选</button><button class="mini" type="button" id="fc-kw-manage" onclick="fcToggleManage('kw')">管理</button></span></div>
           <div id="dp-kwlist" style="margin:6px 0"></div>
           <div id="fc-kw-editrow" style="display:none;gap:8px;margin-top:6px">
-            <input id="dp-kwnew" class="inlinput" placeholder="新增关键词，如 marine Starlink installer">
+            <input id="dp-kwnew" class="inlinput" placeholder="新增关键词，如 HVAC controls integrator">
             <button id="dp-kwadd" class="primary">添加</button>
             <button id="dp-kwseed">载入默认</button>
           </div>
@@ -918,7 +920,7 @@
       <button class="modal-x" type="button" onclick="this.closest('.overlay').classList.remove('show')" title="关闭">×</button>
       <h2>导入 CSV 线索</h2>
       <p class="hint">支持表头（中英文皆可）：company/公司名、website/网站、email/邮箱、country/国家、keyword/关键词。按邮箱或网站自动去重。</p>
-      <textarea id="csv-input" placeholder="company,website,email,country,keyword&#10;Acme Starlink,acmestarlink.com,sales@acmestarlink.com,US,Starlink installer"></textarea>
+      <textarea id="csv-input" placeholder="company,website,email,country,keyword&#10;Acme Air Quality,acme-iaq.com,sales@acme-iaq.com,US,HVAC controls integrator"></textarea>
       <div class="actions">
         <button class="primary" id="do-import">导入</button>
         <button id="cancel-import">取消</button>
@@ -3017,7 +3019,7 @@
       renderMachineStatus(cfg);   // 批⑳ 层1 · 进货机器状态卡（只读，全部字段来自 cfg）
       // ⭐ 批㉑：搜索范围说明行的 N = **真数**（读 allCountries 键数，绝不写死）。
       { const n = Object.keys(_fcAllCountries).length;
-        const el = $("#fc-scope-line"); if (el) el.innerHTML = `覆盖<b>全部星链开放市场（${n} 国）</b> · 自动轮换 · 预算封顶`; }
+        const el = $("#fc-scope-line"); if (el) el.innerHTML = `覆盖<b>目标市场（${n} 国）</b> · 自动轮换 · 预算封顶`; }
       // 单国定向下拉：从 allCountries 填（默认"全部市场"）
       { const sel = $("#fc-one-country");
         if (sel) {

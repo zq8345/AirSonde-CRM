@@ -226,14 +226,17 @@ function normalize(u: string): string {
   }
 }
 
-const REL_KEYWORDS = ["about", "contact", "product", "service", "solution", "shop", "starlink"];
+// C4-A：末位由 starlink 换成 IAQ 相关词 —— 这是**行为**不是文案：
+//   它决定爬虫优先跟哪些链接，留着上游的词等于让它去找一条 AirSonde 用不上的路。
+const REL_KEYWORDS = ["about", "contact", "product", "service", "solution", "shop", "sensor"];
 // ⭐ 证据页：能证明"它在卖/装实体硬件"的页面。打分闸的唯一判据就是这个，
 //    所以这些页必须优先抓 —— 只采 ≤3 个子页时，抓到产品页还是抓到"关于我们"，
 //    直接决定这条线索是 85 还是 30。以前按 found 的插入顺序挑 = 闭着眼睛抓。
 //
 // 分强弱两档（实测教训）：`service` 这种弱词会命中 /service-areas、/terms-of-service，
 // 它们不证明在卖硬件，却会靠文档顺序**挤掉 /products/**。所以强证据必须排在弱证据前面。
-const EVIDENCE_STRONG = /(starlink|product|dealer|shop|store|catalog|equipment|brand|reseller|distributor)/i;
+// C4-A：starlink → air quality/sensor/monitor（同上，这是打分证据的判据，不是文案）
+const EVIDENCE_STRONG = /(air.?quality|sensor|monitor|product|dealer|shop|store|catalog|equipment|brand|reseller|distributor)/i;
 const EVIDENCE_WEAK = /(install|service|solution)/i;
 // 法务/招聘页永远不是证据，先排掉——否则 terms-of-service 会命中上面的 service
 const EVIDENCE_JUNK = /(terms|privacy|policy|legal|cookie|career|job|login|cart|checkout|account)/i;
