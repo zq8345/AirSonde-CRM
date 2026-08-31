@@ -39,6 +39,7 @@ const TOK_FOLLOWUP = 2000;   // 跟进信 40-70 词
 const TOK_REPLY    = 2500;   // 回复草稿 60-120 词
 const TOK_TRANSLATE= 3000;   // 中译：输出长度≈输入，留两倍余量
 const TOK_SCORE    = 2000;   // 打分：600 目前够用，但它跟写信是同一个坑，一并抬（json 输出仍很短）
+export const TOK_CLASSIFY = 2000;  // 回复分类（replies.ts）：原来自己 fetch，额度 200 —— 全仓最小，见下
 
 // 冲刺1a：社会证明/卖点（可信、匿名，不点名具体客户）。用户可在"发信设置"里改。
 // ⚠️ AirSonde 卖点**草稿**：故意只写保守的中性描述，上游那种"top-selling/100+ resellers"社会证明
@@ -64,7 +65,13 @@ export interface ScoreResult {
 
 interface ChatMsg { role: "system" | "user"; content: string; }
 
-async function chat(env: Env, model: string, messages: ChatMsg[], opts: { json?: boolean; maxTokens?: number } = {}): Promise<string> {
+/**
+ * 所有 OpenRouter 调用的**唯一出口**。
+ * ⚠️ 2026-08-31 起 export：`replies.ts` 的 classify() 原来自己 fetch 一份，
+ *    于是 a03a5e5 修的东西（额度、空内容富错误、数组 content 拼接）**一样都没继承到**，
+ *    成了写信空内容 bug 的漏网第 6 条路径。新增调用一律走这里，别再各写各的。
+ */
+export async function chat(env: Env, model: string, messages: ChatMsg[], opts: { json?: boolean; maxTokens?: number } = {}): Promise<string> {
   if (!env.OPENROUTER_API_KEY) throw new Error("缺少 OPENROUTER_API_KEY（本地填 .dev.vars，线上用 wrangler secret put）");
   const body: any = {
     model,
