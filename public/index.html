@@ -172,6 +172,23 @@
     .fp-ev { font-size:12px; color:var(--muted); margin-top:3px; line-height:1.5; }
     .fp-acts { display:flex; gap:6px; align-items:center; flex-shrink:0; }
     .mini { padding:3px 9px; font-size:12px; }
+    /* C2-D 首页三句话：一句一行，字号大、留白多 —— 判据是"30 秒看完"，不是"信息装得下" */
+    .say-list { display:flex; flex-direction:column; gap:10px; margin-top:4px; }
+    .say { display:flex; gap:12px; align-items:flex-start; padding:16px 18px; background:var(--panel);
+           border:1px solid var(--border); border-radius:12px; font-size:16px; line-height:1.5; }
+    .say-i { font-size:20px; flex-shrink:0; line-height:1.3; }
+    .say-t { min-width:0; }
+    .say-sub { display:block; font-size:13px; color:var(--muted); margin-top:4px; font-weight:400; }
+    .say-hot { border-left:3px solid var(--red); }      /* 有人回你了 = 唯一"不理就凉" */
+    .say-act { border-left:3px solid var(--amber); }    /* 该你动手 */
+    .say-mute { border-left:3px solid var(--muted); }   /* 未点火：不是故障，别用红黄 */
+    .say-hot:hover, .say-act:hover, .say-mute:hover { border-color:var(--blue); }
+    /* 机器房：允许密集，进来的人就是来看内部的 */
+    .mr-tab { width:100%; border-collapse:collapse; font-size:13px; margin-top:8px; }
+    .mr-tab td { padding:6px 8px; border-bottom:1px solid var(--border); vertical-align:top; }
+    .mr-kv { display:grid; grid-template-columns:120px 1fr; gap:6px 12px; padding:8px 0;
+             border-bottom:1px solid var(--border); font-size:13px; align-items:baseline; }
+    .mr-kv > span:first-child { color:var(--muted); }
     /* 熔断横幅：自动发送被停了而 Joe 不知道，比不停还糟 → 这里要抢注意力 */
     .brk-banner { background:#fbeae8; border:1px solid #ecc4be; color:#a83a2e; border-radius:8px;
       padding:10px 12px; margin:10px 0; font-size:13px; line-height:1.6; }
@@ -1220,6 +1237,8 @@
         + `<div class="side-nav" data-nav="found" onclick="document.getElementById('btn-discover').click()">🎯 找客户</div>`
         + `<div class="side-nav" data-nav="dashboard" onclick="document.getElementById('btn-dashboard').click()">📊 数据看板</div>`
         + `<div class="side-nav" data-nav="replies" onclick="openReplyInbox('pending')">📬 回复箱</div>`
+      // C2-D：机器房排在最后 —— 它是"需要时才进去"的页，不是每天要看的
+      + `<div class="side-nav" data-nav="machine" onclick="openMachineRoom()">🛠 机器房</div>`
         + `<div class="side-div"></div>`;
       $("#side").innerHTML = navTop + tabHtml(TABS[0]) + `<div class="side-div"></div>` +
         chain.map((t,i) => tabHtml(t) + (i < chain.length - 1 ? `<div class="side-arrow">↓</div>` : "")).join("");
@@ -3941,31 +3960,125 @@ ${esc(d.ours.body||'')}</div></details>`
         //   ⭐ 但 gotoGroup('noscore') 这个**子筛选入口保留**（待分析格里"只看抓不到官网的"）。
         { n:overBudget?1:0,            cls:'tri-warn', icon:'⚠️', text:()=>`今日 Serper 搜索预算已用满（${serper.usedToday}/${serper.budget}）`, sub:'自动搜索已停，明天恢复；要继续可去找客户页调高预算', go:'去找客户', fn:"openDiscover()" },
       ].filter(x=>x.n>0);
+
+      // ================= C2-D 操作员首页：三句话 =================
+      // Joe 的原话是这页「复杂、看不懂」。所以判据不是"信息全不全"，是**30 秒内看不看得完**。
+      // 三句话固定顺序，回答他每天真正在问的三件事：
+      //   ① 今天发了几封   —— 机器有没有在替我干活
+      //   ② 谁回了         —— 钱在不在门口
+      //   ③ 需要我做什么   —— 我现在要不要动手
+      // ⚠️ **每个数字给结论，不给算式**：熔断窗口/爬坡系数/轮转组合/子请求水位这些
+      //    全部搬进「🛠 机器房」（二级页）。首页出现工程术语 = 这次改版失败。
+      // ⚠️ 三句话**永远都在**（哪怕是 0）：一句"今天还没发信"和一片空白不是一回事 ——
+      //    空白让人怀疑是页面坏了，一句话让人知道系统在说"确实没有"。
+      const ign = d.ignition || {};
+      const st = d.sentToday || {};
+      const hot = (d.hotReplies||[]).length;
+      const notIgnited = ign.coreReady === false;
+
+      // ① 今天发了几封
+      const sentLine = notIgnited
+        ? `<b>今天没发信</b> —— 机器还没点火<span class="say-sub">配齐钥匙前不发信是对的，不是故障</span>`
+        : (st.cold>0
+            ? `今天发了 <b>${st.cold}</b> 封开发信<span class="say-sub">首触 ${st.initial||0} · 跟进 ${st.followup||0}${st.transactional?` · 另有 ${st.transactional} 封确认/回信`:''}</span>`
+            : `<b>今天还没发信</b><span class="say-sub">机器已点火；没发多半是没有已批准且有邮箱的线索</span>`);
+
+      // ② 谁回了
+      const replyLine = hot>0
+        ? `<b>${hot}</b> 个客户回了你，还没处理<span class="say-sub">这是唯一"不理就凉了"的事</span>`
+        : `<b>还没有人回信</b><span class="say-sub">有人回你时，这句会变成红色并排到最上面</span>`;
+
+      // ③ 需要你做什么 —— 未点火时它就是点火清单；点着了就是真告警 + 该你决定的事
+      let todoInner;
+      if (notIgnited) {
+        const off = (ign.capabilities||[]).filter(c=>!c.ignited && c.core);
+        todoInner = `<b>去把这 ${off.length} 把钥匙配上</b>，机器才能开始干活
+          <span class="say-sub">${off.map(c=>`${esc(c.label)}（${esc(c.missing.join('/'))}）`).join(' · ')}</span>
+          <span class="say-sub">配好后机器自己会跑：搜客户 → 打分 → 写信 → 你批 → 发出去</span>`;
+      } else if (items.length) {
+        todoInner = `<b>${items.length}</b> 件事需要你<span class="say-sub">${items.map(x=>esc(String(x.sub).slice(0,40))).join(' · ')}</span>`;
+      } else if (d.reviewCount>0) {
+        todoInner = `<b>${d.reviewCount}</b> 家等你批一下<span class="say-sub">批过之后机器会自动发信</span>`;
+      } else {
+        todoInner = `<b>今天没你的事</b><span class="say-sub">机器在跑，有事它会在这里说</span>`;
+      }
+
       const rows = items.length
         ? items.map(x=>`<div class="tri-row ${x.cls}">
             <span class="tri-icon">${x.icon}</span>
             <span class="tri-text">${x.text(x.n)}<span class="tri-sub">${esc(x.sub)}</span></span>
             <button class="tri-go" onclick="${x.fn}">${esc(x.go)} →</button>
           </div>`).join('')
-        : `<div class="tri-empty">今天没你的事，机器在跑。<br><span class="hint">想加线索去「🎯 找客户」；想看健康度去「📊 数据看板」。</span></div>`;
-      // ⭐ C2-C 点火清单：机器还没插电时，待办第一句该是「差这几把钥匙」，
-      //   而不是一堆看不懂的红字。**未点火不进上面的告警列表**（那是故障区），单独一块中性色。
-      let ignHtml = "";
-      try {
-        const ign = await fetch("/api/ignition").then(r=>r.json()).catch(()=>null);
-        if (ign && !ign.coreReady) {
-          const off = (ign.capabilities||[]).filter(c=>!c.ignited);
-          ignHtml = `<div class="tri-row" style="border-left:3px solid var(--muted)">
-            <span class="tri-icon">🔌</span>
-            <span class="tri-text"><b>机器还没点火</b> —— ${ign.ignitedCount}/${ign.total} 项能力就绪，还差 ${off.length} 项
-              <span class="tri-sub">${off.map(c=>`${esc(c.label)}（差 ${esc(c.missing.join('/'))}）`).join(' · ')}</span>
-              <span class="tri-sub">这不是故障，是还没配钥匙 —— 配齐前机器不产出属正常。</span></span>
-          </div>`;
-        }
-      } catch { /* 点火面板拿不到不该拖垮整个待办页 */ }
-      $("#v-page").innerHTML = pageHeader('📋 待办事项','只有两类：客户回你了 · 机器停摆了 —— 其余的数字左栏格子上都写着')
-        + `<div class="tri-list">${ignHtml}${rows}</div>`;
+        : '';
+
+      $("#v-page").innerHTML = pageHeader('📋 今天','三句话看完：机器干了什么 · 谁在等你 · 要不要动手')
+        + `<div class="say-list">
+             <div class="say ${notIgnited?'say-mute':''}"><span class="say-i">📤</span><span class="say-t">${sentLine}</span></div>
+             <div class="say ${hot>0?'say-hot':''}" ${hot>0?`onclick="gotoGroup('replied')" style="cursor:pointer"`:''}><span class="say-i">${hot>0?'🔥':'📭'}</span><span class="say-t">${replyLine}</span></div>
+             <div class="say ${notIgnited?'say-mute':(items.length?'say-act':'')}" ${notIgnited?`onclick="openMachineRoom()" style="cursor:pointer"`:''}><span class="say-i">${notIgnited?'🔌':'👉'}</span><span class="say-t">${todoInner}</span></div>
+           </div>`
+        + (rows ? `<div class="tri-list" style="margin-top:14px">${rows}</div>` : '')
+        // ⚠️ 这句自己也**不许带术语** —— 我第一版写成"（预算/熔断/爬坡/点火明细）"，
+        //    被自己那条"首页禁术语"判据当场抓住。判据管的是整页，不是只管上面三句。
+        + `<p class="hint" style="margin-top:16px">想看机器内部怎么跑的 → <a href="javascript:void(0)" onclick="openMachineRoom()">🛠 机器房</a></p>`;
     }
+    // ================= C2-D「🛠 机器房」=================
+    // 首页从这里搬走的东西全部落在这一页：预算/轮转、熔断窗口与阈值、爬坡算式、点火明细、班次。
+    // ⚠️ 搬走 ≠ 删掉。这些数字**排查故障时是必需的**，只是它们回答的是"机器怎么想的"，
+    //    而不是"我今天要干什么" —— 后者才配上首页。别把能力跟着入口一起删（这仓的老教训）。
+    // ⚠️ 这一页**允许**出现工程术语：进来的人就是来看内部的。首页一个都不许有。
+    window.openMachineRoom = async function openMachineRoom(retried){
+      showMainView('machine');
+      $("#v-page").innerHTML = pageHeader('🛠 机器房','机器内部：钥匙 · 预算 · 闸门 · 班次。日常不用看') + `<p class="hint">加载中…</p>`;
+      const [ign, cfg, today] = await Promise.all([
+        fetch("/api/ignition").then(r=>r.json()).catch(()=>null),
+        fetch("/api/settings/sending").then(r=>r.json()).catch(()=>null),
+        fetch("/api/today").then(r=>r.json()).catch(()=>null),
+      ]);
+      if (!ign || !cfg) { $("#v-page").innerHTML = pageHeader('🛠 机器房','') + `<div class="load-error">${loadErrorHtml('mr-retry', retried)}</div>`;
+        const b=$("#mr-retry"); if(b) b.onclick=()=>openMachineRoom(true); return; }
+
+      const capRows = (ign.capabilities||[]).map(c=>`
+        <tr><td>${c.ignited?'✅':'○'}</td><td>${esc(c.label)}${c.core?' <span class="hint">核心</span>':''}</td>
+        <td>${c.ignited?'<span class="hint">已配</span>':`<code>${esc(c.missing.join(' + '))}</code>`}</td>
+        <td class="hint">${esc(c.unlocks)}</td></tr>`).join('');
+
+      const serper = (today&&today.serper)||{};
+      const br = cfg.breaker||{};
+      // 每个数字后面跟一句**它意味着什么** —— 机器房也不该只甩算式。
+      const ramp = cfg.send_ramp_enabled
+        ? `开 · 今日实际上限 <b>${cfg.effective_send_limit ?? '-'}</b> 封
+           <span class="hint">（昨日冷发 ${cfg.yesterday_cold ?? 0} × ${cfg.send_ramp_factor ?? 1.5}，地板 ${cfg.send_ramp_floor ?? 30}，再与天花板 ${cfg.daily_send_limit} 取小）
+           —— 新域一天暴增最容易被判垃圾，这道闸让它每天最多涨 50%</span>`
+        : `关 · 直接用天花板 <b>${cfg.daily_send_limit}</b> 封<span class="hint">（新发件域建议开着）</span>`;
+
+      $("#v-page").innerHTML = pageHeader('🛠 机器房','机器内部：钥匙 · 预算 · 闸门 · 班次。日常不用看')
+        + `<div class="fc-card"><div class="sec-title">🔌 点火状态 —— ${ign.ignitedCount}/${ign.total} 项就绪${ign.coreReady?'（核心链路已通）':'（核心链路未通）'}</div>
+             <table class="mr-tab"><tbody>${capRows}</tbody></table>
+             <p class="hint">配法：<code>npx wrangler secret put &lt;钥匙名&gt;</code>（由 Joe 亲手配，值不经过任何窗口）</p></div>
+
+           <div class="fc-card" style="margin-top:12px"><div class="sec-title">🚦 发信闸门</div>
+             <div class="mr-kv"><span>天花板（你设的）</span><b>${cfg.daily_send_limit} 封/天</b>
+               <span class="hint">${cfg.daily_send_limit_source==='configured'?'已由你配置':'⚠️ 谁都没配过，现在用的是代码默认值'}</span></div>
+             <div class="mr-kv"><span>新域爬坡</span><span>${ramp}</span></div>
+             <div class="mr-kv"><span>今日冷发用量</span><b>${cfg.cold_sent_today ?? 0}</b>
+               <span class="hint">只算开发信+跟进；确认信/回信不吃额度</span></div>
+             <div class="mr-kv"><span>熔断器</span>${cfg.auto_send_enabled?'<b>自动发送：开</b>':'<b>自动发送：关</b>'}
+               <span class="hint">最近 ${br.window ?? 30} 封自动信里 ${br.unsubs ?? 0} 封退订（${((br.rate??0)*100).toFixed(1)}%）；≥15% 自动停，停了不会自己恢复</span></div>
+           </div>
+
+           <div class="fc-card" style="margin-top:12px"><div class="sec-title">🔍 找客户预算与班次</div>
+             <div class="mr-kv"><span>Serper 今日</span><b>${serper.usedToday ?? 0} / ${serper.budget ?? '-'}</b>
+               <span class="hint">用满就停到明天；每轮只跑一小批关键词×国家组合，避免一次烧光</span></div>
+             <div class="mr-kv"><span>后台班次</span><b>每小时一轮</b>
+               <span class="hint">找客户/目录只在 0、6、12、18 点那四轮跑（爬别人的站要守礼貌节奏）</span></div>
+             <div class="mr-kv"><span>目录源</span><b>未启用</b>
+               <span class="hint">上游那两个是海事/房车目录，对 AirSonde 是错行业，已撤（C2-A）；找到 IAQ 行业目录后可接回</span></div>
+           </div>
+
+           <p class="hint" style="margin-top:14px"><a href="javascript:void(0)" onclick="openToday()">← 回今天</a></p>`;
+    };
+
     $("#btn-today").onclick = openToday;
     $("#today-overlay").onclick = (e) => { if (e.target.id==="today-overlay") closeToday(); };
 

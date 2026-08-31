@@ -1255,12 +1255,18 @@ app.get("/api/today", async (c) => {
     // 批⑭②：alerts.noScore 撤了 —— 「抓不到官网」不再当系统警报（它是"信息不全"不是"故障"）。
     //   那批线索在「待分析」格里正常处理，不在待办里叫。
   };
+  // ⭐ C2-D：首页三句话要的两块数据，**一次请求拿全**（首页多打一次接口 = 多一次能失败的地方）。
+  //   · sentToday：今天发了几封 —— 首页第一句。用与设置页同一个 sentTodayBreakdown，
+  //     ⛔ 不在这里另写一条 SQL：同一个数在两处各算各的，迟早对不上（这仓的老病）。
+  //   · ignition：机器点火了没 —— 决定首句是"发了 N 封"还是"还没点火"。
   return c.json({
     dueFollowups, hotReplies, engagedToday, actions: sug.actions,
     sendable,                       // 批④：真能发的家数（approved+有邮箱+≥60+未压制）
     reviewCount: sug.reviewCount,   // 待审批
     serper,                         // ⚠️系统警报：Serper 预算
     alerts,                         // ⚠️系统警报：熔断 / 收回复失败（批⑪B）
+    sentToday: await sentTodayBreakdown(c.env),   // C2-D 首页第一句
+    ignition: ignitionReport(c.env),              // C2-D 首页第三句 + 机器房
   });
 });
 
