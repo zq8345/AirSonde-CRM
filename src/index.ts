@@ -540,14 +540,31 @@ app.get("/api/dashboard", async (c) => {
   const replied = F("replied"), bounced = F("bounced"), unsubscribed = F("unsubscribed");
   const rate = (x: number) => (sentLeads > 0 ? x / sentLeads : 0);
 
-  // 3) 国家 / 规范分类 分布
-  const byCountry = (await db.prepare(
-    // 批④：GROUP BY UPPER(country) —— 存量遗留的小写码(us)与新写的大写(US)合并，别再出"两个美国"（写入口已在各处堵住）
-    "SELECT UPPER(country) AS v, COUNT(*) AS n FROM leads WHERE country IS NOT NULL AND country!='' GROUP BY UPPER(country) ORDER BY n DESC"
-  ).all()).results;
-  const byCategory = (await db.prepare(
-    "SELECT customer_category AS v, COUNT(*) AS n FROM lead_analysis WHERE customer_category IS NOT NULL AND customer_category!='' GROUP BY customer_category ORDER BY n DESC"
-  ).all()).results;
+  // 3) 维度切片：国家 / 分类 / 关键词 —— **发信 → 回信 对比**（C5-7 块2）
+  //
+  // ⚠️ C5-7 前的形状是 `{v, n}`，n = **线索数**。那个数回答不了"力气该花哪儿"：
+  //    某个国家线索多，只说明它好搜，不说明它回信。改成三列：
+  //      n           = 线索数（保留，做基数与样本量锁的分母）
+  //      sentLeads   = 这一维里**真发出过信**的线索数（DISTINCT，一家发三封只算一家）
+  //      repliedLeads= 这一维里**真回过信**的线索数
+  //    回信率 = repliedLeads / sentLeads，由前端在 n >= N_MIN 时才算（沿用既有样本量锁）。
+  // ⚠️ 就地改形而非并排加列：改形前 grep 过全仓，`byCountry`/`byCategory` 的消费方
+  //    **只有看板那两行**（index.html 4072/4073），而本单正在重建它。
+  //    并排加一套就成了"同一个事实两个字段"，正是这仓一路在修的病。
+  const dimSlice = (label: string, from: string, group: string) => db.prepare(
+    `SELECT ${group} AS v, COUNT(DISTINCT l.id) AS n,
+            COUNT(DISTINCT CASE WHEN EXISTS (SELECT 1 FROM emails e WHERE e.lead_id=l.id AND e.status='sent')
+                                THEN l.id END) AS sentLeads,
+            COUNT(DISTINCT CASE WHEN EXISTS (SELECT 1 FROM replies r WHERE r.lead_id=l.id)
+                                THEN l.id END) AS repliedLeads
+     FROM ${from}
+     WHERE ${group} IS NOT NULL AND ${group} != ''
+     GROUP BY ${group} ORDER BY n DESC`
+  );
+  const byCountry = (await dimSlice("country", "leads l", "UPPER(l.country)").all()).results;
+  const byCategory = (await dimSlice("category", "leads l JOIN lead_analysis a ON a.lead_id = l.id", "a.customer_category").all()).results;
+  // 关键词维度**此前完全没有** —— 而"哪个词带来回信"正是方向盘上唯一能直接动的杆。
+  const byKeyword = (await dimSlice("keyword", "leads l", "l.keyword").all()).results;
 
   // 批④：按「收件箱类型」切片（通用箱 info@/support@ · 销售箱 sales@/team@ · 个人箱）
   // 只给 发送(唯一线索)/退订/互动 三个**计数**；比率交前端在 n>=50 时才算（与主比率同一把样本量锁）。
@@ -588,6 +605,43 @@ app.get("/api/dashboard", async (c) => {
   for (let i = 13; i >= 0; i--) {
     const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
     daily.push({ date: d, neu: newMap[d] || 0, sent: sentMap[d] || 0, replied: repMap[d] || 0 });
+  }
+
+  // 4b) 周粒度（C5-7 块1 与北极星）——**另加字段，不动 daily**：
+  //     daily 的 -13 days 窗口可能还有别的消费方，改它是替别人做决定。
+  //     总工已批：daily 保留；重建后若真无人再读，留着无害，也别顺手删。
+  //
+  // ⚠️ **口径（写清楚，免得将来有人拿它当精确归因）**：
+  //    rate = 当周回信数 / 当周发信数，是个**近似** —— 回信天然滞后于发信，
+  //    跨周会错配（周一发的信周四回，周三发的信下周回）。
+  //    在当前量级这个近似完全够用，⛔ **不为它做归因工程**（那要按 email 逐封串起来，
+  //    成本远大于它能带来的判断力）。要的是"这周比上周好还是坏"，不是精确归因。
+  const WEEKS_BACK = 12;
+  const weekKey = "strftime('%Y-%W', {col})";
+  const sentWeekly = (await db.prepare(
+    `SELECT ${weekKey.replace("{col}", "sent_at")} AS w, COUNT(*) AS n FROM emails
+      WHERE status='sent' AND sent_at IS NOT NULL AND date(sent_at) >= date('now','-${WEEKS_BACK * 7} days')
+      GROUP BY w`
+  ).all()).results as any[];
+  const repWeekly = (await db.prepare(
+    `SELECT ${weekKey.replace("{col}", "received_at")} AS w, COUNT(*) AS n FROM replies
+      WHERE received_at IS NOT NULL AND date(received_at) >= date('now','-${WEEKS_BACK * 7} days')
+      GROUP BY w`
+  ).all()).results as any[];
+  const sw: Record<string, number> = {}; for (const r of sentWeekly) sw[r.w] = r.n;
+  const rw: Record<string, number> = {}; for (const r of repWeekly) rw[r.w] = r.n;
+  // 周键必须**由日期推出**而不是从查询结果里取 —— 否则没有数据的那几周会整周消失，
+  // 折线就会把"那周没发信"画成"那周不存在"（两件事，图上必须分得开）。
+  const weekly: { week: string; sent: number; replied: number }[] = [];
+  for (let i = WEEKS_BACK - 1; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 7 * 86400000);
+    // 与 SQLite 的 %W 对齐：周一为一周之始，年内第几周（补零两位）
+    const y = d.getUTCFullYear();
+    const jan1 = Date.UTC(y, 0, 1);
+    const days = Math.floor((Date.UTC(y, d.getUTCMonth(), d.getUTCDate()) - jan1) / 86400000);
+    const wk = String(Math.floor((days + ((new Date(jan1).getUTCDay() + 6) % 7)) / 7)).padStart(2, "0");
+    const key = `${y}-${wk}`;
+    weekly.push({ week: key, sent: sw[key] || 0, replied: rw[key] || 0 });
   }
 
   // 5) 评分分桶 + 缺邮箱 + 已分析数
@@ -633,10 +687,22 @@ app.get("/api/dashboard", async (c) => {
 
   const sug = await buildActionSuggestions(c.env);   // #47 行动建议（与今日待办共用引擎）
 
+  // 6) 账本（C5-7 块3）——**复用现成取数，不新开查询也不新开端点**：
+  //    · AI 花费走 getAiUsage（自带 10 分钟缓存，且拿不到时绝不返回 0 冒充"没花钱"）
+  //    · Serper 走 getSerperUsage（就是机器房那个唯一展示位读的同一个计数器）
+  //    前端拿它算「每封回信成本」；⚠️ 回信数为 0 时**不做除法**（0 做分母要说人话）。
+  const [aiCost, serperUse] = await Promise.all([
+    getAiUsage(c.env, (k, d) => getSetting(c.env, k, d), (k, v) => setSetting(c.env, k, v)),
+    getSerperUsage(c.env),
+  ]);
+
   return c.json({
     total,
     funnel,
     funnelLevels,   // #43 累计口径漏斗（前端直接渲染）
+    weekly,         // C5-7：12 周 {week,sent,replied}（口径注释见上方定义处）
+    byKeyword,      // C5-7：关键词维度（此前完全没有）
+    cost: { ai: aiCost, serper: serperUse },   // C5-7 账本
     actions: sug.actions,                                              // #47 行动建议（已按紧急度排序，最多 4 条）
     highNoEmail: sug.highNoEmail,                                      // #47 指标（备用）
     readyCount: sug.readyCount, reviewCount: sug.reviewCount,

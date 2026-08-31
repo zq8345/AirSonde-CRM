@@ -68,6 +68,39 @@
           多一个变量就多一处会跟真实状态漂开的地方。 */
     #restock-overlay.rs-running .rs-grid { display:none; }
     #restock-overlay.rs-running #fc-backlog { display:none !important; }
+    /* ══ C5-7 数据看板 ══ 字号/字重/颜色全部取自附录 C 的闭集 */
+    .db-block { margin-bottom:16px; }
+    .db-t { font-size:15px; font-weight:600; margin:0 0 14px; }
+    .db-empty { margin:0; }
+    .db-star { display:flex; align-items:baseline; gap:14px; }
+    .db-star-n { font-size:22px; font-weight:700; color:var(--green); }
+    .db-star-l { font-size:14px; display:flex; flex-direction:column; gap:2px; }
+    .db-star-l .hint { margin:0; }
+    .db-wkchart { display:flex; align-items:flex-end; gap:6px; height:96px; }
+    .db-wk { flex:1; height:100%; display:flex; align-items:flex-end; }
+    .db-wk-bars { display:flex; align-items:flex-end; gap:2px; width:100%; height:100%; }
+    .db-wk-bars i { flex:1; min-height:2px; border-radius:2px 2px 0 0; }
+    .db-legend { margin-top:8px; }
+    .db-dim { color:var(--muted); margin-left:8px; }
+    .db-judge { margin-top:12px; padding:10px 12px; background:var(--panel); border-radius:8px;
+                font-size:13px; line-height:1.55; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    .db-judge.db-bad { background:var(--tint-red); color:var(--red); }
+    .db-ok { margin-top:12px; font-size:13px; color:var(--green); }
+    .db-act { font-size:12px; padding:4px 10px; border-radius:6px; background:var(--bg);
+              border:1px solid var(--border); color:var(--text); cursor:pointer; white-space:nowrap; }
+    .db-act:hover { border-color:var(--blue); color:var(--blue); }
+    .db-sub { font-size:13px; color:var(--muted); margin:14px 0 6px; }
+    .db-sub:first-child { margin-top:0; }
+    .db-dimrow { display:grid; grid-template-columns:minmax(0,1fr) 140px 96px auto; gap:10px;
+                 align-items:center; padding:6px 0; font-size:13px; }
+    .db-dimname { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .db-dimbar { background:var(--panel); border-radius:4px; height:8px; overflow:hidden; }
+    .db-dimbar i { display:block; height:100%; background:var(--green); }
+    .db-dimv { text-align:right; }
+    /* 样本不足的行**锁灰只给计数** —— 现有纪律，不是本单新加 */
+    .db-locked { color:var(--muted); }
+    .db-locked .db-dimbar i { background:var(--border-strong); }
+    @media (max-width:820px){ .db-dimrow { grid-template-columns:minmax(0,1fr) 72px auto; } .db-dimbar { display:none; } }
     .btn-quiet { background:transparent; border-color:transparent; color:var(--muted); }
     .btn-quiet:hover { background:var(--panel); border-color:var(--border); color:var(--text); }
     /* C5-4v A：批量条**只在选中 ≥1 条时出现**（常驻一条"已选 0 条"是噪音），出现时浮起 */
@@ -380,8 +413,6 @@
     .td-act { flex-shrink:0; background:var(--bg); border:1px solid var(--border); color:var(--blue); cursor:pointer; font-size:12px; padding:2px 9px; border-radius:6px; }
     .td-act:hover { border-color:var(--blue); }
     /* 数据看板 */
-    .kpi-row { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:14px; }  /* #47 8 张 KPI → 2 行 4 列 */
-    .kpi-card { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:12px 14px; }
     /* 批⑳ 层2 · 积压刹车条：一行式收敛（旧三卡瓷砖 .bk-cell/.bk-head 退役）。
        贴着进货动作提示"管道堵了多少，别只顾抓更多"——它是刹车提示，不是仪表盘。 */
     .fc-backlog { background:var(--panel); border:1px solid var(--border); border-left:3px solid var(--amber);
@@ -448,8 +479,6 @@
     .ib-l { font-size:12px; color:var(--muted); }
     .kpi-n { font-size:22px; font-weight:700; }
     .kpi-l { font-size:12px; color:var(--muted); margin-top:2px; }
-    .db-cols { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-    .db-card { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:12px 14px; margin-bottom:12px; }
     .fn-row { display:grid; grid-template-columns:82px 1fr 92px; align-items:center; gap:8px; margin:6px 0; font-size:13px; }
     .fn-track { background:var(--bg); border-radius:4px; height:18px; overflow:hidden; }
     .fn-fill { height:100%; background:var(--blue); min-width:2px; }
@@ -3689,14 +3718,6 @@
       }).join("");
     }
 
-    function miniBars(items, labelFn, color){
-      if(!items || !items.length) return '<div class="muted" style="padding:8px 0">暂无数据</div>';
-      const max = Math.max(1, ...items.map(i=>i.n));
-      return items.map(i=>`<div class="frow" style="grid-template-columns:118px 1fr 34px">
-        <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(labelFn(i))}">${labelFn(i)}</span>
-        <div class="fbar-track" style="height:16px"><div class="fbar" style="width:${(i.n/max*100).toFixed(1)}%;background:${color}"></div></div>
-        <span class="muted" style="text-align:right">${i.n}</span></div>`).join("");
-    }
 
     // 近14天双序列迷你柱状图（纯内联 SVG）
     function trendSVG(daily){
@@ -3826,56 +3847,6 @@
       return `今天「无回复自动跟进」也是 <b>0 封</b>（没有失败记录 ⇒ 是今天没有到跟进时点的线索，不是它坏了）。`;
     }
 
-    function healthHtml(H, N_MIN){
-      if (!H) return `<div class="db-note">发信健康度暂时取不到（接口错误）—— 这里本该显示退订率/发送额度/自动发送状态。</div>`;
-      const n = H.touched||0, ok = n >= N_MIN;
-      const p = (x) => `${(x||0).toFixed(1)}%`;
-      const u = H.unsub||{}, b = H.bounced||{}, r = H.replied||{}, t = H.today||{}, rp = H.ramp||{}, a = H.auto||{};
-      // 🔴 自动发送关着 = 额度全是空转。Joe 现在根本不知道这件事，必须最显眼。
-      const autoBanner = a.enabled
-        ? `<div class="db-note" style="border-left:3px solid #1e7a4f">✅ <b>自动发送：开</b> —— 每小时自动发已批准线索。今日自动已发 <b>${a.sent_today||0}</b> 封，自动闸 <b>${a.limit}</b>${a.source==='system'?'（跟随系统闸）':'（单独设定）'}。</div>`
-        : `<div class="db-note" style="border-left:3px solid #b03a2e;background:rgba(224,122,106,.08)">🔴 <b>自动发送：关</b> —— <b>机器现在不会自动发任何开发信</b>。
-             今日上限设成多少都不会产生发信量。${followupTruth(t)}
-             要让机器重新开始触达新客户，去「发信设置」把它打开。</div>`;
-      const cell = (val, label, note, color) =>
-        `<div class="kpi-card"><div class="kpi-n"${color?` style="color:${color}"`:''}>${val}</div><div class="kpi-l">${label}${note?`<span class="kpi-note">${note}</span>`:''}</div></div>`;
-      // 比率一律受样本门槛；未达门槛只给计数（沿用看板既有纪律，别在同一页出现两套标准）
-      const rateCell = (cnt, pctVal, label, note, color, warnAt) => {
-        if (!ok) return `<div class="kpi-card kpi-muted"><div class="kpi-n" style="color:var(--muted)">${cnt}<span class="kpi-den">/${n}</span></div>`
-          + `<div class="kpi-l">${label}<span class="kpi-note">样本不足，暂不下结论（n=${n}&lt;${N_MIN}）</span></div></div>`;
-        const over = warnAt!=null && (pctVal/100) >= warnAt;
-        return `<div class="kpi-card"><div class="kpi-n" style="color:${over?'#b03a2e':color}">${p(pctVal)}</div>`
-          + `<div class="kpi-l">${label}<span class="kpi-note">${cnt}/${n}${note?` · ${note}`:''}${over?' · ⚠️ 超警戒线':''}</span></div></div>`;
-      };
-      const rampNote = rp.enabled
-        ? (rp.cap!=null && rp.cap < (t.ceiling||0)
-            ? `爬坡中：昨日冷发 ${rp.yesterday_cold} → 今日上限 ${rp.cap}（天花板 ${t.ceiling}）`
-            : `已开（当前不构成限制）`)
-        : `已关 —— 直接用天花板 ${t.ceiling}`;
-      return `
-        ${autoBanner}
-        <div class="sec-title">📮 发信健康度<span class="hint" style="font-weight:400;margin-left:8px">分母 = 收到过<b>冷发信</b>（首触/跟进）的线索 <b>${n}</b> 家${(H.transactional_only||0)>0?`；另有 ${H.transactional_only} 家只收到过事务信（询盘确认/回信）<b>不计入</b> —— 这就是它与上方「已触达(家)」差额的来源`:'；只收到询盘确认信的不算在内'}</span></div>
-        <div class="kpi-row">
-          ${rateCell(u.human_like||0, u.pct_human||0, '退订率（真人）', `另有 ${u.machine_like||0} 条疑似机器误退订已扣除`, '#8a5225', 0.05)}
-          ${rateCell(b.n||0, b.pct||0, '退信率', null, '#b03a2e', 0.03)}
-          ${rateCell(r.leads||0, r.pct||0, '线索回复率', `其中意向/询价 ${r.hot||0} 封`, '#1e7a4f', null)}
-          ${cell(`${t.cold_sent||0} / ${t.effective||0}`, '今日冷发 / 生效上限', `天花板 ${t.ceiling||0}${H.limit_source!=='configured'?' · ⚠️ 上限未配置':''}`)}
-          ${(()=>{const p=H.pool||{};const s=p.sendable??0, st=p.stuck_no_email??0;
-            // ⭐ 这一格是"机器今天还能发几封"的真正决定因素。2026-07-28 诊断时它只有 25，
-            //    而日上限设的是 1000 —— **上限从来不是瓶颈，可发池才是**。
-            return cell(s, '可发池（已批准+有邮箱）', st>s?`⚠️ 另有 ${st} 家已批准但<b>没有邮箱</b>，发不出去`:`另有 ${st} 家缺邮箱`, st>s?'#8a5225':undefined);})()}
-        </div>
-        <div class="hint" style="margin:6px 0 2px">
-          · <b>退订拆解</b>：共 ${u.total||0} 条 —— 首触后退 <b>${u.after_initial||0}</b> · 跟进后退 <b>${u.after_followup||0}</b>；
-            疑似机器误退订 <b>${u.machine_like||0}</b> 条（判据：退订时刻距最后一封发信 &lt;120 秒；<i>近似</i>——用线索更新时间当退订时刻，无专门时间戳）。
-            安全网关误触已于 2026-07-28 修复（GET 退订改确认页），此前数据受污染。<br>
-          · <b>爬坡保护</b>：${rampNote}<br>
-          · <b>自动补邮箱</b>：${(H.pool||{}).find_email_enabled
-              ? `已开（每轮免费抓公开联系页补进来，<b>不用 Hunter 积分</b>）${(H.pool||{}).find_email_last?` · 最近：${esc((H.pool||{}).find_email_last)}`:` · 还没补到过`}`
-              : `<span style="color:var(--amber)">已关</span> —— 已批准但缺邮箱的线索将一直卡着，机器发不出去`}<br>
-          · <b>开信率不显示</b>：Apple 隐私保护与安全网关会伪造开信，冷发场景下这个数不可信，给了只会让人做错决定。
-        </div>`;
-    }
 
     // ===== #37 回复箱 =====
     // 病根（库里的铁证）：replies #4/#5 正文原文 =「（在 邮件 上回复了，由人工标记）」
@@ -3999,80 +3970,156 @@ ${esc(d.ours.body||'')}</div></details>`
       await openReplyInbox();
     };
 
+    // ══ C5-7 数据看板重建 ══
+    //   Joe 裁定看板保留（宪法 §2 的"整页删除"判决作废）：**没数据是时机问题，不是价值问题**。
+    //   每块 = 数据 + 判读 + 动作；空态给一句"什么时候会长出内容"，⛔ 不摆 0/0 的墙。
+    //
+    // 阈值常量（全部具名 + 标来源；⚠️ 经验值会随真实数据改，注释就是它们的家）
+    const DB_N_MIN       = 50;    // 样本门槛。来源：本仓既有纪律（healthHtml 同一把锁），沿用不新立
+    const DB_TREND_DELTA = 0.20;  // 周环比"算变化"的幅度。⚠️ 经验值·待实测校准
+    const DB_SPREAD_MIN  = 2.0;   // 维度间回信率倍数差，超过才建议挪力气。⚠️ 经验值·待实测校准
+    const DB_UNSUB_WARN  = 0.05;  // 退订警戒。来源：既有 rateKpi 就是 0.05，沿用
+    const DB_BOUNCE_WARN = 0.03;  // 退信警戒。来源：既有 rateKpi 就是 0.03，沿用
+
     async function openDashboard(retried){
       showMainView('dashboard');
       $("#v-page").innerHTML = pageHeader('数据看板','') + `<p class="hint">加载中…</p>`;
-      const [d, H] = await Promise.all([
-        fetch("/api/dashboard").then(r=>r.json()).catch(e=>({error:String(e)})),
-        fetch("/api/health/sending").then(r=>r.json()).catch(()=>null),   // 健康度取不到不该拖垮整个看板
-      ]);
+      const d = await fetch("/api/dashboard").then(r=>r.json()).catch(e=>({error:String(e)}));
       if (d.error){ $("#v-page").innerHTML = pageHeader('数据看板','') + `<div class="load-error">${loadErrorHtml('dash-retry', retried)}</div>`;
         const b=$("#dash-retry"); if(b) b.onclick=()=>openDashboard(true); return; }
-      const sb = d.scoreBuckets||{}, r = d.rates||{}, f = d.funnel||{}, F = s => f[s]||0;
-      // ⭐ 两档制：「高分线索(≥80)」换成「翻牌堆待复核(<60)」。
-      //   ≥80 在自动通道下没有意义 —— 它只随找到的线索变多而变大，既不是健康度也不对应动作
-      //   （机器已经把信发了）。翻牌堆才是唯一映射到"还剩多少你的活"的数。
-      const flipPending = (sb.bFlipPending||0), sLine = sb.min||60;
-      const kpi = (n,l,color) => `<div class="kpi-card"><div class="kpi-n"${color?` style="color:${color}"`:''}>${n}</div><div class="kpi-l">${l}</div></div>`;
-      // ⭐批④ 样本量门槛（看板最重要的一条）：分母 n<50 → **只显示计数、不显示比率**，写明"样本不足，暂不下结论"；
-      //   n>=50 才亮比率和警戒线。理由：25% 退订率是 5/20 算的，置信区间 9%–49%，纯噪音；
-      //   那个红字会让人对着噪音焦虑、甚至去改打分标准。看板的职责是告诉你"什么时候可以下结论"，不是制造警报。
-      const N_MIN = 50, denom = d.sentLeads||0, enoughN = denom >= N_MIN;
-      const c = d.counts||{};
-      const rateKpi = (cnt, label, color, warnAt) => {
-        if (!enoughN) return `<div class="kpi-card kpi-muted"><div class="kpi-n" style="color:var(--muted)">${cnt}<span class="kpi-den">/${denom}</span></div>`
-          + `<div class="kpi-l">${label}<span class="kpi-note">样本不足，暂不下结论（n=${denom}<${N_MIN}）</span></div></div>`;
-        const rate = denom ? cnt/denom : 0, over = warnAt!=null && rate>=warnAt;
-        return `<div class="kpi-card"><div class="kpi-n" style="color:${over?'#b03a2e':color}">${pct(rate)}</div>`
-          + `<div class="kpi-l">${label}<span class="kpi-note">${cnt}/${denom}${over?` · ⚠️ 超警戒线 ${pct(warnAt)}`:''}</span></div></div>`;
-      };
-      // #47 6 级转化漏斗：后端累计口径（funnelLevels，单调递减、转化%≤100、条宽用累计值/顶端基数）
-      const levels = d.funnelLevels || [];
-      const maxN = Math.max(1, ...levels.map(x=>x.n));
-      let worst='', worstP=101;
-      const fnHtml = levels.map((lv,i)=>{
-        const conv = (lv.conv!=null) ? lv.conv : null;
-        if (conv!==null && conv<worstP){ worstP=conv; worst=`${levels[i-1].label}→${lv.label}`; }
-        return `<div class="fn-row"><span class="muted">${lv.label}</span><div class="fn-track"><div class="fn-fill" style="width:${(lv.n/maxN*100).toFixed(1)}%"></div></div><span>${lv.n}${conv!==null?` <span class="muted">· ${conv}%</span>`:''}</span></div>`;
+
+      const wk = d.weekly || [], c = d.counts || {}, denom = d.sentLeads || 0;
+      const enoughN = denom >= DB_N_MIN;
+      const w = wk[wk.length-1] || {sent:0,replied:0}, prev = wk[wk.length-2] || {sent:0,replied:0};
+      const totalReplied = c.replied || 0;
+      const rateOf = (o) => (o && o.sent > 0) ? (o.replied||0)/o.sent : null;
+      const card = (title, body) => `<div class="page-card db-block"><div class="db-t">${title}</div>${body}</div>`;
+      const empty = (line) => `<div class="hint db-empty">${line}</div>`;
+      const act = (label, fn) => `<button class="db-act" onclick="${fn}">${label} →</button>`;
+
+      // ── 页顶 · 北极星 ────────────────────────────────────────────────
+      // ⚠️ **不显示百分比环比**：分母是个位数时百分比会撒谎（1→2 = +100%）。说绝对差就够了。
+      let starLine;
+      if (totalReplied === 0) starLine = empty('还没有人回信 —— 机器点火并发出第一批信之后，这里开始计数');
+      else {
+        const dlt = (w.replied||0) - (prev.replied||0);
+        const judge = (prev.replied === 0 && w.replied > 0) ? '本周首次有人回信'
+                    : dlt > 0 ? `比上周多 ${dlt} 封`
+                    : dlt < 0 ? `比上周少 ${-dlt} 封`
+                    : '与上周持平';
+        starLine = `<div class="db-star"><span class="db-star-n">${w.replied||0}</span>
+          <span class="db-star-l">本周回信<span class="hint">累计 ${totalReplied} 封 · ${judge}</span></span></div>`;
+      }
+
+      // ── 块1 · 生意在动吗（周线 + 判读）─────────────────────────────
+      const anySent = wk.some(x => (x.sent||0) > 0);
+      let b1;
+      if (!anySent) b1 = empty('还没发信 —— 机器点火后这里开始画线');
+      else {
+        const tmax = Math.max(1, ...wk.map(x=>Math.max(x.sent||0, x.replied||0)));
+        const bars = wk.map(x=>`<div class="db-wk" title="${esc(x.week)} 发 ${x.sent||0} · 回 ${x.replied||0}"><div class="db-wk-bars"><i style="height:${((x.sent||0)/tmax*100).toFixed(0)}%;background:var(--amber)"></i><i style="height:${((x.replied||0)/tmax*100).toFixed(0)}%;background:var(--green)"></i></div></div>`).join('');
+        const rNow = rateOf(w), rPrev = rateOf(prev);
+        const totalSent = wk.reduce((a,x)=>a+(x.sent||0),0);
+        let j = '';
+        if (totalSent < DB_N_MIN) j = `<div class="hint">累计发出 ${totalSent} 封，还不到 ${DB_N_MIN} —— 先看线，暂不下结论</div>`;
+        else if (rNow!=null && rPrev!=null && w.sent > prev.sent*(1+DB_TREND_DELTA) && rNow < rPrev*(1-DB_TREND_DELTA))
+          j = `<div class="db-judge">发得更多了，回信率却掉了 —— 该看看信写得怎么样 ${act('去改文案',"openSettings()")}</div>`;
+        else if (prev.sent > 0 && w.sent < prev.sent*(1-DB_TREND_DELTA))
+          j = `<div class="db-judge">这周发得比上周少 —— 多半是没客户可发了 ${act('去补货',"openRestock()")}</div>`;
+        else if (rNow!=null && rPrev!=null && w.sent > prev.sent*(1+DB_TREND_DELTA) && rNow >= rPrev)
+          j = `<div class="db-judge">量涨了、回信率没掉 —— 照这个方向继续</div>`;
+        b1 = `<div class="db-wkchart">${bars}</div><div class="hint db-legend"><span style="color:var(--amber)">■</span> 发信　<span style="color:var(--green)">■</span> 回信　<span class="db-dim">近 ${wk.length} 周</span></div>${j}`;
+      }
+
+      // ── 块2 · 力气该花哪儿（维度对比，回信率降序）────────────────
+      // ⚠️ 行尾动作**按维度定**：入口要指向能完成动作的地方（铁律四推论）。
+      //    关键词 → 方向盘（勾选就在那）；国家 → 补货弹窗预选该国（单国定向是国家维度唯一的杆）；
+      //    分类 → **无按钮**（没有对应旋钮，摆一个不通向动作的按钮就是骗人）。
+      const dimRows = (items, labelFn, actFn) => items.map(it=>{
+        const sent = it.sentLeads||0, rep = it.repliedLeads||0;
+        const ok = sent >= DB_N_MIN;
+        const r = sent ? rep/sent : 0;
+        return `<div class="db-dimrow ${ok?'':'db-locked'}"><span class="db-dimname">${labelFn(it)}</span><span class="db-dimbar"><i style="width:${ok?(r*100).toFixed(0):0}%"></i></span><span class="db-dimv">${ok ? pct(r) : `${rep}/${sent}`}${ok?'':`<span class="hint"> 样本不足</span>`}</span>${actFn ? actFn(it) : ''}</div>`;
       }).join('');
-      // 批④：「线索状态分布」已删 —— 与左栏漏斗是同一份数据两套叫法，且口径打架
-      //（左栏"待发送 322" vs 看板"已批准 322/待发送 0"）。**左栏是唯一真源。**
-      // 批④：按收件箱类型切片（通用箱/销售箱/个人箱），同样受 n<50 锁 —— 只有计数够了才敢比较
-      const BOX_LABEL = { generic:'通用箱 info@ / support@', sales:'销售箱 sales@ / team@', personal:'个人箱（具体某个人）' };
-      const inbox = d.byInbox||[];
-      const inboxHtml = inbox.length ? inbox.map(b=>{
-        const ok = (b.sent||0) >= N_MIN;
-        const cell = (cnt,lab) => ok
-          ? `<span class="ib-v">${pct((b.sent? cnt/b.sent : 0))}<span class="ib-den"> ${cnt}/${b.sent}</span></span><span class="ib-l">${lab}</span>`
-          : `<span class="ib-v ib-muted">${cnt}<span class="ib-den">/${b.sent}</span></span><span class="ib-l">${lab}</span>`;
-        return `<div class="ib-row"><div class="ib-name">${esc(BOX_LABEL[b.box]||b.box)}<span class="ib-n">已发 ${b.sent} 家${ok?'':`　<span class="kpi-note">样本不足(<${N_MIN})，只给计数</span>`}</span></div>
-          <div class="ib-cells"><div class="ib-cell">${cell(b.unsub||0,'退订')}</div><div class="ib-cell">${cell(b.engaged||0,'互动')}</div></div></div>`;
-      }).join('') : `<div class="hint">还没有发出去的信，暂无切片。</div>`;
-      // 近 14 天 3 色柱（新增/发信/回复）+ 日期轴
-      const dl = d.daily||[]; const tmax = Math.max(1, ...dl.map(x=>Math.max(x.neu||0,x.sent||0,x.replied||0)));
-      const trend = `<div style="display:flex;align-items:flex-end;gap:3px;height:84px">${dl.map(x=>`<div title="${x.date} 新增${x.neu||0}·发信${x.sent}·回复${x.replied}" style="flex:1;display:flex;align-items:flex-end;gap:1px;height:100%">
-        <div style="flex:1;background:var(--blue);height:${((x.neu||0)/tmax*100).toFixed(0)}%;min-height:1px"></div>
-        <div style="flex:1;background:var(--amber);height:${(x.sent/tmax*100).toFixed(0)}%;min-height:1px"></div>
-        <div style="flex:1;background:var(--green);height:${(x.replied/tmax*100).toFixed(0)}%;min-height:1px"></div></div>`).join('')}</div>
-        <div style="display:flex;gap:3px;margin-top:3px">${dl.map((x,i)=>`<div style="flex:1;text-align:center;font-size:12px;color:var(--muted)">${i%2===0?esc(x.date.slice(5)):''}</div>`).join('')}</div>
-        <div class="hint" style="margin-top:5px"><span style="color:var(--blue)">■</span> 新增　<span style="color:var(--amber)">■</span> 发信　<span style="color:var(--green)">■</span> 回复</div>`;
-      // 批④ 数据看板 = 体检报告：只回答"系统健康吗、哪里漏水"，不告诉你今天干嘛（那是待办事项的活）。
-      // 已删：「现在最该做」（与待办事项完全重复）、「线索状态分布」（与左栏漏斗同数据两套叫法且口径打架）。
-      $("#v-page").innerHTML = pageHeader('数据看板','') + healthHtml(H, N_MIN) + `
-        ${enoughN?'':`<div class="db-note">📐 已发 <b>${denom}</b> 家，未达统计门槛 <b>${N_MIN}</b> —— 下面的比率只给<b>计数</b>，不下结论。
-          样本太小的比率会骗人（如 5/20 = 25% 退订，置信区间约 9%–49%，纯噪音）。先把量发上去，到 ${N_MIN}+ 再看。</div>`}
-        <div class="kpi-row">${kpi(d.total,'线索总数')}${kpi(d.analyzedCount||0,'已分析')}${kpi(d.sentLeads||0,'已触达(家)')}${kpi(d.noEmailCount||0,'缺邮箱','#8a5225')}
-          ${rateKpi(c.replied||0,'回复率','#1e7a4f',null)}${rateKpi(c.unsubscribed||0,'退订率','#8a5225',0.05)}${rateKpi(c.bounced||0,'退信率','#b03a2e',0.03)}${kpi(flipPending,`翻牌堆待复核(&lt;${sLine})`,'#8a5225')}</div>
-        <div class="db-cols">
-          <div class="db-card"><div class="k muted" style="margin-bottom:8px">转化漏斗（累计口径）</div>${fnHtml}${worst?`<div class="hint" style="margin-top:8px">掉点最狠：<b style="color:var(--amber)">${worst}</b>（转化 ${worstP}%）</div>`:''}</div>
-          <div class="db-card"><div class="k muted" style="margin-bottom:8px">近 14 天趋势</div>${trend}</div>
-        </div>
-        <div class="db-card" style="margin-top:12px"><div class="k muted" style="margin-bottom:8px">按收件箱类型</div>${inboxHtml}</div>
-        <div class="db-cols" style="margin-top:12px">
-          <div class="db-card"><div class="k muted" style="margin-bottom:8px">按国家 Top10</div>${miniBars((d.byCountry||[]).slice(0,10), i=>esc(countryName(i.v)), "#2f6fd6")}</div>
-          <div class="db-card"><div class="k muted" style="margin-bottom:8px">按分类</div>${miniBars((d.byCategory||[]).slice(0,8), i=>esc(i.v), "#1e7a4f")}</div>
-        </div>`;
+      const rank = (arr) => (arr||[]).slice().filter(x=>(x.sentLeads||0)>0)
+        .sort((a,b)=>((b.repliedLeads||0)/(b.sentLeads||1))-((a.repliedLeads||0)/(a.sentLeads||1)));
+      const kwR = rank(d.byKeyword), ccR = rank(d.byCountry), catR = rank(d.byCategory);
+      let b2;
+      if (!kwR.length && !ccR.length) b2 = empty(`还没有足够样本 —— 累计发出 ${DB_N_MIN} 封之后，这里会告诉你哪个方向回得多`);
+      else {
+        // 判读只在两端都够样本时才下（否则是拿噪音在指挥）
+        const ranked = kwR.filter(x=>(x.sentLeads||0)>=DB_N_MIN);
+        let j = '';
+        if (ranked.length >= 2){
+          const hi = ranked[0], lo = ranked[ranked.length-1];
+          const rh = hi.repliedLeads/hi.sentLeads, rl = lo.repliedLeads/lo.sentLeads;
+          if (rl > 0 && rh/rl >= DB_SPREAD_MIN)
+            j = `<div class="db-judge">「${esc(hi.v)}」的回信率是「${esc(lo.v)}」的 ${(rh/rl).toFixed(1)} 倍 —— 考虑把关键词的力气挪过去 ${act('去方向盘',"openSettings()")}</div>`;
+        }
+        b2 = `<div class="db-sub">按关键词</div>${dimRows(kwR.slice(0,8), i=>esc(i.v), () => act('去方向盘',"openSettings()")) || empty('还没有关键词数据')}<div class="db-sub">按国家</div>${dimRows(ccR.slice(0,8), i=>esc(countryName(i.v)), it => act('补一轮这国',`openRestockFor('${esc(String(it.v||'').toLowerCase())}')`)) || empty('还没有国家数据')}<div class="db-sub">按分类</div>${dimRows(catR.slice(0,6), i=>esc(i.v), null) || empty('还没有分类数据')}${j}`;
+      }
+
+      // ── 块3 · 哪里在漏水 + 账本 ────────────────────────────────────
+      const levels = d.funnelLevels || [];
+      let b3;
+      if (!levels.length || !(d.total>0)) b3 = empty('漏斗还是空的 —— 有线索进来之后这里会指出卡在哪一环');
+      else {
+        const maxN = Math.max(1, ...levels.map(x=>x.n));
+        // 掉点位置 → 对应动作。**没有动作的环节不参与"最狠掉点"评选**：
+        //   「已回复→成交」在 Joe 成交第一单之前恒为 0%，会**永远**霸占漏点指认，
+        //   而那一环是他自己的销售动作，机器帮不上忙 —— 指着它说"这里漏水"既不准也没用。
+        //   铁律四：每个数字要么帮他做决定，要么不出现。⇒ 只在"机器动得了"的环节里找最狠的。
+        //   ⚠️「已查看」这一环也要有动作：没人点链接**就是文案问题**，与"没人回信"同一个处方。
+        //     漏了它的话，真实数据里掉得最狠的那一环（本地 520 条假数据实测 30%）会被静默跳过，
+        //     指认反而落到一个掉得更轻的环节上 —— 一个"看着在工作"的错答案。
+        const leakAct = (to) => /发送|联系/.test(to) ? act('去补邮箱',"gotoGroup('ready')")
+                              : /回复|回信|查看|点击/.test(to) ? act('去改文案',"openSettings()")
+                              : /批准|审批/.test(to) ? act('去看打分标准',"openSettings()") : null;
+        let worst=null, worstP=101;
+        levels.forEach((lv,i)=>{
+          // ⚠️ 只在上一级样本够时才认这个掉点：3 个里掉 2 个 = 33%，那是噪音不是漏水
+          if (lv.conv!=null && i>0 && levels[i-1].n >= DB_N_MIN && leakAct(lv.label) && lv.conv < worstP){
+            worstP=lv.conv; worst={from:levels[i-1].label,to:lv.label};
+          }
+        });
+        const fn = levels.map((lv)=>`<div class="fn-row"><span class="muted">${esc(lv.label)}</span><div class="fn-track"><div class="fn-fill" style="width:${(lv.n/maxN*100).toFixed(1)}%"></div></div><span>${lv.n}${lv.conv!=null?` <span class="muted">· ${lv.conv}%</span>`:''}</span></div>`).join('');
+        let leak = '';
+        if (worst){
+          leak = `<div class="db-judge">掉得最狠的是 <b>${esc(worst.from)}→${esc(worst.to)}</b>（${worstP}%）${leakAct(worst.to)}</div>`;
+        } else if (!enoughN) leak = `<div class="hint">已发 ${denom} 家，不到 ${DB_N_MIN} —— 暂不指认漏点</div>`;
+        const ur = denom ? (c.unsubscribed||0)/denom : 0, brr = denom ? (c.bounced||0)/denom : 0;
+        const bad = enoughN && (ur>=DB_UNSUB_WARN || brr>=DB_BOUNCE_WARN);
+        const health = !enoughN
+          ? `<div class="hint">退订 ${c.unsubscribed||0} · 退信 ${c.bounced||0}（共发 ${denom} 家，样本不足不算率）</div>`
+          : bad
+            ? `<div class="db-judge db-bad">⚠️ 退订 ${pct(ur)}${ur>=DB_UNSUB_WARN?`（超 ${pct(DB_UNSUB_WARN)}）`:''} · 退信 ${pct(brr)}${brr>=DB_BOUNCE_WARN?`（超 ${pct(DB_BOUNCE_WARN)}）`:''} —— 先停下看信的内容和名单来源</div>`
+            : `<div class="db-ok">退订 ${pct(ur)} · 退信 ${pct(brr)} —— 都在正常范围</div>`;
+        // 账本：⚠️ 回信为 0 时**不做除法**（0 做分母要说人话，不显示 ∞/NaN）
+        const ai = (d.cost||{}).ai || {}, sp = (d.cost||{}).serper || {};
+        const aiM = ai.ok ? Number(ai.monthly||0) : null;
+        const ledger = ai.notIgnited
+          ? `<div class="hint">AI 还没点火，暂无花费</div>`
+          : (aiM==null ? `<div class="hint">这次没问到 AI 花费（不是 $0）</div>`
+            : totalReplied===0
+              ? `<div class="hint">本月 AI $${aiM.toFixed(2)} · 搜索 ${sp.usedToday??0} 次 —— 还没有回信，成本还算不出每封多少</div>`
+              : `<div class="hint">本月 AI $${aiM.toFixed(2)} · 搜索 ${sp.usedToday??0} 次 ÷ 回信 ${totalReplied} 封 = 每封约 <b>$${(aiM/totalReplied).toFixed(2)}</b></div>`);
+        b3 = fn + leak + health + ledger;
+      }
+
+      $("#v-page").innerHTML = pageHeader('数据看板','')
+        + `<div class="page-card db-block">${starLine}</div>`
+        + card('生意在动吗？', b1)
+        + card('力气该花哪儿？', b2)
+        + card('哪里在漏水？', b3);
     }
+    // C5-7：从看板「补一轮这国」进补货 —— 打开弹窗并**预选该国**。
+    //   ⚠️ 预选必须等 openRestock 里的 loadSearchCfg 把下拉填好之后再设，
+    //      否则设的是一个还不存在的 option —— 静默失效，看不出任何异常。
+    window.openRestockFor = async (gl) => {
+      await openRestock();
+      const sel = $("#fc-one-country");
+      if (sel && [...sel.options].some(o=>o.value===gl)) { sel.value = gl; updateTransparency(); }
+    };
     // #47 行动建议：数据看板 + 今日待办共用的渲染 + 跳转
     function actionPanelHtml(actions, title){
       const rows = (actions||[]).length
