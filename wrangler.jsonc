@@ -49,12 +49,17 @@
     // SENDER_NAME 仅 senderBrand 兜底。
     "SENDER_EMAIL": "",
     "SENDER_NAME": "AirSonde",
-    // APP_URL：退订链接 base。⚠️ 占位值指向 Access 门后的 crm 域 —— 发信开通前**必须**
-    //   换成公开可达 host（Access 挡退订链接 = 合规违规，见上游 #53 注释）。C1 零发信，无实害。
+    // APP_URL：**只剩一个用途** = ADMIN_URL 的兜底（飞书卡片「打开后台」按钮）。
+    //   退订链接不再走它 —— send.ts 优先用下面的 PUBLIC_API_URL（C2-F 已配）。
     "APP_URL": "https://crm.airsonde.com",
-    // 上游的 API_HOST / PUBLIC_API_URL（公开 API 正门）**故意不配**：
-    //   未配 = #53 公开分支不激活（landing/退订/webhook 无公开面），全部路径留在 Access 门后。
-    //   AirSonde 开发信/落地页上线时再随发信域单一起配。
+    // ⭐ C2-F 公开正门（2026-08-31）：退订链接 / Resend webhook / 官网询盘转发 三件走这里。
+    //   为什么必须有：crm 域整站在 Access 门后 ⇒ 收件人点退订会撞登录页（**合规违规**）、
+    //   Resend 的退信/投诉 webhook 进不来（熔断器与自动压制名单**全瞎**，发得越多越危险）。
+    //   host 取自**发件域**：退订链接域与发件域同源，对收件端信誉更一致。
+    //   ⛔ 这个子域**绝不能建 Cloudflare Access 应用** —— 建了等于把退订入口又关上（上游 #53 红线原话）。
+    //   worker 侧：Host==API_HOST 时，除上述公开路径外一律 404（后台面绝不暴露在公开正门）。
+    "API_HOST": "link.airsonde.net",
+    "PUBLIC_API_URL": "https://link.airsonde.net",
     // ADMIN_HOST/ADMIN_URL：团队后台自定义域名，受 Cloudflare Access 保护（每人邮箱登录）
     "ADMIN_HOST": "crm.airsonde.com",
     "ADMIN_URL": "https://crm.airsonde.com",
@@ -80,8 +85,12 @@
 
   // 团队后台自定义域名（Cloudflare 自动建 DNS + 证书）。airsonde.com 在同一 CF 账号。
   // Access 应用 airsonde-crm（crm.airsonde.com）Joe 已建好，worker 绑域即生效。
+  // ⚠️ 顺序有意义：`wrangler dev` 会把**本地所有请求的 Host 钉成 routes 第一条 custom_domain**
+  //    （上游实测教训）。crm 必须留在第一位，否则本地开发会整个跑进公开正门分支、后台 API 全 404。
   "routes": [
-    { "pattern": "crm.airsonde.com", "custom_domain": true }
+    { "pattern": "crm.airsonde.com", "custom_domain": true },
+    // C2-F 公开正门：**不建 Access 应用**（建了就等于把退订入口关上）。
+    { "pattern": "link.airsonde.net", "custom_domain": true }
   ],
 
   // 可观测性：开日志留存（上游 2026-07-28 事故结论：历史日志不可查 = 出问题只能等复现）。

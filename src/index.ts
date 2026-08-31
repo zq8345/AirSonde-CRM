@@ -78,7 +78,11 @@ const app = new Hono<{ Bindings: Env }>();
 app.use("*", async (c, next) => {
   if (c.req.path.startsWith("/u/")) return next();          // 退订页对收件人公开
   if (c.req.path.startsWith("/api/webhooks/")) return next(); // webhook 需公开（自带签名校验）
-  if (c.req.path === "/catalog" || c.req.path === "/api/inbound") return next(); // Landing 落地页 + 询盘写端点：公开
+  if (c.req.path === "/api/inbound") return next();          // 询盘写端点：公开（官网 Function 转发；带 token 鉴权）
+  // ⛔ C2-F：`/catalog` **从公开豁免里撤掉了**。公开面按总工定的只有三件：退订 · Resend webhook · 官网询盘转发。
+  //   落地页不在其中，而它现在挂的是**未经 Joe 审的 IAQ 占位文案**（见 landing.ts 头部注释）——
+  //   一个公网可达的页面替公司说没人审过的话，是 claims 纪律里最不该开的口子。
+  //   页面本身**留着**（还能从后台看），要公开时把它加回这一行即可。
   // ⚠️ 批㉔ 修正顺序：DEV_BYPASS 必须在 301 **之前**。
   //   上游㉕a 第二刀曾把旧域 301 放最前（理由"本地能测 301"）——被实测证伪：wrangler dev 把**所有**本地请求的
   //   Host 钉成 routes 第一条 custom_domain，于是本地一切后台 API 全被 301 打去生产，
@@ -128,7 +132,7 @@ app.use("*", async (c, next) => {
   //       所以这一行在本地**根本不会命中**。
   //   ⇒ 它对本地开发是**死代码**，只对生产是风险面。留着两条并行放行路径，迟早会漂。
 
-  // #53 公开 API 正门：公开端点（/u · /api/webhooks/* · /catalog · /api/inbound）
+  // #53 公开 API 正门：公开端点（/u · /api/webhooks/* · /api/inbound —— C2-F 起 /catalog 不在其中）
   //   已在本函数最前的路径豁免里 return next()、与域名无关 → 能走到这里的、API_HOST 上的都是**非公开路径**。
   //   在公开正门上一律 404，绝不把 admin API/后台面暴露出去（这台主机没有 Access/Basic 保护）。
   //   API_HOST 未配 = 分支惰性（AirSonde C1 未配 → 无公开面）。真 Host 分支只在生产生效
