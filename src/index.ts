@@ -8,7 +8,7 @@ import { parseCsv, mapRowToLead } from "./csv";
 import { analyzeLead, getProfile, DEFAULT_PROFILE, ensureDraft } from "./service";
 import { writeReplyDraft, writeWarmFollowup, DEFAULT_SELLING_POINTS, translateToChinese, isTrustedDirectorySource, getAiUsage } from "./openrouter";
 import { scrapeSite } from "./scrape";
-import { sendLead, sendApprovedBatch, sendFollowupBatch, sendWarmFollowupNow, unsubscribeByToken, getSetting, setSetting, addSuppressedEmail, isEmailSuppressed, autoSentToday, sentToday, sentTodayBreakdown, failedTodayBreakdown, getBreakerStatus, BREAKER_WINDOW, BREAKER_THRESHOLD, deliverEmail, brandForLead, senderSentToday, SENDER_PRIMARY, SENDER_LEGACY, systemDailySendLimit, coldSentToday, SYSTEM_LIMIT_DEFAULT, RAMP_FLOOR, RAMP_FACTOR, autoSendDailyLimit } from "./send";
+import { sendLead, sendApprovedBatch, sendFollowupBatch, sendWarmFollowupNow, unsubscribeByToken, getSetting, setSetting, addSuppressedEmail, isEmailSuppressed, autoSentToday, sentToday, sentTodayBreakdown, failedTodayBreakdown, getBreakerStatus, BREAKER_WINDOW, BREAKER_THRESHOLD, deliverEmail, brandForLead, senderSentToday, SENDER_PRIMARY, SENDER_LEGACY, DEFAULT_COMPANY_ADDRESS, systemDailySendLimit, coldSentToday, SYSTEM_LIMIT_DEFAULT, RAMP_FLOOR, RAMP_FACTOR, autoSendDailyLimit } from "./send";
 
 // 系统发信上限可设的最大值。Joe 拍板 1000 → 老的 500 clamp 会静默截断，故放宽到 2000 留余量。
 // （不设无穷：手滑多打一个 0 就把域名烧了，这类不可逆代价才值得一个上限。）
@@ -1556,7 +1556,7 @@ app.get("/api/settings/sending", async (c) => {
     // 系统闸只卡冷发(initial+followup)；事务信(确认/回真人)豁免但在用量里显示，见 send.ts coldSentToday
     cold_sent_today: await coldSentToday(c.env),
     company_name: await getSetting(c.env, "company_name", "AirSonde"),
-    company_address: await getSetting(c.env, "company_address", ""),
+    company_address: await getSetting(c.env, "company_address", DEFAULT_COMPANY_ADDRESS),
     company_website: await getSetting(c.env, "company_website", c.env.SITE_URL || "https://airsonde.com"),
     selling_points: await getSetting(c.env, "selling_points", DEFAULT_SELLING_POINTS),
     chat_script: await getSetting(c.env, "chat_script", DEFAULT_CHAT_SCRIPT),

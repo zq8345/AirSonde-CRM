@@ -657,7 +657,7 @@
       <p class="hint" style="margin:2px 0 0">开发信/跟进/回信全部密送到这个邮箱留档。建好公共邮箱再填。</p>
       <div class="k muted" style="margin-top:8px">发件域（只读观察）</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        <span class="pill" style="background:#e3f2e9;color:#1e6b45">hello@airsonde.net · 唯一发件人(占位,发信域待定)</span>
+        <span class="pill" style="background:#e3f2e9;color:#1e6b45">sales@airsonde.net · 唯一发件人</span>
         <span class="hint" id="cfg-primary-today"></span>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:4px">
@@ -1852,7 +1852,7 @@
 
 `
           + `其中 <60分／退订／黑名单／已发过的 还会再跳过一些。
-**发出不可撤**（发件 hello@airsonde.net）`;
+**发出不可撤**（发件 sales@airsonde.net）`;
       }); };
     // 「已联系」：跟进选中。点过链接的由**后端**自动用「趁热」暖变体（/api/followup/run 里判 has_click）。
     //
@@ -2346,7 +2346,7 @@
                   ${/* 没草稿时「确认发送」照样可点 —— 发送路径自己会先生成再发（ensureDraft），不是坏按钮 */''}
                   <button class="btn-chat" data-company="${esc(lead.company_name)||''}" onclick="copyScript(this)">📋 复制话术</button>
                   <button class="dp-copy" id="tr-btn" onclick="translateEmail(${lead.id})">🌐 翻译</button>
-                  ${preSend ? `<span class="hint">发出不可撤（发件 hello@airsonde.net）。</span>` : `<span class="hint">已发送，如需再触达请用下方「安排跟进」。</span>`}<span class="hint" id="send-msg"></span>
+                  ${preSend ? `<span class="hint">发出不可撤（发件 sales@airsonde.net）。</span>` : `<span class="hint">已发送，如需再触达请用下方「安排跟进」。</span>`}<span class="hint" id="send-msg"></span>
                 </div>
                 <div id="tr-panel" style="display:none;margin-top:8px"></div>
               </div>` : `<div class="dp-card"><div class="hint">尚无 AI 分析。点底部「AI 分析」抓官网+打分+写信${!lead.email?"（无邮箱可先「找邮箱」）":""}。</div></div>`}
@@ -2453,7 +2453,7 @@
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px">
           <button class="btn-green" onclick="sendWarm(${id})">✅ 确认发送</button>
           <button class="btn-ghost" onclick="draftWarm(${id})">↻ 重新生成</button>
-          <span class="hint">发出不可撤，确认无误再发（发件 hello@airsonde.net）。</span><span class="hint" id="warm-send-msg"></span>
+          <span class="hint">发出不可撤，确认无误再发（发件 sales@airsonde.net）。</span><span class="hint" id="warm-send-msg"></span>
         </div>`;
     };
     window.sendWarm = async (id) => {
@@ -2783,7 +2783,7 @@
 
     // 单条立即发送
     window.sendOne = async (id) => {
-      if (!(await uiConfirm({ title:'确认发送开发信', body:'确认用 hello@airsonde.net 给这条线索发送开发信？\n发出不可撤。', confirmText:'确认发送' }))) return;
+      if (!(await uiConfirm({ title:'确认发送开发信', body:'确认用 sales@airsonde.net 给这条线索发送开发信？\n发出不可撤。', confirmText:'确认发送' }))) return;
       const res = await fetch(`/api/leads/${id}/send`, { method:"POST" }).then(r=>r.json()).catch(e=>({error:String(e)}));
       if (res.error) { alert("发送失败: " + res.error); return; }
       if (res.skipped) { alert("已跳过: " + res.skipped); return; }

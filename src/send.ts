@@ -7,6 +7,13 @@ import { classifyError, failText, readBodySafe, type FailKind } from "./failkind
 
 const RESEND_URL = "https://api.resend.com/emails";
 
+/** CAN-SPAM 页脚必填的实体地址 —— **单一真源**（index.ts 的设置端点也从这里取，别两处各写一份）。
+ *  值取自官网已公开的联系地址（airsonde-web/src/data/site-content.json → contact.address），
+ *  两处保持一致：页脚地址与官网对不上，收件人第一反应是"这封信是假的"。
+ *  ⚠️ Joe 在后台「发信设置」填了就以库里的为准；这里只是**没配时的正确默认**，不是硬编码兜底。 */
+export const DEFAULT_COMPANY_ADDRESS =
+  "AirSonde, No. 62, Baotian 1st Road, Xixiang Street, Bao'an District, Shenzhen, Guangdong, China";
+
 // ---- 通用 settings 读写 ----
 /**
  * 幂等补列 `emails.error` —— 存**服务商/运行时原话**，不存我们的措辞。
@@ -293,7 +300,7 @@ export async function coldSentToday(env: Env): Promise<number> {
 // ⚠️ AirSonde：主发件域候选 airsonde.net，**待 Joe 确认注册**（下面是占位值）。
 //   C1 发信结构性锁死（无 RESEND_API_KEY），此值不会产生任何真实出站。
 //   SENDER_LEGACY 在 AirSonde 无旧域，置空 —— 它仅在 IMAP 收信端作 fallback，空=fail-closed。
-export const SENDER_PRIMARY = "hello@airsonde.net";
+export const SENDER_PRIMARY = "sales@airsonde.net";
 export const SENDER_LEGACY = "";   // AirSonde 无退役旧域；仅收信端(IMAP 双箱)语义保留
 export async function pickSender(_env: Env, _lead: any, _kind: string): Promise<string> {
   return SENDER_PRIMARY;   // initial/confirmation/followup/reply 全部主发件域
@@ -433,7 +440,7 @@ export async function deliverEmail(env: Env, lead: any, subject: string, body: s
   //   ⚠️ AirSonde C1 两者都指不到公开面（无发信能力，无实害）；发信域单落地时必须给公开 host。
   const appUrl = (env.PUBLIC_API_URL || env.APP_URL || "http://localhost:8787").replace(/\/+$/, "");
   const company = await getSetting(env, "company_name", "AirSonde");
-  const address = await getSetting(env, "company_address", "");
+  const address = await getSetting(env, "company_address", DEFAULT_COMPANY_ADDRESS);
   const website = await getSetting(env, "company_website", env.SITE_URL || "https://airsonde.com");
 
   const token = crypto.randomUUID();

@@ -492,7 +492,7 @@ export async function runNmeaDiscovery(env: Env, affcode: string): Promise<Direc
   let html = "";
   try {
     const res = await fetch(`https://web.nmea.org/directory/results/results.aspx?affcode=${encodeURIComponent(aff)}&ysort=true`, {
-      headers: { "user-agent": "AirSondeBot/1.0 (+https://airsonde.com; contact hello@airsonde.com)" },
+      headers: { "user-agent": "AirSondeBot/1.0 (+https://airsonde.com; contact sales@airsonde.com)" },
     });
     if (!res.ok) { out.errors.push(`HTTP ${res.status}`); return out; }
     html = await res.text();
@@ -577,7 +577,7 @@ export async function runLinkHarvest(env: Env, url: string, source: string, blac
   const out: DirectoryResult = { fetched: 0, inserted: 0, skipped: 0, noSite: 0, social: 0, errors: [] };
   let html = "";
   try {
-    const res = await fetch(url, { headers: { "user-agent": "AirSondeBot/1.0 (+https://airsonde.com; contact hello@airsonde.com)" } });
+    const res = await fetch(url, { headers: { "user-agent": "AirSondeBot/1.0 (+https://airsonde.com; contact sales@airsonde.com)" } });
     if (!res.ok) { out.errors.push(`HTTP ${res.status}`); return out; }
     html = await res.text();
   } catch (e: any) { out.errors.push(String(e?.message || e)); return out; }
