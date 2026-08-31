@@ -4250,7 +4250,10 @@ ${esc(d.ours.body||'')}</div></details>`
              <div class="mr-kv"><span>轮转进度</span>${(() => {
                  if (!scfg) return '<span class="hint">读不到</span>';
                  const kwN=(scfg.keywords||[]).length, ccN=Object.keys(scfg.allCountries||{}).length, total=kwN*ccN;
-                 return total ? `<b>${scfg.discoveryCursor||0}</b> / ${total}<span class="hint">${kwN} 词 × ${ccN} 国，环绕推进</span>`
+                 // ⚠️ 分子分母必须在**同一个 `<b>`** 里：mr-kv 是两列网格，`<b>` 之外的文本会被当成
+                 //   第三个子元素掉到下一行 —— 出图上就成了「0」和「/ 540」分居两行。
+                 //   同一块里「Serper 今日」是对的（整串在一个 b 里），照它写。
+                 return total ? `<b>${scfg.discoveryCursor||0} / ${total}</b><span class="hint">${kwN} 词 × ${ccN} 国，环绕推进</span>`
                               : '<b>—</b><span class="hint">还没有关键词或市场清单</span>';
                })()}</div>
              <div class="mr-kv"><span>后台班次</span><b>每小时一轮</b>
