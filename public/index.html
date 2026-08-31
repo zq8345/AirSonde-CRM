@@ -739,15 +739,18 @@
                 所有 onclick 绑定、行为、进度条全没动 —— 只换了位置。 -->
         <div class="fc-card">
           <div class="sec-title">🎯 找客户 —— 选一个开始</div>
+          <!-- C2-A（2026-08-31）：撤下「抓 NMEA 船舶经销商 / 抓 rvwithtito RV 安装商」两个按钮。
+               它们是**上游 Wanew 的垂直目录**（海事 / 房车），对 AirSonde 是错行业，
+               曾灌进 261 条无关线索并反复爬第三方站。后端管道与来源背书逻辑**一行未拆**：
+               见 discover.ts 的 ENABLED_DIRECTORY_SOURCES（现为空注册表）。
+               C3 研究单找到 IAQ 行业目录后，在那份注册表里加一条 + 在这里加回按钮即可。 -->
           <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:8px">
-            <button id="fc-nmea" class="primary">🚢 抓 NMEA 船舶经销商</button>
-            <button id="fc-rvtito">🚐 抓 rvwithtito RV 安装商</button>
             <button id="btn-import">📄 导入 CSV</button>
             <button id="dp-run" class="primary fc-cta">▶ 开始找客户</button>
           </div>
           <div class="hint" style="margin-top:8px">
-            前两个是<b>免费目录</b>（零 Serper、质量高）· CSV 是<b>自有名单</b> ·
-            「开始找客户」= 用<b>已保存的配置</b>直接跑（搜索 → AI 打分 → 补邮箱），不用配任何东西。
+            CSV 是<b>自有名单</b> ·
+            「开始找客户」= 用<b>已保存的配置</b>直接跑（关键词搜索 → AI 打分 → 补邮箱），不用配任何东西。
           </div>
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:6px">
             <span class="hint" id="fc-free-msg"></span><span class="hint" id="dp-msg"></span>
@@ -810,10 +813,9 @@
                它必须跟着进高级设置 —— **它是设置，不是动作**，不能跟着卡一起消失。
                我批⑪B 刚总结过"别把能力跟着入口一起删掉"，删这张卡时自己又犯了一次，
                是提交前的 id 残留自检抓住的（fc-dir-auto = 0 次）。 -->
-          <label style="display:flex;align-items:center;gap:7px;margin-top:6px;cursor:pointer;font-size:13px">
-            <input type="checkbox" id="fc-dir-auto"> 每周自动刷新免费目录（NMEA / rvwithtito）
-            <span class="hint" id="fc-dir-last">（零 Serper；后台每 6h 检查一次，距上次 >7 天才真跑）</span>
-          </label>
+          <!-- C2-A：「每周自动刷新免费目录」开关一并撤下 —— 目录源注册表为空时它无事可做，
+               留着只会让人以为后台还在抓。设置项本身（directory_autorefresh_enabled）保留在库里，
+               将来接上 IAQ 目录源时把这个 label 加回来即可。 -->
           <label style="display:flex;align-items:center;gap:7px;margin-top:6px;cursor:pointer;font-size:13px">
             <input type="checkbox" id="dp-auto"> 开启后台每小时自动搜索新客户
             <span class="hint">（默认关；每轮只轮转跑一小批 20 组合、受下方预算封顶）</span>
@@ -2903,6 +2905,10 @@
         + (jam>200?'<span class="fc-warn">建议先消化再进货</span>':'');
     }
     // 批B 免费目录源：NMEA（逐 affcode + 10s Crawl-delay）+ rvwithtito
+    // ⚠️ C2-A（2026-08-31）起**不可达**：两个入口按钮已撤（见上方 #fc-card 注释），
+    //    下面的 onclick 绑定本来就带 null 守卫，所以这两个函数现在是留档的死代码。
+    //    后端也已装闸（discover.ts ENABLED_DIRECTORY_SOURCES 为空）——**两层都关，不靠任何一层单独兜**。
+    //    接上 IAQ 目录源时：注册表加一条 + 按钮加回来，这里一行不用改。
     async function runNmeaHarvest(){
       if (window._freeRunning) return; window._freeRunning = true;
       const btn=$("#fc-nmea"), btn2=$("#fc-rvtito"), log=$("#fc-free-log"), res=$("#fc-free-result");

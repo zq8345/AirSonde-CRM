@@ -478,6 +478,28 @@ export async function getSerperUsage(env: Env): Promise<{ usedToday: number; bud
 }
 
 // ===== 免费目录发现源（批B）：零 Serper 搜索费，抓公开会员目录入库，走现有去重+分析管道 =====
+/** ⛔ 已启用的目录源注册表 —— **现在是空的**（C2-A，2026-08-31）。
+ *
+ *  为什么空：上游那两个源（NMEA 船舶电子经销商目录 / rvwithtito 房车太阳能安装商名录）是
+ *  **Wanew 的垂直**，对 AirSonde（IAQ 空气检测仪）是错行业。它们曾被 cron 每 6 小时灌进生产库
+ *  261 条无关线索，同时反复爬第三方站；C2-A 已备份后清空。
+ *
+ *  ⚠️ 管道与**来源背书逻辑一行未拆**（openrouter.ts 的 SOURCE_ENDORSEMENT 照旧）：
+ *     C3 研究单找到属于 IAQ 的行业目录后，**在这里加一条**即可复用整条管道，
+ *     而不是把某个开关再翻回去 —— 加数据比翻开关更难错。
+ *
+ *  ⚠️ 闸装在三个抓取函数**自己**身上（见下），不是装在调用点：
+ *     调用点今天有 3 个，明天可能有第 4 个；守函数才守得住没想到的那一个。
+ *     这是 devguard.ts 那条「往上收敛，只守出站口子」的同一条纪律。 */
+export const ENABLED_DIRECTORY_SOURCES: readonly string[] = [];
+export function directorySourcesEnabled(): boolean { return ENABLED_DIRECTORY_SOURCES.length > 0; }
+/** 统一的"没有已启用目录源"空结果 —— 不抛错：调用方（cron/后台按钮）该看到"没跑"，不是"炸了"。 */
+function noDirectorySources(affcode?: string): DirectoryResult {
+  console.log("directory harvest skipped: ENABLED_DIRECTORY_SOURCES 为空（C2-A：AirSonde 尚无自有 IAQ 目录源）");
+  return { affcode, fetched: 0, inserted: 0, skipped: 0, noSite: 0, social: 0,
+           errors: ["未启用任何目录源：AirSonde 还没有属于自己的 IAQ 行业目录（C3 研究单在找）"] };
+}
+
 export interface DirectoryResult {
   affcode?: string; fetched: number; inserted: number; skipped: number; noSite: number; social: number; errors: string[];
 }
@@ -487,6 +509,7 @@ const NMEA_AFFCODES = ["Dealer", "International"];   // Manufacturer(多为厂�
 
 // 抓 NMEA 船舶电子经销商目录的**单个 affcode**（前端逐个调、间隔 10s 遵守 Crawl-delay），入库 source='nmea'
 export async function runNmeaDiscovery(env: Env, affcode: string): Promise<DirectoryResult> {
+  if (!directorySourcesEnabled()) return noDirectorySources(affcode);   // C2-A 闸
   const aff = NMEA_AFFCODES.includes(affcode) ? affcode : "Dealer";
   const out: DirectoryResult = { affcode: aff, fetched: 0, inserted: 0, skipped: 0, noSite: 0, social: 0, errors: [] };
   let html = "";
@@ -547,6 +570,11 @@ export async function runDirectoryRefresh(env: Env, opts: { force?: boolean } = 
   ran: boolean; reason?: string; inserted: number; detail: Record<string, number>;
 }> {
   const detail: Record<string, number> = {};
+  // C2-A 闸：没有已启用的目录源 ⇒ 连"该不该刷新"都不必问。
+  // ⚠️ 且**绝不碰 directory_last_refresh** —— 上游三次事故之一正是"清了这个游标 → 真去抓了一次 nmea.org"。
+  if (!directorySourcesEnabled()) {
+    return { ran: false, reason: "未启用任何目录源（C2-A：AirSonde 尚无自有 IAQ 目录源）", inserted: 0, detail };
+  }
   if (!opts.force && (await getS(env, "directory_autorefresh_enabled", "1")) !== "1") {
     return { ran: false, reason: "autorefresh disabled", inserted: 0, detail };
   }
@@ -574,6 +602,7 @@ export async function runDirectoryRefresh(env: Env, opts: { force?: boolean } = 
 
 // 通用「网页链接采集」免费源：抓一个页面正文里的外链域名，黑名单第三方域后入库（rvwithtito 等 RV 安装商名单用）
 export async function runLinkHarvest(env: Env, url: string, source: string, blacklist: string[]): Promise<DirectoryResult> {
+  if (!directorySourcesEnabled()) return noDirectorySources();          // C2-A 闸
   const out: DirectoryResult = { fetched: 0, inserted: 0, skipped: 0, noSite: 0, social: 0, errors: [] };
   let html = "";
   try {
