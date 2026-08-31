@@ -2152,7 +2152,23 @@ app.post("/api/notify/test", async (c) => {
     : { ok: false, error: "未配置 LARK_WEBHOOK_URL" };
   const appBot = await sendAppCard(c.env, testAppCard(appUrl));
   const ok = webhook.ok || appBot.ok;
-  return c.json({ ok, webhook, appBot }, ok ? 200 : 500);
+  // ⭐ 顶层 `error` 是补的：原来只返回 {ok, webhook, appBot}，而前端读 `res.error` ⇒
+  //   永远显示「失败:」后面空白。**原因一直在响应里，只是没人读得到** ——
+  //   任何失败都必须给得出人话原因，这是服务端这一侧的保证，不能只靠前端会不会挖。
+  //   ⚠️ 「未配置」不进 error（C2-C 点火语义：没点火不是故障）。
+  const reasons = [
+    !webhook.ok && webhook.error && !/未配置/.test(webhook.error) ? `群机器人 webhook：${webhook.error}` : null,
+    !appBot.ok && appBot.error && !/未配置/.test(appBot.error) ? `应用机器人：${appBot.error}` : null,
+  ].filter(Boolean);
+  const notIgnited = [
+    !webhook.ok && /未配置/.test(String(webhook.error || "")) ? "LARK_WEBHOOK_URL" : null,
+    !appBot.ok && /未配置/.test(String(appBot.error || "")) ? "LARK_APP_ID/SECRET" : null,
+  ].filter(Boolean);
+  return c.json({
+    ok, webhook, appBot,
+    error: ok ? undefined : (reasons.join("；") || undefined),
+    notIgnited: ok ? undefined : (notIgnited.length ? notIgnited : undefined),
+  }, ok ? 200 : 500);
 });
 
 // ---- Resend 退信/投诉 webhook（公开，Svix 签名校验）----

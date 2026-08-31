@@ -631,6 +631,10 @@
       <button class="btn-ghost" onclick="showMainView('list')">← 返回列表</button>
       <div class="pg-titlewrap"><span class="pg-title">⚙ 设置</span><span class="pg-sub">自动化开关 · 发信参数 · 话术 · 跟进 · 通知</span></div>
     </div>
+    <!-- 加载失败横幅：这一页原来**没有**（其余四页都有）。缺它的后果不是难看，是**页面静默空白**：
+         openSettings 第一行 fetch 一抛（登录过期时返回的是登录页 HTML，r.json() 必抛），
+         后面每个 .value= 都不执行 → 整张表单停在占位态、一个字的错误都不显示。 -->
+    <div class="load-error" id="cfg-loaderr" style="display:none"></div>
     <div class="set-page">
       <p class="hint">养域期建议每日上限从 10–20 起步，逐周提高。公司地址是冷邮件合规（CAN-SPAM）要求，会出现在每封信页脚，请填真实地址。</p>
 <!-- 熔断横幅：只在熔断时出现，必须显眼 —— 自动发送停了而 Joe 不知道，比不停还糟 -->
@@ -3267,9 +3271,38 @@
     // 发信设置
     // 批⑩A：「⚙ 设置」直接进整页（原来要先在下拉里二选一）。
     // 一次把两块数据都读进来 —— 整页是一个整体，不该出现"上半页是新的、下半页还是旧的"。
-    window.openSettings = async () => {
+    // ⭐⭐ 这一页曾经是全站唯一**没有失败处理**的加载器（其余四页都用 loadErrorHtml）。
+    //   后果有两层，第二层才是真危险：
+    //     ① 加载抛错 → 表单停在占位态，**一声不吭**（Joe 2026-08-31 撞到：以为设置全丢了）
+    //     ② 空表单**照样能点保存** → 保存会把 `$("#cfg-company").value` 等**空串**发上去，
+    //        后端 `if (x != null)` 就写 ⇒ **一键抹掉公司名/地址/卖点**。
+    //   ②的形状是「我没收到 ≠ 用户想清空」：加载失败与"用户真的清空了"在保存那一刻长得一模一样。
+    //   所以修法不是只加个提示：**没成功加载过，就不许保存**（_cfgLoaded 闸，见 save-sendcfg）。
+    let _cfgLoaded = false;
+    window.openSettings = async (retried) => {
       showMainView('settings');
-      const c = await fetch("/api/settings/sending").then(r=>r.json());
+      const errBox = $("#cfg-loaderr");
+      if (errBox) { errBox.style.display = 'none'; errBox.innerHTML = ''; }
+      let c, fu;
+      try {
+        const r1 = await fetch("/api/settings/sending");
+        if (!r1.ok) throw new Error("HTTP " + r1.status);     // 401/403（登录过期）也走这条
+        c = await r1.json();
+        const r2 = await fetch("/api/settings/followup");
+        if (!r2.ok) throw new Error("HTTP " + r2.status);
+        fu = await r2.json();
+      } catch (e) {
+        _cfgLoaded = false;                                    // 闸落下：保存被挡住
+        if (errBox) {
+          errBox.style.display = '';
+          errBox.innerHTML = loadErrorHtml('cfg-retry', retried)
+            + `<div class="hint" style="margin-top:6px">⚠️ 表单里的空白**不是你的数据**，只是没加载上来 —— 已暂时禁用「保存」，防止空值覆盖真设置。</div>`;
+          const b = $("#cfg-retry"); if (b) b.onclick = () => openSettings(true);
+        }
+        const sv = $("#save-sendcfg"); if (sv) { sv.disabled = true; sv.title = "配置没加载成功，保存已禁用（防止空值覆盖）"; }
+        return;
+      }
+      { const sv = $("#save-sendcfg"); if (sv) { sv.disabled = false; sv.title = ""; } }
       $("#cfg-limit").value = c.daily_send_limit;
       $("#cfg-company").value = c.company_name || "";
       $("#cfg-address").value = c.company_address || "";
@@ -3312,7 +3345,6 @@
       $("#cfg-primary-today").textContent = `今日已发 ${c.primary_sent_today ?? 0}`;
       $("#cfg-legacy-today").textContent = `今日已发 ${c.legacy_sent_today ?? 0}`;
       _chatScript = c.chat_script || DEFAULT_CHAT;
-      const fu = await fetch("/api/settings/followup").then(r=>r.json());
       $("#fu-enabled").checked = !!fu.enabled;
       $("#fu-delay").value = fu.delay_days;
       $("#fu-engaged-delay").value = fu.engaged_delay_days;
@@ -3320,6 +3352,7 @@
       $("#fu-noreply").value = fu.no_reply_days;
       renderAutomation(c);
       await loadNotifyCfg();          // 飞书那块也一起刷新
+      _cfgLoaded = true;              // 全部字段都真填上了，才允许保存
     };
     $("#btn-settings").onclick = () => openSettings();
     document.addEventListener("input", (e) => { if (e.target && e.target.id === "cfg-auto-limit") renderCapacity(); });
@@ -3429,6 +3462,12 @@
     // ⚠️ 三个请求各自会失败。**每一段失败都必须说出来** —— 原来 followup 那发是 fire-and-forget
     //    （没读返回值），存失败了 Joe 也看不见，正是我们一路在修的那种静默病。
     $("#save-sendcfg").onclick = async () => {
+      // ⛔ 没成功加载过就不许保存 —— 空表单一存就是把公司名/地址/卖点抹成空串。
+      //   （按钮已 disabled，这里是第二道：防止有人用键盘/脚本绕过 disabled。闸不能只有一层。）
+      if (!_cfgLoaded) {
+        $("#sendcfg-result").textContent = "配置没加载成功，已阻止保存（否则会用空值覆盖真设置）——请先点上方「重试」。";
+        return;
+      }
       $("#sendcfg-result").textContent = "保存中…"; $("#ntf-result").textContent = "";
       const jf = (p) => p.then(r=>r.json()).catch(e=>({error:String(e)}));
       const res = await jf(fetch("/api/settings/sending", { method:"POST", headers:{"content-type":"application/json"},
@@ -3476,7 +3515,32 @@
     $("#ntf-test").onclick = async () => {
       $("#ntf-result").textContent = "发送中…";
       const res = await fetch("/api/notify/test", { method:"POST" }).then(r=>r.json()).catch(e=>({error:String(e)}));
-      $("#ntf-result").textContent = res.ok ? "已发送，去飞书群看卡片 ✅" : ("失败: "+(res.error||""));
+      // ⭐ 修「失败:」后面空白：端点返回的是 {ok, webhook:{ok,error}, appBot:{ok,error}}，
+      //   **没有顶层 error** —— 原来读 res.error 永远是 undefined，真原因就躺在响应里没人读。
+      //   ⚠️ 同时套用点火语义（C2-C）：**未配置 ≠ 失败**。飞书应用机器人本来就没配，
+      //     不该跟真错误一起报红，否则 Joe 每次都看到一条永远治不好的"失败"。
+      if (res.ok) {
+        $("#ntf-result").textContent = "已发送，去飞书群看卡片 ✅";
+      } else {
+        const why = [];
+        const pick = (name, r) => {
+          if (!r || r.ok) return;
+          const msg = String(r.error || "");
+          if (/未配置/.test(msg)) return;              // 未点火：不算失败，不刷屏
+          why.push(`${name}：${msg || "(服务端没给原因)"}`);
+        };
+        pick("群机器人 webhook", res.webhook);
+        pick("应用机器人", res.appBot);
+        const notConfigured = [
+          res.webhook && !res.webhook.ok && /未配置/.test(String(res.webhook.error||"")) ? "群机器人 webhook" : null,
+          res.appBot  && !res.appBot.ok  && /未配置/.test(String(res.appBot.error ||"")) ? "应用机器人" : null,
+        ].filter(Boolean);
+        $("#ntf-result").textContent = why.length
+          ? "失败 — " + why.join("；")
+          : (notConfigured.length
+              ? `未点火：${notConfigured.join(" 和 ")} 还没配（不是故障）`
+              : "失败：服务端没有给出原因（这本身是个缺陷，请报给开发）");
+      }
     };
 
     // 批③顶栏收口：设置里的「客户画像」及其弹层已删 —— 客户画像已是「找客户」页顶部第①块（全局打分标准），
