@@ -16,12 +16,15 @@
   <style>
     :root { /* W3 浅色系（Joe 拍板纯浅色唯一主题，2026-08-12） */
             --bg:#ffffff; --panel:#f4f5f7; --surface-2:#f4f5f7; --border:#e6e9ed; --text:#101418; --muted:#4d5762;
-            --green:#1e7a4f; --red:#c0392b; --amber:#8a5a00; --blue:#2f6fd6; }
+            --green:#1e7a4f; --red:#c0392b; --amber:#8a5a00; --blue:#2f6fd6;
+  /* C5-4v 附录 C.3：状态底色收成 token —— 它们原来以 10+ 个字面量散落在各处，
+     同一种"浅蓝提示条"在三个页面是三个色值。tint 只做背景，不做前景。 */
+  --border-strong:#c8d0da; --tint-blue:#eaf1fb; --tint-green:#e8f4ee; --tint-red:#fbecea; --tint-amber:#f9f1e2; }
     * { box-sizing: border-box; }
     body { margin:0; font:14px/1.5 -apple-system,Segoe UI,Roboto,"Microsoft YaHei",sans-serif;
            background:var(--bg); color:var(--text); }
     header { padding:14px 12px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px; }
-    header h1 { font-size:16px; margin:0; }
+    header h1 { font-size:15px; margin:0; }
     header .sub { color:var(--muted); font-size:12px; }
     .wrap { display:flex; gap:12px; padding:12px; height:calc(100vh - 64px); box-sizing:border-box; }
     .side { width:178px; background:var(--surface-2); border:.5px solid var(--border); border-radius:12px; padding:12px; flex-shrink:0; overflow:auto;
@@ -29,43 +32,57 @@
     .side-settings { margin-top:10px; padding-top:10px; border-top:1px solid var(--border); flex-shrink:0; display:block; }
     .side-settings .gear-btn { width:100%; text-align:left; }
     /* 账号菜单：原生 <details>，展开收起零 JS。收起态仍显示当前登录人（"我以谁的身份在操作"不能藏）。 */
-    .acct-menu { margin-top:6px; position:relative; }
-    .acct-summary { list-style:none; cursor:pointer; background:var(--panel); border:1px solid var(--border);
       color:var(--text); padding:7px 12px; border-radius:8px; font-size:13px; display:flex; align-items:center;
       justify-content:space-between; gap:6px; }
-    .acct-summary::-webkit-details-marker { display:none; }   /* 去掉浏览器默认三角，用自己的 caret */
-    .acct-summary:hover { border-color:var(--blue); }
-    .acct-summary:focus-visible { outline:2px solid var(--blue); outline-offset:2px; }   /* 键盘可达要看得见 */
     /* ⚠️ 邮箱**不截断**：word-break 让长地址换行显示，而不是 ellipsis 吞掉后半段。
        产品后台那边就是被截成 `joe@wanew.com …`，我们这边不重蹈。 */
-    #acct-who { min-width:0; word-break:break-all; line-height:1.35; }
-    .acct-caret { flex-shrink:0; color:var(--muted); transition:transform .15s; }
-    .acct-menu[open] .acct-caret { transform:rotate(180deg); }
     /* ⚠️ 必须显式隐藏：`<details>` 关闭时 Chrome 用的是 `content-visibility:hidden`，
        而**绝对定位的子元素会从中逃逸**、照样渲染出来 —— 实测收起态下退出链仍然可见。
        只有真渲染才抓得到（查"元素存不存在"会以为没问题）。 */
-    .acct-menu:not([open]) .acct-pop { display:none; }
-    .acct-pop { position:absolute; bottom:calc(100% + 6px); left:0; right:0; background:var(--panel);
       border:1px solid var(--border); border-radius:8px; padding:6px; box-shadow:0 8px 24px rgba(0,0,0,.45); z-index:40; }
-    .acct-logout { display:block; padding:8px 10px; border-radius:6px; color:var(--text); text-decoration:none; font-size:13px; }
-    .acct-logout:hover { background:#f5ecea; color:#a83a2e; }
     .dd-menu.dd-up { top:auto; bottom:calc(100% + 4px); left:0; right:auto; }   /* 左栏底部→菜单向上弹 */
     .tab { padding:7px 10px; border-radius:6px; cursor:pointer; display:flex; align-items:center; gap:5px; color:var(--muted); }
     .tab:hover { background:var(--panel); }
-    .tab.active { background:#dce9f8; color:#245a9e; font-weight:600; box-shadow:inset 3px 0 0 var(--blue); }
-    .tab.active:hover { background:#dce9f8; }
+    .tab.active { background:var(--tint-blue); color:var(--blue); font-weight:600; box-shadow:inset 3px 0 0 var(--blue); }
+    .tab.active:hover { background:var(--tint-blue); }
     .tab .cnt { color:var(--muted); font-size:12px; }
-    .tab.active .cnt { color:#3a6ea8; }
-    .main { flex:1; overflow:auto; padding:16px 20px; background:var(--surface-2); border:.5px solid var(--border); border-radius:12px; }
+    .tab.active .cnt { color:var(--blue); }
+    .main { flex:1; overflow:auto; padding:16px 20px; background:var(--panel); border-radius:12px; }
+    /* C5-4v 附录 C.5：.main 是**画布**（灰），内容各自成白卡 —— 原来它自己是"灰底+边框"的一张卡，
+       于是设置页有卡片层次、别的页没有（Joe 点名的正是这个）。 */
+    .page-card { background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:24px; margin-bottom:16px; }
+    .page-card:last-child { margin-bottom:0; }
+    @media (max-width:820px){ .page-card { padding:18px 16px; } }
+    /* 长表格页：表格自己就是那张卡 —— 内边距收窄，让表格贴着卡边（附录 C.5 的例外，已写进宪法） */
+    .table-card { padding:0; overflow:hidden; }
+    .table-card table { margin:0; }
+    /* C5-4v A：次级小按钮 —— 「重置筛选/重置列宽」不该与主动作平级 */
+    /* ══ C5-4v B：补货弹窗 —— 两张选择卡 ══ */
+    .rs-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    @media (max-width:640px){ .rs-grid { grid-template-columns:1fr; } }
+    .rs-card { background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:16px; }
+    .rs-card-t { font-size:15px; font-weight:600; margin-bottom:12px; }
+    .rs-est { font-size:12px; color:var(--muted); line-height:1.55; }
+    /* 运行中：两张卡收起，弹窗只回答"跑到哪了"。
+       ⚠️ 状态由 runPipeline 的 pipelineRunning 真值驱动，**不新增状态变量**——
+          多一个变量就多一处会跟真实状态漂开的地方。 */
+    #restock-overlay.rs-running .rs-grid { display:none; }
+    #restock-overlay.rs-running #fc-backlog { display:none !important; }
+    .btn-quiet { background:transparent; border-color:transparent; color:var(--muted); }
+    .btn-quiet:hover { background:var(--panel); border-color:var(--border); color:var(--text); }
+    /* C5-4v A：批量条**只在选中 ≥1 条时出现**（常驻一条"已选 0 条"是噪音），出现时浮起 */
+    .bulk-bar { background:var(--bg); border:1px solid var(--border); border-radius:10px;
+                padding:10px 12px; margin-bottom:12px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;
+                box-shadow:0 2px 10px -6px rgba(16,20,24,.4); }
     .toolbar { display:flex; gap:10px; margin-bottom:10px; align-items:center; flex-wrap:wrap; }
     input,select,textarea,button { font:inherit; }
     input[type=search] { background:var(--panel); border:1px solid var(--border); color:var(--text);
                          padding:7px 10px; border-radius:6px; width:240px; }
     button { background:var(--panel); border:1px solid var(--border); color:var(--text);
              padding:7px 12px; border-radius:6px; cursor:pointer; }
-    button:hover { border-color:#d5dae1; }
+    button:hover { border-color:var(--border-strong); }
     button:disabled { opacity:.5; cursor:not-allowed; }
-    button.primary { background:var(--blue); border-color:var(--blue); color:#fff; }
+    button.primary { background:var(--blue); border-color:var(--blue); color:var(--bg); }
     button.mini { padding:5px 10px; font-size:13px; }
     .filters { display:flex; gap:8px; margin-bottom:14px; align-items:center; flex-wrap:wrap; }
     .filters select { background:var(--panel); border:1px solid var(--border); color:var(--text); padding:6px 8px; border-radius:6px; }
@@ -77,73 +94,73 @@
     .col-resizer:hover, .col-resizer.drag { background:var(--blue); opacity:.5; width:3px; right:-1px; }
     tr.row:hover { background:var(--panel); cursor:pointer; }
     .pill { padding:2px 8px; border-radius:10px; font-size:12px; white-space:nowrap; }
-    .s-new,.s-analyzed,.s-pending { background:#e9ebee; color:#3f4a56; }
-    .s-approved,.s-queued,.s-sent,.s-replied { background:#e3f2e9; color:#1e6b45; }
-    .s-won { background:#e3f2e9; color:#17724a; font-weight:600; }
-    .s-followup { background:#e8f0fa; color:#1f5fae; }
-    .s-ignored { background:#f7efdd; color:#7a5410; }
-    .s-blacklisted,.s-unsubscribed,.s-bounced { background:#fbeae8; color:#b03a2e; }
-    button.btn-won { background:#1a7f47; border-color:#1a7f47; color:#fff; }
+    .s-new,.s-analyzed,.s-pending { background:var(--panel); color:var(--muted); }
+    .s-approved,.s-queued,.s-sent,.s-replied { background:var(--tint-green); color:var(--green); }
+    .s-won { background:var(--tint-green); color:var(--green); font-weight:600; }
+    .s-followup { background:var(--tint-blue); color:var(--blue); }
+    .s-ignored { background:var(--tint-amber); color:var(--amber); }
+    .s-blacklisted,.s-unsubscribed,.s-bounced { background:var(--tint-red); color:var(--red); }
+    button.btn-won { background:var(--green); border-color:var(--green); color:var(--bg); }
     /* 联系渠道按钮 */
     .chan-row { display:flex; flex-wrap:wrap; gap:6px; margin:6px 0 4px; }
     .chan { display:inline-flex; align-items:center; gap:5px; padding:5px 10px; border-radius:6px; font-size:12px;
             text-decoration:none; border:1px solid var(--border); background:var(--bg); color:var(--text); }
-    .chan:hover { border-color:#d5dae1; }
+    .chan:hover { border-color:var(--border-strong); }
     .chan-whatsapp { color:#25d366; } .chan-linkedin { color:#4a9fe0; } .chan-telegram { color:#3aa9e0; }
-    .chan-facebook { color:#3a5fa8; } .chan-instagram { color:#a5527d; } .chan-youtube { color:#b03a2e; }
+    .chan-facebook { color:#3a5fa8; } .chan-instagram { color:#a5527d; } .chan-youtube { color:var(--red); }
     /* 时间线 */
     .tl-row { display:flex; gap:8px; padding:5px 0; border-bottom:1px solid var(--border); }
     .tl-time { color:var(--muted); white-space:nowrap; font-size:12px; min-width:96px; }
-    .due-flag { color:#7a5410; }
-    button.tgl-on { background:var(--amber); border-color:var(--amber); color:#fff; }
+    .due-flag { color:var(--amber); }
+    button.tgl-on { background:var(--amber); border-color:var(--amber); color:var(--bg); }
     /* 销售漏斗阶段徽章 */
     .stg { display:inline-block; padding:2px 8px; border-radius:10px; font-size:12px; white-space:nowrap; }
-    .st-bad { background:#fbeae8; color:#b03a2e; }
-    .st-won { background:#e3f2e9; color:#17724a; font-weight:600; }
-    .st-talk { background:#e3f2e9; color:#1e6b45; }
-    .st-mute { background:#e9ebee; color:#4d5762; }
-    .st-hot { background:#f7efdd; color:#7a5410; }
+    .st-bad { background:var(--tint-red); color:var(--red); }
+    .st-won { background:var(--tint-green); color:var(--green); font-weight:600; }
+    .st-talk { background:var(--tint-green); color:var(--green); }
+    .st-mute { background:var(--panel); color:var(--muted); }
+    .st-hot { background:var(--tint-amber); color:var(--amber); }
     /* 批⑱ 副标记：参与度/回复情绪/抓不到官网 —— 从属于格名，不能抢主词的位置 */
-    .stg-sub { margin-left:6px; font-size:11px; opacity:.72; white-space:nowrap; }
+    .stg-sub { margin-left:6px; font-size:12px; opacity:.72; white-space:nowrap; }
     /* 批⑲ 分组视图 + 灰按钮原因 */
     /* 批㉓ 组头吸顶：滚到某组中段时该组头贴顶，组头自带的主要动作按钮永远够得着（Joe：②组78行把③组头埋沉底）。
        .main 是滚动容器（overflow:auto）→ top:0 贴其视口顶；背景 #ffffff 不透穿、z-index 压住下滚的行。 */
-    .grp-head td { background:#ffffff; border-top:2px solid var(--border); padding:9px 10px; position:sticky; top:0; z-index:2; }
+    .grp-head td { background:var(--bg); border-top:2px solid var(--border); padding:9px 10px; position:sticky; top:0; z-index:2; }
     .grp-head b { font-size:13px; }
     /* 批㉓ 组间跳转条：工具栏下一行，链接直达各组头（scrollIntoView），数字用真值 */
-    .grp-jump { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:10px; font-size:12.5px; }
+    .grp-jump { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:10px; font-size:12px; }
     .grp-jump .gj-lb { color:var(--muted); }
     .gj-lnk { color:var(--blue); cursor:pointer; }
     .gj-lnk:hover { text-decoration:underline; }
     .grp-jump .gj-sep { color:var(--muted); }
-    .grp-n { display:inline-block; margin:0 9px; padding:1px 8px; border-radius:9px; background:#e9ebee; font-size:12px; }
-    .grp-empty { color:#5b6470; font-size:12px; padding:11px; font-style:italic; }
+    .grp-n { display:inline-block; margin:0 9px; padding:1px 8px; border-radius:9px; background:var(--panel); font-size:12px; }
+    .grp-empty { color:var(--muted); font-size:12px; padding:11px; font-style:italic; }
     .row-sub { margin-left:22px; margin-top:4px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
     /* 批㉖：抓取失败=一个小徽章（全文挂 title、点行进详情处理）。铁律：行内元素不随数据量膨胀。 */
-    .fail-badge { display:inline-block; padding:1px 7px; border-radius:8px; background:#fbeae8; color:#b0452e; font-size:11px; white-space:nowrap; vertical-align:1px; }
-    .fail-badge.fail-retry { background:#e9ebee; color:#5b6470; }
-    .reason-sm { color:#4d5762; font-size:12px; max-width:520px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .fail-badge { display:inline-block; padding:1px 7px; border-radius:8px; background:var(--tint-red); color:var(--red); font-size:12px; white-space:nowrap; vertical-align:1px; }
+    .fail-badge.fail-retry { background:var(--panel); color:var(--muted); }
+    .reason-sm { color:var(--muted); font-size:12px; max-width:520px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     /* 批⑲b：阶段列里的紧凑「他回了」——同一行、不占新行、不增加行高 */
     .stgcol { white-space:nowrap; }   /* 徽章 + 他回了 同一行不换行（否则 ②组行会高一截）*/
-    .stg-reply { margin-left:8px; padding:1px 7px; font-size:11px; vertical-align:middle; }
+    .stg-reply { margin-left:8px; padding:1px 7px; font-size:12px; vertical-align:middle; }
     /* 批⑲b：脏渠道值（拼不出合法链接）显示原文但不可点，灰 + ⚠️ 一眼可辨 */
-    .chbad { color:#5b6470; cursor:default; opacity:.8; }
+    .chbad { color:var(--muted); cursor:default; opacity:.8; }
     /* 批⑲b 追加：整页加载失败横幅（可见 + 可重试，别让登录过期看着像系统坏了）*/
     .load-error { margin:10px 0; padding:10px 14px; border:1px solid #7a5a1e; border-radius:8px;
-                  background:#f7efdd; color:#7a5410; font-size:13px; }
+                  background:var(--tint-amber); color:var(--amber); font-size:13px; }
     /* 灰按钮必须写明原因（批⑲ 硬要求）——没有它，灰按钮就退回成"摆着更困惑" */
-    .btn-why { margin-left:5px; font-size:11px; opacity:.75; font-weight:400; }
-    .st-sent { background:#e8f0fa; color:#1f5fae; }
-    .st-send { background:#e8f0fa; color:#1f5fae; }
-    .st-new { background:#e9ebee; color:#3f4a56; }
+    .btn-why { margin-left:5px; font-size:12px; opacity:.75; font-weight:400; }
+    .st-sent { background:var(--tint-blue); color:var(--blue); }
+    .st-send { background:var(--tint-blue); color:var(--blue); }
+    .st-new { background:var(--panel); color:var(--muted); }
     /* 待分析：机器还没处理完，人不用做什么 → 比「待审核」(等你审) 更暗、更安静，别抢注意力 */
-    .st-todo { background:#eef1f4; color:#5b6470; }
+    .st-todo { background:var(--panel); color:var(--muted); }
     /* 顺带修④ 会话过期横幅：钉在顶部，因为此刻**页面上的每个数字都可能是旧的** */
     #sess-expired { position:fixed; top:0; left:0; right:0; z-index:9999; padding:10px 16px;
-      background:#fbeae8; border-bottom:1px solid #ecc4be; color:#a83a2e; font-size:13px;
+      background:var(--tint-red); border-bottom:1px solid #ecc4be; color:var(--red); font-size:13px;
       display:flex; align-items:center; gap:12px; }
     #sess-expired button { margin-left:auto; padding:5px 12px; border-radius:6px; cursor:pointer;
-      background:var(--blue); border:none; color:#fff; font-size:12.5px; }
+      background:var(--blue); border:none; color:var(--bg); font-size:12px; }
     /* 批⑦A：草稿改成发送时才生成 → 详情页必须说清"为什么这儿是空的"，不能留个空白 textarea 当哑谜 */
     .draft-none { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:6px; padding:10px 12px;
       border:1px dashed var(--border); border-radius:7px; font-size:13px; }
@@ -151,15 +168,15 @@
     /* 批⑥A 重扫进度：428 家要跑 1-2 小时，**绝不能是黑盒** —— 必须实时看得见在动 */
     .rescan-bar { margin-top:9px; padding:9px 11px; border:1px solid var(--border); border-radius:7px;
       background:var(--bg); font-size:13px; line-height:1.7; }
-    .rescan-bar.rescan-err { border-color:#ecc4be; background:#fbeae8; color:#a83a2e; }
-    .rescan-track { height:6px; background:#eef1f4; border-radius:3px; overflow:hidden; margin:6px 0 4px; }
+    .rescan-bar.rescan-err { border-color:var(--red); background:var(--tint-red); color:var(--red); }
+    .rescan-track { height:6px; background:var(--panel); border-radius:3px; overflow:hidden; margin:6px 0 4px; }
     .rescan-fill { height:100%; background:linear-gradient(90deg,#9dbfe4,#17724a); transition:width .3s; }
     /* 批⑤B 翻牌堆：组名要能一眼扫，证据摘要要能一行看懂 */
     .fp-intro { font-size:13px; color:var(--text); margin:8px 0 12px; line-height:1.7; }
     .fp-intro .hint { display:block; margin-top:2px; }
     .fp-group { border:1px solid var(--border); border-radius:8px; margin-bottom:8px; overflow:hidden; }
     .fp-head { display:flex; align-items:center; gap:9px; padding:10px 12px; cursor:pointer; background:var(--panel2,#22262c); }
-    .fp-head:hover { background:#eef1f4; }
+    .fp-head:hover { background:var(--panel); }
     .fp-caret { width:10px; color:var(--muted); flex-shrink:0; }
     .fp-label { font-weight:600; font-size:13px; flex-shrink:0; }
     .fp-count { font-size:12px; color:var(--muted); flex-shrink:0; }
@@ -182,9 +199,9 @@
     .set-page.cfg-unloaded ~ .cfg-unloaded-tip, .cfg-unloaded-tip.show { display:block; }
     /* C2-D 首页三句话：一句一行，字号大、留白多 —— 判据是"30 秒看完"，不是"信息装得下" */
     .say-list { display:flex; flex-direction:column; gap:10px; margin-top:4px; }
-    .say { display:flex; gap:12px; align-items:flex-start; padding:16px 18px; background:var(--panel);
-           border:1px solid var(--border); border-radius:12px; font-size:16px; line-height:1.5; }
-    .say-i { font-size:20px; flex-shrink:0; line-height:1.3; }
+    .say { display:flex; gap:12px; align-items:flex-start; padding:16px 18px; background:var(--bg);
+           border:1px solid var(--border); border-radius:12px; font-size:15px; line-height:1.5; }
+    .say-i { font-size:17px; flex-shrink:0; line-height:1.3; }
     .say-t { min-width:0; }
     .say-sub { display:block; font-size:13px; color:var(--muted); margin-top:4px; font-weight:400; }
     .say-hot { border-left:3px solid var(--red); }      /* 有人回你了 = 唯一"不理就凉" */
@@ -198,9 +215,9 @@
              border-bottom:1px solid var(--border); font-size:13px; align-items:baseline; }
     .mr-kv > span:first-child { color:var(--muted); }
     /* 熔断横幅：自动发送被停了而 Joe 不知道，比不停还糟 → 这里要抢注意力 */
-    .brk-banner { background:#fbeae8; border:1px solid #ecc4be; color:#a83a2e; border-radius:8px;
+    .brk-banner { background:var(--tint-red); border:1px solid #ecc4be; color:var(--red); border-radius:8px;
       padding:10px 12px; margin:10px 0; font-size:13px; line-height:1.6; }
-    .brk-banner b { color:#ff8a7d; }
+    .brk-banner b { color:var(--red); }
     .auto-box { border:1px solid var(--border); border-radius:8px; padding:10px 12px; margin:10px 0; }
     .auto-title { font-size:13px; font-weight:600; margin-bottom:7px; }
     .auto-row { display:flex; align-items:center; gap:8px; padding:4px 0; font-size:13px; cursor:pointer; }
@@ -217,38 +234,38 @@
     th.filt .fcaret { color:var(--muted); margin-left:6px; display:inline-flex; vertical-align:middle; }
     th.filt .fcaret svg { display:block; }
     th.filt .fcaret.fcaret-score { margin-left:12px; padding-left:10px; border-left:1px solid var(--border); }
-    th.filt .sortarrow { color:#1f5fae; font-size:10px; }
+    th.filt .sortarrow { color:var(--blue); font-size:12px; }
     /* A3 高分待发横幅 */
-    .hs-banner { background:#e3f2e9; border:1px solid #1f5a38; color:#1e6b45; border-radius:8px;
+    .hs-banner { background:var(--tint-green); border:1px solid #1f5a38; color:var(--green); border-radius:8px;
                  padding:9px 14px; margin-bottom:10px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
-    .hs-banner b { color:#17724a; }
+    .hs-banner b { color:var(--green); }
     /* B1 批量操作条 */
     .bulk-bar { background:var(--panel); border:1px solid var(--blue); border-radius:8px; padding:8px 12px;
                 margin-bottom:10px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-    .bulk-bar b { color:#1f5fae; }
+    .bulk-bar b { color:var(--blue); }
     .rowchk { cursor:pointer; }
-    .bulk-bar.analyzing { border-color:var(--amber); background:#f7efdd; color:#7a5410; }
-    .bulk-bar.analyzing b { color:#7a5410; }
+    .bulk-bar.analyzing { border-color:var(--amber); background:var(--tint-amber); color:var(--amber); }
+    .bulk-bar.analyzing b { color:var(--amber); }
     .bulk-prog { display:inline-block; width:130px; height:7px; background:var(--bg); border:1px solid var(--border); border-radius:4px; overflow:hidden; vertical-align:middle; margin-left:8px; }
     .bulk-prog-fill { display:block; height:100%; background:var(--amber); transition:width .3s; }
     th.filt:hover .fcaret { color:var(--text); }
-    th.filt.on { color:#1f5fae; }
-    th.filt.on .fcaret { color:#1f5fae; }
+    th.filt.on { color:var(--blue); }
+    th.filt.on .fcaret { color:var(--blue); }
     .hdrmenu { position:fixed; display:none; z-index:50; background:var(--panel); border:1px solid var(--border);
                border-radius:8px; box-shadow:0 8px 28px rgba(0,0,0,.5); padding:5px; min-width:150px; max-height:340px; overflow:auto; }
     .hdrmenu.show { display:block; }
     .hdrmenu .mi { padding:7px 10px; border-radius:6px; cursor:pointer; font-size:13px; display:flex; justify-content:space-between; gap:10px; }
     .hdrmenu .mi:hover { background:var(--bg); }
-    .hdrmenu .mi.sel { color:#1f5fae; }
+    .hdrmenu .mi.sel { color:var(--blue); }
     .hdrmenu .mi .cnt { color:var(--muted); font-size:12px; }
     /* 一键开聊按钮 */
     .chat-row { display:flex; flex-wrap:wrap; gap:8px; margin:6px 0 2px; }
     .btn-chat { display:inline-flex; align-items:center; gap:5px; padding:8px 12px; border-radius:8px; font-size:13px;
                 text-decoration:none; border:1px solid var(--border); background:var(--bg); color:var(--text); cursor:pointer; }
-    .btn-chat:hover { border-color:#d5dae1; }
-    .ptype { background:#e8f0fa; color:#1f5fae; }
-    .miss { color:#b03a2e; font-size:12px; background:#fbeae8; padding:2px 7px; border-radius:10px; }
-    .wsite { display:block; font-size:12px; color:#2361c4; margin-top:2px; text-decoration:none; }
+    .btn-chat:hover { border-color:var(--border-strong); }
+    .ptype { background:var(--tint-blue); color:var(--blue); }
+    .miss { color:var(--red); font-size:12px; background:var(--tint-red); padding:2px 7px; border-radius:10px; }
+    .wsite { display:block; font-size:12px; color:var(--blue); margin-top:2px; text-decoration:none; }
     .muted { color:var(--muted); }
     /* 弹层 */
     .overlay { position:fixed; inset:0; background:rgba(0,0,0,.55); display:none; align-items:center; justify-content:center; }
@@ -268,7 +285,7 @@
     /* 详情整页 v3（渲进 #v-page，两栏：左=理由/开发信/话术，右=国家来源/联系方式/下一步/时间线）*/
     .dp { max-width:1100px; }
     .dp-top { display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:12px; }
-    .dp-company { font-size:19px; font-weight:700; overflow:hidden; text-overflow:ellipsis; }
+    .dp-company { font-size:17px; font-weight:700; overflow:hidden; text-overflow:ellipsis; }
     .dp-scoremeta { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-left:auto; }
     .dp-body { display:grid; grid-template-columns:1fr 340px; gap:14px; align-items:start; }
     .dp-card { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:12px 14px; margin-bottom:12px; }
@@ -278,7 +295,7 @@
     .dp-contact:last-child { border-bottom:0; }
     .dp-c-ic { width:20px; text-align:center; flex-shrink:0; }
     .dp-c-val { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; }
-    .dp-copy { flex-shrink:0; background:var(--bg); border:1px solid var(--border); color:var(--muted); cursor:pointer; font-size:11px; padding:2px 8px; border-radius:6px; }
+    .dp-copy { flex-shrink:0; background:var(--bg); border:1px solid var(--border); color:var(--muted); cursor:pointer; font-size:12px; padding:2px 8px; border-radius:6px; }
     .dp-copy:hover { color:var(--text); border-color:var(--blue); }
     /* #44 开发信中文对照面板（只读、内联，不弹窗） */
     .tr-panel-box { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:9px 11px; }
@@ -287,29 +304,29 @@
     .cd-overlay { position:fixed; inset:0; background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center; z-index:9999; padding:20px; animation:cdFade .12s ease; }
     @keyframes cdFade { from{opacity:0} to{opacity:1} }
     .cd-card { background:var(--surface-2); border:1px solid var(--border); border-radius:12px; max-width:460px; width:100%; padding:18px 20px; box-shadow:0 14px 44px rgba(0,0,0,.5); }
-    .cd-card-danger { border-color:#ecc4be; }                                  /* 破坏性操作：边框先示警 */
+    .cd-card-danger { border-color:var(--red); }                                  /* 破坏性操作：边框先示警 */
     .cd-title { font-size:15px; font-weight:700; margin-bottom:10px; display:flex; align-items:center; gap:7px; }
     .cd-ticon { font-size:15px; line-height:1; }
     .cd-body { font-size:13px; color:var(--text); line-height:1.65; margin-bottom:16px; }
-    .cd-body b { color:#245a9e; font-weight:600; }                             /* 把"对哪 N 条做什么"顶出来 */
-    .cd-li { padding-left:2px; color:var(--muted); font-size:12.5px; line-height:1.75; }   /* 「· 」次要说明降一级 */
+    .cd-body b { color:var(--blue); font-weight:600; }                             /* 把"对哪 N 条做什么"顶出来 */
+    .cd-li { padding-left:2px; color:var(--muted); font-size:12px; line-height:1.75; }   /* 「· 」次要说明降一级 */
     .cd-warn { color:var(--amber); font-weight:600; margin-top:4px; }
     /* 批⑥C uiPick 单选：每项一行、点了就是选中（不需要再点确认——多一步没意义） */
     .cd-picks { display:flex; flex-direction:column; gap:6px; margin:10px 0 14px; }
     .cd-pick { text-align:left; padding:9px 12px; border-radius:7px; font-size:13px; cursor:pointer;
       background:var(--bg); border:1px solid var(--border); color:var(--text); transition:border-color .15s, background .15s; }
-    .cd-pick:hover, .cd-pick:focus { border-color:var(--blue); background:#eef1f4; outline:none; }
+    .cd-pick:hover, .cd-pick:focus { border-color:var(--blue); background:var(--panel); outline:none; }
     .cd-actions { display:flex; justify-content:flex-end; gap:10px; align-items:center; }
     .cd-actions button { padding:7px 16px; border-radius:7px; font-size:13px; cursor:pointer; transition:filter .15s ease, border-color .15s ease; }
     .cd-cancel { background:var(--bg); border:1px solid var(--border); color:var(--text); }
-    .cd-cancel:hover { border-color:#d5dae1; }
-    .cd-ok { background:var(--blue); border:none; color:#fff; }
+    .cd-cancel:hover { border-color:var(--border-strong); }
+    .cd-ok { background:var(--blue); border:none; color:var(--bg); }
     .cd-ok:hover { filter:brightness(1.12); }
-    .cd-ok.cd-danger { background:#c0392b; }
+    .cd-ok.cd-danger { background:var(--red); }
     /* 批④ 详情页顶部「打开/点击」状态徽章（列表有 🔥/👀，详情页也要有） */
-    .dp-eng { font-size:11px; padding:3px 8px; border-radius:7px; border:1px solid var(--border); white-space:nowrap; }
-    .dp-eng-hot { background:#fbeae8; color:#ff9c8f; border-color:#ecc4be; }
-    .dp-eng-warm { background:#f7efdd; color:#7a5410; border-color:#e6d3a3; }
+    .dp-eng { font-size:12px; padding:3px 8px; border-radius:7px; border:1px solid var(--border); white-space:nowrap; }
+    .dp-eng-hot { background:var(--tint-red); color:var(--red); border-color:var(--red); }
+    .dp-eng-warm { background:var(--tint-amber); color:var(--amber); border-color:var(--amber); }
     .dp-eng-none { background:var(--bg); color:var(--muted); }
     /* #46b 底部决策条：一条淡边框 surface 簇（去掉全宽间隔，按钮聚成一块） */
     .dp-bottom { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:14px; padding:10px 12px; background:var(--surface-2); border:1px solid var(--border); border-radius:10px; }
@@ -317,8 +334,8 @@
     /* #46 底部决策条：主操作突出、破坏性弱化最右防误点、次要靠左 */
     .dp-bottom .dp-primary { font-size:14px; padding:9px 18px; font-weight:600; }
     .dp-bottom .dp-danger-weak { background:transparent; border:1px solid var(--border); color:var(--muted); margin-left:14px; }
-    .dp-bottom .dp-danger-weak:hover { border-color:#c0392b; color:#b03a2e; }
-    .dp-bottom .dp-label { font-size:11px; color:var(--muted); margin-right:2px; align-self:center; }
+    .dp-bottom .dp-danger-weak:hover { border-color:var(--red); color:var(--red); }
+    .dp-bottom .dp-label { font-size:12px; color:var(--muted); margin-right:2px; align-self:center; }
     @media(max-width:820px){ .dp-body { grid-template-columns:1fr; } }
     /* 整页视图共用头 */
     /* 批⑩A 设置整页：原来这些内容长在 .modal 里，靠它给宽度/内边距/滚动。弹层删了之后
@@ -330,10 +347,15 @@
     .pg-titlewrap { display:flex; flex-direction:column; line-height:1.25; }
     .pg-title { font-size:17px; font-weight:700; }
     .pg-sub { font-size:12px; color:var(--muted); }
+    /* C5-4v①：设置页页头吸顶。⚠️ 吸的是 `.main` 这个**滚动容器**内的 top，不是视口 ——
+       页面滚动发生在 .main 里，贴视口会完全不动。 */
+    #v-settings .pg-head { position:sticky; top:-16px; z-index:5; background:var(--bg);
+      margin:-16px -20px 16px; padding:16px 20px; border-bottom:1px solid var(--border);
+      box-shadow:0 6px 14px -12px rgba(16,20,24,.5); display:flex; align-items:center; gap:12px; }
     /* 今日待办 2×2 卡 */
     .td-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
     .td-card { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:12px 14px; }
-    .td-card.td-danger { border-color:#c0392b; }
+    .td-card.td-danger { border-color:var(--red); }
     .td-card.td-warn { border-color:var(--amber); }
     .td-head { font-weight:600; margin-bottom:8px; display:flex; align-items:center; gap:6px; }
     .td-count { margin-left:auto; background:var(--border); border-radius:10px; padding:0 8px; font-size:12px; color:var(--text); }
@@ -362,24 +384,24 @@
     .ms-ic { width:20px; flex-shrink:0; text-align:center; }
     .ms-lb { color:var(--muted); width:100px; flex-shrink:0; }
     .ms-vl { color:var(--text); }
-    .ms-on { color:#1e7a4f; } .ms-off { color:var(--muted); }
+    .ms-on { color:var(--green); } .ms-off { color:var(--muted); }
     /* 批⑳ 层3 末 · 维护折叠（全量重扫降位收敛，不再占页顶黄金位） */
     .fc-maint { border-top:1px dashed var(--border); margin-top:16px; padding-top:10px; }
     /* 批⑳ 客户画像折叠：默认收起（大 textarea 不再常驻占屏），点标题展开 */
     .fc-collapsed { display:none !important; }
     /* 批④ 待办事项 = 分诊台：按紧急度排的一列，0 的不显示，每条一句人话 + 一个跳转 */
     .tri-list { display:flex; flex-direction:column; gap:10px; }
-    .tri-row { display:flex; align-items:center; gap:12px; background:var(--panel); border:1px solid var(--border);
+    .tri-row { display:flex; align-items:center; gap:12px; background:var(--bg); border:1px solid var(--border);
                border-left:3px solid var(--border); border-radius:10px; padding:13px 15px; transition:border-color .15s ease; }
-    .tri-row:hover { border-color:#d5dae1; }
-    .tri-row.tri-hot  { border-left-color:#c0392b; }   /* 🔥 最急：有人回你了 */
+    .tri-row:hover { border-color:var(--border-strong); }
+    .tri-row.tri-hot  { border-left-color:var(--red); }   /* 🔥 最急：有人回你了 */
     .tri-row.tri-warm { border-left-color:var(--amber); }
-    .tri-row.tri-warn { border-left-color:var(--amber); background:#f7efdd; }
-    .tri-icon { font-size:19px; line-height:1; flex-shrink:0; }
+    .tri-row.tri-warn { border-left-color:var(--amber); background:var(--tint-amber); }
+    .tri-icon { font-size:17px; line-height:1; flex-shrink:0; }
     .tri-text { flex:1; min-width:0; font-size:14px; display:flex; flex-direction:column; gap:2px; }
-    .tri-text b { color:#245a9e; font-size:15px; }
+    .tri-text b { color:var(--blue); font-size:15px; }
     .tri-sub { font-size:12px; color:var(--muted); }
-    .tri-go { flex-shrink:0; background:var(--blue); border:none; color:#fff; font-size:12.5px; padding:7px 14px;
+    .tri-go { flex-shrink:0; background:var(--blue); border:none; color:var(--bg); font-size:12px; padding:7px 14px;
               border-radius:7px; cursor:pointer; white-space:nowrap; transition:filter .15s ease; }
     .tri-go:hover { filter:brightness(1.12); }
     .tri-empty { text-align:center; padding:38px 16px; color:var(--text); font-size:15px; background:var(--panel);
@@ -390,25 +412,25 @@
     .act-row { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:6px 0; border-top:1px solid var(--border); }
     .act-row:first-of-type { border-top:0; }
     .act-text { font-size:13px; }
-    .act-btn { flex-shrink:0; background:var(--blue); border:none; color:#fff; font-size:12px; padding:5px 12px; border-radius:6px; cursor:pointer; white-space:nowrap; transition:filter .15s ease; }
+    .act-btn { flex-shrink:0; background:var(--blue); border:none; color:var(--bg); font-size:12px; padding:5px 12px; border-radius:6px; cursor:pointer; white-space:nowrap; transition:filter .15s ease; }
     .act-btn:hover { filter:brightness(1.12); }
     /* 批④ 看板：样本量门槛 + 收件箱切片（.sd-* 状态分布已随该块删除） */
-    .db-note { background:#eef1f5; border:1px solid #c3d7ee; border-left:3px solid var(--blue); color:#3f4a56;
-               border-radius:10px; padding:11px 14px; margin-bottom:14px; font-size:12.5px; line-height:1.7; }
-    .db-note b { color:#245a9e; }
+    .db-note { background:var(--tint-blue); border:1px solid #c3d7ee; border-left:3px solid var(--blue); color:var(--muted);
+               border-radius:10px; padding:11px 14px; margin-bottom:14px; font-size:12px; line-height:1.7; }
+    .db-note b { color:var(--blue); }
     .kpi-muted { opacity:.92; }
     .kpi-den { font-size:13px; color:var(--muted); font-weight:400; margin-left:2px; }
-    .kpi-note { display:block; font-size:10.5px; color:var(--muted); margin-top:2px; line-height:1.4; }
+    .kpi-note { display:block; font-size:12px; color:var(--muted); margin-top:2px; line-height:1.4; }
     .ib-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:9px 0; border-bottom:1px solid var(--border); }
     .ib-row:last-child { border-bottom:0; }
     .ib-name { font-size:13px; display:flex; flex-direction:column; gap:2px; min-width:0; }
-    .ib-n { font-size:11px; color:var(--muted); }
+    .ib-n { font-size:12px; color:var(--muted); }
     .ib-cells { display:flex; gap:18px; flex-shrink:0; }
     .ib-cell { text-align:right; display:flex; flex-direction:column; }
     .ib-v { font-size:15px; font-weight:700; }
     .ib-v.ib-muted { color:var(--muted); font-weight:600; }
-    .ib-den { font-size:11px; color:var(--muted); font-weight:400; }
-    .ib-l { font-size:10.5px; color:var(--muted); }
+    .ib-den { font-size:12px; color:var(--muted); font-weight:400; }
+    .ib-l { font-size:12px; color:var(--muted); }
     .kpi-n { font-size:22px; font-weight:700; }
     .kpi-l { font-size:12px; color:var(--muted); margin-top:2px; }
     .db-cols { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
@@ -417,18 +439,21 @@
     .fn-track { background:var(--bg); border-radius:4px; height:18px; overflow:hidden; }
     .fn-fill { height:100%; background:var(--blue); min-width:2px; }
     /* 找客户 */
-    .fc-card { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:14px 16px; margin-bottom:12px; }
+    /* C5-4v 附录 C.5：卡片 = 白底。原来是 var(--panel)，与灰画布同色 ⇒ 完全没有层次
+       —— Joe 那句「设置页板块跟底色有区分，其他页没有」，病根就是这一行（还有下面两条）。 */
+    .fc-card { background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:20px 22px; margin-bottom:16px; }
+    @media (max-width:820px){ .fc-card { padding:16px; } }
     .fc-cc { display:flex; flex-wrap:wrap; gap:6px; }
     .fc-chip { background:var(--bg); border:1px solid var(--border); border-radius:14px; padding:3px 10px; font-size:12px; cursor:pointer; display:inline-flex; align-items:center; gap:5px; user-select:none; }
-    .fc-chip.on { background:#e8f0fa; border-color:var(--blue); color:#1f5fae; }
+    .fc-chip.on { background:var(--tint-blue); border-color:var(--blue); color:var(--blue); }
     .fc-cta { font-size:15px; padding:11px 22px; }
     @media(max-width:820px){ .td-grid,.db-cols{ grid-template-columns:1fr; } .kpi-row{ grid-template-columns:repeat(2,1fr); } }
-    .d-company { font-size:18px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding-right:34px; }
+    .d-company { font-size:17px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding-right:34px; }
     .d-scorebar { display:flex; gap:14px; align-items:stretch; margin:12px 0 8px; }
     .d-scoreblock { border-radius:10px; padding:8px 16px; min-width:118px; text-align:center; display:flex; flex-direction:column; justify-content:center; }
-    .d-scoreblock.sc-green { background:#e3f2e9; color:#17724a; } .d-scoreblock.sc-amber { background:#f7efdd; color:#7a5410; }
-    .d-scoreblock.sc-red { background:#fbeae8; color:#b03a2e; } .d-scoreblock.sc-none { background:transparent; border:1px dashed var(--border); color:var(--muted); }
-    .d-scorelabel { font-size:11px; opacity:.85; } .d-scorenum { font-size:32px; font-weight:800; line-height:1.05; }
+    .d-scoreblock.sc-green { background:var(--tint-green); color:var(--green); } .d-scoreblock.sc-amber { background:var(--tint-amber); color:var(--amber); }
+    .d-scoreblock.sc-red { background:var(--tint-red); color:var(--red); } .d-scoreblock.sc-none { background:transparent; border:1px dashed var(--border); color:var(--muted); }
+    .d-scorelabel { font-size:12px; opacity:.85; } .d-scorenum { font-size:22px; font-weight:700; line-height:1.05; }
     .d-scorenum span { font-size:14px; font-weight:400; opacity:.7; }
     .d-scoremeta { flex:1; display:flex; flex-direction:column; justify-content:center; gap:5px; font-size:13px; min-width:0; }
     .d-callout { border-left:3px solid var(--border); background:var(--bg); border-radius:0 8px 8px 0; padding:8px 12px; margin-top:8px; }
@@ -444,12 +469,12 @@
     textarea { width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text);
                border-radius:6px; padding:8px; min-height:120px; font-family:ui-monospace,Consolas,monospace; }
     .actions { display:flex; gap:8px; margin-top:16px; flex-wrap:wrap; align-items:center; }
-    .btn-green { background:var(--green); border-color:var(--green); color:#fff; }
-    .btn-amber { background:var(--amber); border-color:var(--amber); color:#fff; }
-    .btn-red { background:var(--red); border-color:var(--red); color:#fff; }
+    .btn-green { background:var(--green); border-color:var(--green); color:var(--bg); }
+    .btn-amber { background:var(--amber); border-color:var(--amber); color:var(--bg); }
+    .btn-red { background:var(--red); border-color:var(--red); color:var(--bg); }
     .hint { color:var(--muted); font-size:12px; margin-top:6px; }
     .empty { color:var(--muted); text-align:center; padding:40px; }
-    a { color:#2361c4; }
+    a { color:var(--blue); }
     /* 找客户面板 */
     .sec-title { font-size:13px; color:var(--text); margin:16px 0 4px; font-weight:600; }
     .cc-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(124px,1fr)); gap:6px; margin:8px 0; }  /* 批A#2 加宽容 4 个中文字 */
@@ -457,31 +482,31 @@
     label.cc input { margin:0; }
     .kwchip { display:inline-flex; align-items:center; gap:5px; background:var(--bg); border:1px solid var(--border); border-radius:14px; padding:3px 10px; margin:3px 3px 0 0; font-size:13px; }
     .kwchip i { cursor:pointer; color:var(--muted); font-style:normal; font-size:15px; line-height:1; }
-    .kwchip i:hover { color:#b03a2e; }
+    .kwchip i:hover { color:var(--red); }
     /* #45 找客户配置：区块标题+全选/全不选、国家/关键词 勾选框标签+删除 */
     .sec-row { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:12px; }
     .sec-tools { display:flex; gap:6px; flex-shrink:0; }
-    .mini { font-size:11px; padding:2px 9px; border-radius:6px; }
-    .mini.mini-on { background:#e8f0fa; border-color:var(--blue); color:#1f5fae; }  /* 管理态高亮 */
+    .mini { font-size:12px; padding:2px 9px; border-radius:6px; }
+    .mini.mini-on { background:var(--tint-blue); border-color:var(--blue); color:var(--blue); }  /* 管理态高亮 */
     .fc-warn { color:var(--amber); font-weight:600; }  /* #45 大批量预估醒目提醒 */
     #fc-profile { min-height:96px; }  /* 客户画像·打分标准（全局，不折叠） */
     /* 批① IA 徽章 + 子块标题 */
-    .fc-badge { font-size:11px; font-weight:600; padding:2px 8px; border-radius:10px; margin-left:8px; vertical-align:middle; }
-    .fc-badge-free { background:#e3f2e9; color:#1e7a4f; border:1px solid #2f7a4d; }
-    .fc-badge-cost { background:#f7efdd; color:#7a5410; border:1px solid #e6d3a3; }
+    .fc-badge { font-size:12px; font-weight:600; padding:2px 8px; border-radius:10px; margin-left:8px; vertical-align:middle; }
+    .fc-badge-free { background:var(--tint-green); color:var(--green); border:1px solid #2f7a4d; }
+    .fc-badge-cost { background:var(--tint-amber); color:var(--amber); border:1px solid #e6d3a3; }
     .fc-subhead { font-size:12px; font-weight:700; color:var(--muted); text-transform:none; letter-spacing:.3px; margin:2px 0 6px; padding-bottom:4px; border-bottom:1px solid var(--border); }
     .fc-add-sel { min-width:200px; max-width:260px; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:6px 10px; border-radius:6px; font-size:13px; cursor:pointer; }  /* #45 添加国家选择器：够宽、不再被 .fld 的 80px 压成 glitch */
     .ccitem, .kwitem { display:inline-flex; align-items:center; gap:6px; background:var(--bg); border:1px solid var(--border); border-radius:14px; padding:4px 11px; margin:5px 7px 0 0; font-size:13px; }  /* #45 chip 间距加大 */
     .ccitem label, .kwitem label { display:inline-flex; align-items:center; gap:5px; cursor:pointer; margin:0; white-space:nowrap; }  /* 批A#2 国家名不折行 */
     .ccitem input, .kwitem input { margin:0; }
-    .ccitem.on, .kwitem.on { background:#e8f0fa; border-color:var(--blue); }
+    .ccitem.on, .kwitem.on { background:var(--tint-blue); border-color:var(--blue); }
     .ccitem i, .kwitem i { cursor:pointer; color:var(--muted); font-style:normal; font-size:15px; line-height:1; margin-left:2px; }
-    .ccitem i:hover, .kwitem i:hover { color:#b03a2e; }
-    .transparency { background:#e8f0fa; border:1px solid #c3d7ee; border-radius:6px; padding:9px 11px; font-size:13px; margin:12px 0; }
+    .ccitem i:hover, .kwitem i:hover { color:var(--red); }
+    .transparency { background:var(--tint-blue); border:1px solid #c3d7ee; border-radius:6px; padding:9px 11px; font-size:13px; margin:12px 0; }
     .prog { margin-top:14px; display:none; }
     .prog-track { height:8px; background:var(--bg); border-radius:5px; overflow:hidden; border:1px solid var(--border); }
     .prog-bar { height:100%; width:0; background:var(--blue); transition:width .35s; }
-    .prog-log { font-size:13px; color:#3f4a56; margin-top:8px; min-height:20px; white-space:pre-line; }
+    .prog-log { font-size:13px; color:var(--muted); margin-top:8px; min-height:20px; white-space:pre-line; }
     .fld { width:80px; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:6px 8px; border-radius:6px; }
 
     /* ══ C5-2c 设置页样式改版（Joe：「能让它的 UI 更好看一些吗」）══
@@ -537,7 +562,7 @@
     .dcard { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:10px 12px; }
     .dcard .n { font-size:22px; font-weight:700; line-height:1.1; }
     .dcard .l { color:var(--muted); font-size:12px; margin-top:3px; }
-    .dcard .s { color:var(--muted); font-size:11px; margin-top:1px; }
+    .dcard .s { color:var(--muted); font-size:12px; margin-top:1px; }
     .dash-sec { font-size:13px; font-weight:600; margin:18px 0 8px; color:var(--text); }
     .dash-cols { display:grid; grid-template-columns:1fr 1fr; gap:22px; }
     @media (max-width:640px){ .dash-cols { grid-template-columns:1fr; } }
@@ -560,21 +585,29 @@
     .dd-static { padding:7px 10px; font-size:12px; color:var(--muted); }
     .dd-static a { color:var(--blue); }
     .side-div { height:1px; background:var(--border); margin:8px 6px; }
-    .side-arrow { text-align:left; padding-left:12px; color:var(--muted); font-size:11px; line-height:1; margin:2px 0; opacity:.55; }
+    .side-arrow { text-align:left; padding-left:12px; color:var(--muted); font-size:12px; line-height:1; margin:2px 0; opacity:.55; }
     /* 状态统一重构：顶栏合并成一行（brand · 主动作+更多▾ · 搜索+⚙设置▾），漏斗已移除 */
     header { flex-wrap:nowrap; gap:12px; background:var(--surface-2); }
     header h1 { white-space:nowrap; }
     .hdr-actions { display:flex; align-items:center; gap:7px; flex-wrap:nowrap; min-width:0; }
     .hdr-actions button { white-space:nowrap; padding:6px 10px; }
     .hdr-right { display:flex; align-items:center; gap:8px; margin-left:auto; flex:0 0 auto; }
-    .hdr-right #q { width:160px; min-width:110px; padding:7px 10px; background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:8px; font-size:13px; }
+    /* 🔴 C5-4v：这条原来写的是 `.hdr-right #q` —— **它从来没匹配过任何东西**。
+       #q 的父元素叫 `.hdr-right-zone`（某次改名留下的死规则），实际生效的是通用的
+       `input[type=search]`。我第一版就把"边框加深"改进了这条死规则里，
+       浏览器一量才发现颜色没变。⇒ 判据要落在**产出（computed style）**，不落在"我改了哪一行"。 */
+    #q { width:160px; min-width:110px; padding:7px 10px; background:var(--bg);
+         border:1.5px solid var(--border-strong); color:var(--text); border-radius:8px; font-size:13px; }
     .hdr-right .gear-btn { padding:6px 10px; }
     .hdr-left { width:178px; flex-shrink:0; display:flex; align-items:center; justify-content:center; }  /* 正对左侧栏(178px)：logo 上下+左右居中 */
     .hdr-right-zone { flex:1; min-width:0; display:flex; align-items:center; gap:12px; }  /* 正对主列表：按钮+搜索+设置 */
-    .side-nav { padding:7px 10px; border-radius:6px; cursor:pointer; color:var(--text); font-size:13px; display:flex; align-items:center; gap:6px; }
+    .side-nav { padding:8px 10px; border-radius:8px; cursor:pointer; color:var(--text); font-size:13px; display:flex; align-items:center; gap:9px; }
+    /* C5-4v 附录 C.6：图标 stroke=currentColor ⇒ 选中/悬停不必再配第二份颜色 */
+    .nav-ico { flex:0 0 auto; opacity:.75; }
+    .side-nav:hover .nav-ico, .side-nav.active .nav-ico { opacity:1; }
     .side-nav:hover { background:var(--panel); }
-    .side-nav.active { background:#dce9f8; color:#245a9e; font-weight:600; box-shadow:inset 3px 0 0 var(--blue); }  /* #42 与漏斗 tab 选中态一致 */
-    .side-nav.active:hover { background:#dce9f8; }
+    .side-nav.active { background:var(--tint-blue); color:var(--blue); font-weight:600; box-shadow:inset 3px 0 0 var(--blue); }  /* #42 与漏斗 tab 选中态一致 */
+    .side-nav.active:hover { background:var(--tint-blue); }
     /* #41 全站 hover 交互统一：可点元素加平滑过渡 + 细腻反馈（贴合 CDS 深色后台，不浮夸） */
     button, .tab, tr.row, .side-nav, .dp-copy, .td-act, .fc-chip, label.cc,
     .gear-btn, .tb-more, .dd-item, .dd-menu .dd-item, .btn-ghost, th.filt .fcaret, .hdr-left img, .kwchip i, .ccitem, .kwitem, .ccitem i, .kwitem i {
@@ -582,7 +615,7 @@
     .hdr-left img { cursor:pointer; }
     .hdr-left img:hover { opacity:.72; }
     .btn-ghost:hover { background:var(--panel); }
-    .fc-chip:hover { border-color:var(--blue); color:#1f5fae; }
+    .fc-chip:hover { border-color:var(--blue); color:var(--blue); }
     label.cc:hover { border-color:var(--blue); }
   </style>
 </head>
@@ -594,11 +627,11 @@
     <!-- 字标：Joe 定稿绿版（1686×351，浅色底用绿）。**按高约束**：顶栏内容高度预算 38px
          （由搜索框撑，不是文字的 22.5px）→ 取 28px 高、等比宽≈134px，落在左栏 178px 容器内，
          顶栏高度一个像素不涨（改前后实测均 66px）。max-width 兜住极端窄屏。 -->
-    <div class="hdr-left"><img src="/airsonde-logo-green-transparent.png?v=6" alt="AIRSONDE" title="回今天" onclick="openToday()" style="height:28px;width:auto;max-width:150px;display:block"></div>
+    <div class="hdr-left"><img src="/airsonde-logo-green-transparent.png?v=6" alt="AIRSONDE" title="回待办事项" onclick="openToday()" style="height:28px;width:auto;max-width:150px;display:block"></div>
     <div class="hdr-right-zone">
       <input type="search" id="q" placeholder="搜索公司 / 邮箱 / 域名…" />
       <!-- 左栏导航的隐藏代理按钮（左栏 side-nav 的 handler 靠它们，勿删） -->
-      <button id="btn-today" style="display:none">今天</button>
+      <button id="btn-today" style="display:none">待办事项</button>
       <button id="btn-dashboard" style="display:none">数据看板</button>
     </div>
   </header>
@@ -622,25 +655,11 @@
              ⚠️ 走**应用级** /cdn-cgi/access/logout（只退当前应用），
                 不用团队级 wanewgroup.cloudflareaccess.com/logout（那会一键踢出全部内部系统）。
              文案写全「退出登录」：Joe 是在**设备安全**的语境下找它的，别只写"退出"。 -->
-        <!-- ⭐ 改成「点账号才展开」（Joe：「退出登录按钮裸露在外面，最好设计成点击账号才出现」）。
-             与产品后台同一种长相 —— 同一个概念在两个后台里只能有一种样子。
-             ⚠️ 用**原生 <details>/<summary>**：展开收起**零 JS**、键盘天然可达（summary 可聚焦、
-                Enter/Space 切换）—— **连"展开这一层也会坏"的风险都没有**。
-             ⚠️ 上一轮那条红线仍然守着，但要分清两种 JS 依赖：
-                · ❌ **退出动作本身**靠 JS 导航 → 失败时"看起来点了其实没退"，**静默且危险**
-                · ✅ **展开/关闭**靠交互控制 → 失败时"点了没反应"，**用户看得见**
-                所以菜单里那一项**仍是真 <a href>**；JS 只用于 Esc / 点外部关闭这两个**增强**。
-             ⚠️ 收起态**仍显示当前登录人** —— 那是"我以谁的身份在操作"，不能跟着一起藏。
-             ⚠️ 展开态**只放退出**，不塞别的；设置页那条这次不动。 -->
-        <details id="acct-menu" class="acct-menu">
-          <summary id="acct-summary" class="acct-summary" title="点击展开账号操作">
-            <span id="acct-who">👤 …</span><span class="acct-caret">▾</span>
-          </summary>
-          <div class="acct-pop">
-            <a href="/cdn-cgi/access/logout" class="acct-logout"
-               title="退出当前后台的登录状态（只影响这个系统，不会退出其它内部系统）">🔓 退出登录</a>
-          </div>
-        </details>
+        <!-- C5-4v（Joe 2026-08-31 裁定）：**左栏账号菜单整块删除，退出只留设置页一处**。
+             ⚠️ 这里原来有一段"两处并存不是重复"的理由 —— 那个理由已被 Joe 推翻，所以**改写而不是留着**：
+                留着旧论证，下一个人读到会照它把这块加回来。裁定是"一处就够"。
+             设置页 ④当前账号 里的退出**仍是真 <a href>**，不经任何 JS。
+             /api/me 与设置页 #whoami 保留（它回答"我以谁的身份在操作"）。 -->
       </div>
     </nav>
     <div class="main">
@@ -655,10 +674,15 @@
         </span>
         <!-- 批③C：🔔待跟进 已移到左栏做独立视图；🔥最近参与 已删（与「已查看」格重复，排序保留在该格内部按 last_engaged_at）。
              这两个的 handler 里写死 current="all" 会把用户踢回全部页，是"操作不清晰"的根源，一并删除。每页只留 重置筛选/重置列宽。 -->
-        <button id="f-reset" class="mini">重置筛选</button>
-        <button id="f-resetcol" class="mini" title="恢复默认列宽">↔ 重置列宽</button>
+        <!-- C5-4v A：这两个降为次级小按钮，不与主动作平级（Joe：它们不该抢眼） -->
+        <button id="f-reset" class="mini btn-quiet">重置筛选</button>
+        <button id="f-resetcol" class="mini btn-quiet" title="恢复默认列宽">↔ 重置列宽</button>
         <span class="muted" id="active-filters" style="font-size:12px"></span>
-        <span class="muted" id="batch-status" style="margin-left:auto"></span>
+        <span class="muted" id="batch-status"></span>
+        <!-- C5-4v A：「➕ 补货」从批量条里搬出来 —— 它**与选中集无关**，
+             挤在「已选 0 条」旁边是语义错位（那条是"对选中的做什么"）。
+             这里是页面级动作位：右侧、primary。 -->
+        <button id="btn-restock" class="primary" style="margin-left:auto;display:none;align-items:center;gap:6px" onclick="openRestock()"></button>
       </div>
       <div id="hdrmenu" class="hdrmenu"></div>
       <!-- 批③D：绿横幅已撤出列表页（提示搬进待办事项、动作归待审批格） -->
@@ -670,12 +694,15 @@
       <!-- 批⑤B 翻牌堆：在「待审批」格选「<60 翻牌堆」时，**顶掉表格**换成按"被杀原因"分组的复核视图。
            不造新房间（走既有的 待审批+筛选 那条路），但换一种读法：Joe 扫组名整组略过，只在杀错的地方下钻。 -->
       <div id="flip-pile" style="display:none"></div>
+      <!-- C5-4v A：表格整体装进白卡（页底灰、卡内表格）——Joe 点名"别的页没有卡片层次" -->
+      <div class="page-card table-card">
       <table>
         <thead><tr><th><input type="checkbox" id="sel-all" title="全选当前筛选" onclick="event.stopPropagation();toggleSelAll(this.checked)"> 公司</th><th>评分</th><th>阶段</th><th>邮箱</th><th>分类</th><th>国家</th><th class="chcol">LinkedIn</th><th class="chcol">WhatsApp</th><th class="chcol">Facebook</th><th class="chcol">Instagram</th><th class="chcol">电话</th><th>录入时间</th></tr></thead>
         <tbody id="rows"></tbody>
       </table>
       <div class="empty" id="empty" style="display:none">暂无数据。点上方「➕ 补货」加线索——自动搜一轮，或导入自有名单 CSV。</div>
-      </div>
+      </div><!-- /.table-card -->
+      </div><!-- /#v-list -->
       <div id="v-page" style="display:none"></div>
   <!-- ⚙ 设置整页（批⑩A：原「发信设置」+「飞书通知」两个弹层合并而来） -->
   <!-- ⚠️ 元素 id 全部原样保留 → 既有的读取/保存逻辑一行没改，行为不变。这是刻意的：
@@ -684,7 +711,11 @@
   <div id="v-settings" style="display:none">
     <div class="pg-head">
       <button class="btn-ghost" onclick="showMainView('list')">← 返回列表</button>
-      <div class="pg-titlewrap"><span class="pg-title">⚙ 设置</span><span class="pg-sub">自动化开关 · 发信参数 · 话术 · 跟进 · 通知</span></div>
+      <div class="pg-titlewrap"><span class="pg-title">设置</span></div>
+      <!-- C5-4v①：保存移进吸顶页头右侧 —— "存不存得下"是全页共同的状态，理应跟着页头走。
+           ⚠️ _cfgLoaded 闸照旧管住它（openSettings 里 disabled + title），这里只换位置。 -->
+      <button class="primary" id="save-sendcfg" style="margin-left:auto">保存</button>
+      <span class="hint" id="sendcfg-result" style="margin:0 0 0 10px"></span>
     </div>
     <!-- 加载失败横幅：这一页原来**没有**（其余四页都有）。缺它的后果不是难看，是**页面静默空白**：
          openSettings 第一行 fetch 一抛（登录过期时返回的是登录页 HTML，r.json() 必抛），
@@ -704,8 +735,7 @@
       <!-- ── ① 你是谁 —— 这些字会出现在每一封信里 ── -->
       <div class="set-card">
         <div class="sec-title">① 你是谁</div>
-        <div class="sec-sub">这几项会出现在每封开发信里（页脚 + 正文），收信人看得到。</div>
-        <div class="set-note">公司地址是冷邮件合规（CAN-SPAM）要求，会出现在每封信页脚，请填真实地址。</div>
+        <div class="sec-sub">会出现在每封信里，收信人看得到。</div>
         <div class="set-grid">
           <div class="k">公司名</div>
           <div class="v"><input id="cfg-company" class="set-in"></div>
@@ -714,29 +744,30 @@
           <div class="v"><input id="cfg-website" class="set-in" placeholder="https://airsonde.com"></div>
 
           <div class="k">公司地址</div>
-          <div class="v"><textarea id="cfg-address" style="min-height:72px" placeholder="e.g. AirSonde, 123 Example St, City, Country"></textarea></div>
+          <div class="v"><textarea id="cfg-address" style="min-height:72px" placeholder="e.g. AirSonde, 123 Example St, City, Country"></textarea>
+            <div class="hint">合规要求，须真实：每封信页脚都带它。</div></div>
 
           <div class="k">卖点</div>
           <!-- C6-B/P2-4：placeholder 里的 "flexible MOQs" 删掉 —— 它就在"只写站得住的事实"那句提示旁边，
                却在**示范一句我们答不上来的商务承诺**（MOQ 是工厂问题清单三-9 未答项），
                而这个框的内容会被 AI 直接引用进真发的开发信。Y2 清了 landing/卖点默认值，漏了这一处。 -->
           <div class="v"><textarea id="cfg-selling" style="min-height:76px" placeholder="e.g. Factory-direct IAQ monitors (CO2/PM2.5/TVOC); OEM & private-label.（认证/产能/MOQ/案例未经工厂书面确认前不要写）"></textarea>
-            <div class="hint">AI 写信时可引用；⚠️ 只写站得住的事实</div></div>
+            <div class="hint">AI 会引用；只写站得住的事实。</div></div>
 
           <div class="k">开场白</div>
           <div class="v"><textarea id="cfg-chatscript" style="min-height:96px" placeholder="Hi {company} team — AirSonde builds air quality monitors factory-direct…"></textarea>
-            <div class="hint">「一键开聊」用；{company} 会替换成公司名</div></div>
+            <div class="hint">{company} 会替换成公司名。</div></div>
 
           <div class="k">存档邮箱</div>
           <div class="v"><input id="cfg-bcc" class="set-in" placeholder="留空 = 不存档">
-            <div class="hint">选填；填了之后每封外发都密送一份到这里</div></div>
+            <div class="hint">选填，每封外发密送一份。</div></div>
         </div>
       </div>
 
       <!-- ── ② 机器开关 —— 它替你做多少 ── -->
       <div class="set-card">
         <div class="sec-title">② 机器开关</div>
-        <div class="sec-sub">养域期建议每日上限从 10–20 起步，逐周提高。</div>
+        <div class="sec-sub">养域期从 10–20 起步，逐周提高。</div>
         <div class="auto-box">
           <label class="auto-row"><input type="checkbox" id="cfg-auto-approve">
             <span><b>自动批准</b> <span class="hint">≥<span id="cfg-auto-min">…</span> 分的线索直接进「待联系」，不用你点</span></span></label>
@@ -746,13 +777,13 @@
         <!-- ⚠️ 这一句是**语义说明不是装饰**：这两个开关是勾选即存（不走下面的保存钮），
              而改版后保存是全页唯一的实心按钮 —— 不说清楚，Joe 会以为勾了还得再按保存。
              （总工 C5-2c ③ 明确允许加这一句短说明；勾选即存的逻辑一个字没动。） -->
-        <div class="hint" style="margin:0 0 16px">这两个开关改一下就立即生效，不用按保存。</div>
+        <div class="hint" style="margin:0 0 16px">这两个改一下就生效，不用保存。</div>
         <div class="set-grid">
           <div class="k">每天最多发</div>
           <div class="v"><div class="set-numrow">
               <input id="cfg-limit" type="number" min="1" class="set-num"> <span class="hint">封</span>
               <span id="cfg-limit-badge" class="pill" style="display:none"></span></div>
-            <div class="hint">手动 + 自动 + 跟进 共用这一个数</div></div>
+            <div class="hint">手动 + 自动 + 跟进 共用。</div></div>
 
           <div class="k">其中自动发</div>
           <div class="v">
@@ -765,14 +796,14 @@
 
           <div class="k">新域保护</div>
           <div class="v"><label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer"><input id="cfg-ramp" type="checkbox" style="margin-top:3px">
-            <span class="hint" style="margin:0">开着时每天发信量最多涨 50%，避免新域名被判垃圾邮件（建议保持开启）</span></label></div>
+            <span class="hint" style="margin:0">每天最多涨 50%，避免被判垃圾。建议开着。</span></label></div>
         </div>
       </div>
 
       <!-- ── ③ 无回复自动跟进 ── -->
       <div class="set-card">
         <div class="sec-title">③ 无回复自动跟进</div>
-        <div class="sec-sub">发出去没人回，自动再发一封。</div>
+        <div class="sec-sub">没人回就自动再发一封。</div>
         <label style="display:flex;gap:8px;align-items:center;cursor:pointer;margin:0 0 16px">
           <input type="checkbox" id="fu-enabled"> <span class="hint" style="margin:0">开启自动跟进</span>
         </label>
@@ -829,7 +860,7 @@
             <span class="hint">次/天 · 到上限自动停（含手动+后台）</span>
             <button id="fc-serper-save" class="mini">保存预算</button>
           </div>
-          <div class="hint" style="margin-top:4px">今日已用多少 → 🛠 机器房（那里是它唯一的展示位）</div>
+          <div class="hint" style="margin-top:4px">今日已用 → 机器房。</div>
 
           <div class="set-numrow" style="margin-top:16px">
             <button id="dp-save" class="primary">💾 保存方向盘</button>
@@ -841,9 +872,13 @@
       <!-- ── ④ 飞书通知 + 当前账号 ── -->
       <div class="set-card">
         <div class="sec-title">④ 通知与账号</div>
-        <div class="sec-sub">有客户回信/询盘时推到群里。</div>
+        <div class="sec-sub">有回信/询盘时推到群里。</div>
         <div id="notify-status" class="transparency"></div>
         <label style="display:flex;gap:8px;align-items:center;cursor:pointer;margin:0 0 16px"><input type="checkbox" id="ntf-enabled"> <span class="hint" style="margin:0">开启飞书通知</span></label>
+        <div class="set-numrow" style="margin-bottom:16px">
+          <button class="btn-secondary" id="ntf-test">发送测试卡片</button>
+          <span class="hint" id="ntf-result" style="margin:0"></span>
+        </div>
         <div class="k" style="color:var(--muted);font-size:13px;margin-bottom:6px">当前账号</div>
         <div class="transparency" id="whoami" style="margin:0"></div>
       </div>
@@ -851,12 +886,8 @@
       <!-- ⚠️ 保存语义没改：**一个「保存」按钮存全部**（发信设置 + 跟进 + 飞书一起存）。
            两个引擎开关是勾选即存（批㉒），上面卡片里已明说，这里不重复。
            「发送测试卡片」是**动作**不是设置 → 降为描边次级钮，实心只留给保存。 -->
-      <div class="set-actions">
-        <button class="primary" id="save-sendcfg">保存</button>
-        <button class="btn-secondary" id="ntf-test">发送测试卡片</button>
-        <span class="hint" id="sendcfg-result" style="margin:0"></span>
-        <span class="hint" id="ntf-result" style="margin:0"></span>
-      </div>
+      <!-- C5-4v①：底部动作条撤销 —— 保存已上移进吸顶页头；
+           「发送测试卡片」移进 ④通知与账号 卡（它测的就是那一块，语义归位）。 -->
     </div>
   </div>
       <!-- ══ C5-3：整页「🔍 找客户」已解散（Joe：四页架构收口）══
@@ -903,29 +934,31 @@
            ⚠️ 条里三个「去处理」链接点下去要先关弹窗再跳，否则弹窗会盖在跳转后的列表上。 -->
       <div id="fc-backlog" class="fc-backlog" style="display:none;margin-bottom:12px"></div>
 
-      <div class="rs-sec">
-        <div class="rs-sec-t">自动搜一轮</div>
-        <div class="transparency" id="dp-transparency" style="margin:0 0 10px"></div>
-        <div class="set-numrow" style="margin-bottom:8px">
-          <label style="display:flex;align-items:center;gap:6px;font-size:13px">🎯 只搜某国
+      <!-- C5-4v B：两张选择卡（窄屏上下叠）。⚠️ 纯排版层：id / 绑定 / 管线一个没动。 -->
+      <div class="rs-grid">
+        <div class="rs-card">
+          <div class="rs-card-t">🔍 自动搜一轮</div>
+          <div class="set-numrow" style="margin-bottom:10px">
+            <span style="font-size:13px">只搜某国</span>
             <select id="fc-one-country" class="fc-add-sel"><option value="">全部市场（默认）</option></select>
-          </label>
-          <span class="hint">后台自动轮换永远覆盖全部市场，不受这里影响</span>
+          </div>
+          <div class="set-numrow" style="margin-bottom:12px">
+            <span style="font-size:13px">本次条数</span>
+            <input id="dp-perkw" type="range" min="1" max="100" step="1" value="10" style="width:150px;max-width:100%">
+            <span style="font-size:13px"><b id="fc-perkw-val">10</b> 条/词/国</span>
+          </div>
+          <!-- 估算行：从蓝底横幅降成卡内一行安静文字；只有批量大时才由 .fc-warn 变警示色 -->
+          <div id="dp-transparency" class="rs-est"></div>
+          <button id="dp-run" class="primary" style="margin-top:12px">▶ 开始找客户</button>
+          <div class="hint" id="dp-msg" style="margin-top:6px"></div>
         </div>
-        <div class="set-numrow" style="margin-bottom:10px">
-          <span style="font-size:13px">本次条数</span>
-          <input id="dp-perkw" type="range" min="1" max="100" step="1" value="10" style="width:220px;max-width:100%">
-          <span style="font-size:13px"><b id="fc-perkw-val">10</b> 条 / 关键词 / 国家</span>
-        </div>
-        <button id="dp-run" class="primary">▶ 开始找客户</button>
-        <span class="hint" id="dp-msg" style="margin-left:8px"></span>
-        <span class="hint" id="fc-free-msg"></span>
-      </div>
 
-      <div class="rs-sec">
-        <div class="rs-sec-t">导入 CSV</div>
-        <div class="hint" style="margin:0 0 8px">自有名单，零搜索成本。</div>
-        <button id="btn-import">📄 导入 CSV</button>
+        <div class="rs-card">
+          <div class="rs-card-t">📄 导入 CSV</div>
+          <div class="hint" style="margin:0 0 12px">自有名单，零搜索成本。</div>
+          <button id="btn-import" class="btn-secondary">选择 / 粘贴 CSV</button>
+          <div class="hint" id="fc-free-msg" style="margin-top:6px"></div>
+        </div>
       </div>
 
       <div class="prog-log" id="fc-free-log" style="margin-top:8px;display:none"></div>
@@ -1271,16 +1304,20 @@
       //   · 行内的 🔔 标记还在（isDue → 每一格里都能看见"这条该跟进了"）
       //   · `openDue()` 还在（待办里的「🔔 N 家今天该跟进」仍然跳它）
       //   降级成「已联系」页的筛选/排序（跟 🔥 点过链接同一层），不占左栏一格。
-      // Joe 2026-08-31：导航写「待办事项」而页面标题写「今天」，同一个东西两个名字。
-      //   叫法归一到**页面上那个名字**（今天），导航跟着改。
-      const navTop = `<div class="side-nav" data-nav="today" onclick="document.getElementById('btn-today').click()">📋 今天</div>`
-          + `<div class="side-nav" data-nav="dashboard" onclick="document.getElementById('btn-dashboard').click()">📊 数据看板</div>`
+      // C5-4v：导航与页名统一叫「待办事项」（Joe 定），emoji 退场换单色线条图标。
+      //   ⚠️ 只改 label 与图标：`data-nav="today"` / `btn-today` / activeView 的 'today' 是契约，一字不动。
+      const navTop = `<div class="side-nav" data-nav="today" onclick="document.getElementById('btn-today').click()">${ICON.todo}<span>待办事项</span></div>`
+          + `<div class="side-nav" data-nav="dashboard" onclick="document.getElementById('btn-dashboard').click()">${ICON.dash}<span>数据看板</span></div>`
       // C5-1：「📬 回复箱」导航项**撤除** —— 回信列表已内嵌进「今天」页（客户回你了 = 今天最该看的事，
       //   它不该是一个要你自己想起来去点的第二个入口）。
       //   ⚠️ `openReplyInbox` / `openReplyDetail` 两个函数**保留**：详情视图仍由内嵌列表调用。
       // C2-D：机器房排在最后 —— 它是"需要时才进去"的页，不是每天要看的
-      + `<div class="side-nav" data-nav="machine" onclick="openMachineRoom()">🛠 机器房</div>`
+      + `<div class="side-nav" data-nav="machine" onclick="openMachineRoom()">${ICON.machine}<span>机器房</span></div>`
         + `<div class="side-div"></div>`;
+      // C5-4v A：页面级「补货」按钮 —— 只在「全部」页出现（给整个库进货，不属于某一格）
+      { const rb=$("#btn-restock");
+        if(rb){ rb.innerHTML = `${ICON.plus}<span>补货</span>`;
+                rb.style.display = (current==='all') ? 'inline-flex' : 'none'; } }
       $("#side").innerHTML = navTop + tabHtml(TABS[0]) + `<div class="side-div"></div>` +
         chain.map((t,i) => tabHtml(t) + (i < chain.length - 1 ? `<div class="side-arrow">↓</div>` : "")).join("");
       document.querySelectorAll(".tab").forEach(el =>
@@ -1349,12 +1386,10 @@
     // ===== 批③C 分格工具栏：每格 = 这一格的出口动作 =====
     // sel:true = 选中类（未选中时禁用，标题带条数）；否则 = 全量类（对当前格全体，始终可用）
     const GROUP_TOOLS = {
-      // ══ C5-3：「找客户」整页解散后，「再抓一批」这个动作落在这里 ══
-      //   只放在「全部」页：它不是某一格的出口动作，是**给整个库进货**。
-      //   ⚠️ 不带 `sel` —— 它跟选中集无关（进货是全量的事）。
-      all: [
-        { t:"➕ 补货", cls:"primary", fn:"openRestock()" },
-      ],
+      // C5-4v A：「➕ 补货」已从这里**搬到页面级动作位**（#btn-restock，筛选行右侧）——
+      //   它与选中集无关，混在批量条里语义错位（那条说的是"对选中的做什么"）。
+      //   留空 ⇒「全部」页的批量条只在真有选中时才出现。
+      all: [],
       // ⭐⭐ 批⑭②：「待分析」现在装 new + analyzed无分（抓不到官网）两类混合 → 工具栏要覆盖两者的出口。
       //   · 立即分析：new 是首次打分，无分的是重抓重试 —— 同一个动作（toolAnalyzeSel 内部按 status 走）
       //   · 🔗 改网址：无分那批的主出口（官网可能写错/换域名了）—— 改完退回 new，cron 下轮会重抓
@@ -1726,8 +1761,11 @@
       //   真正决定"这一格有没有工具栏"的是这一行，不是那张表。
       //   现在统一由表决定：`all` 有条目就渲染，没有就空 —— 少一处只有读代码才知道的例外。
       const defs = GROUP_TOOLS[current] || [];
-      if(!defs.length){ bar.style.display="none"; bar.innerHTML=""; return; }
       const n = selectedIds.size;
+      // C5-4v A：**没选中就不出现**。常驻一条"已选 0 条"是噪音（Joe 点名）。
+      //   ⚠️ 判据要两条都成立：这一格有动作 **且** 有选中 —— 只判后者的话，
+      //      在没有出口动作的格子里选几条会冒出一条空条。
+      if(!defs.length || n === 0){ bar.style.display="none"; bar.innerHTML=""; return; }
       // ⭐ 批⑬③：当前**选中集**的构成 —— 给动态标题 t() 和 hideIf() 用。
       //   ⚠️ 用 _loadedLeads 而不是重新请求：它就是当前列表的那批对象，loadList 每次都刷。
       const _picked = _loadedLeads.filter(l => selectedIds.has(String(l.id)));
@@ -2040,7 +2078,7 @@
                   <div class="fp-main">
                     <div class="fp-co">${scoreBadge(l.match_score)} <b>${esc(l.company_name)||"(未命名)"}</b>
                       ${l.website?(safeHref(l.website)?`<a class="wsite" href="${esc(safeHref(l.website))}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(hostOf(l.website))}</a>`:`<span class="wsite" title="链接协议不合法，已按纯文本显示">${esc(hostOf(l.website))}</span>`):""}
-                      ${l.human_approved?`<span class="pill" style="background:var(--green);color:#fff">已人工放行</span>`:""}
+                      ${l.human_approved?`<span class="pill" style="background:var(--green);color:var(--bg)">已人工放行</span>`:""}
                     </div>
                     <div class="fp-ev">${esc(l.evidence)||"<span class='muted'>（无理由）</span>"}</div>
                   </div>
@@ -2119,7 +2157,7 @@
       // 阶段列取代原公司名旁的状态徽章（更信息量：漏斗阶段+下一步）；保留 🔔待跟进 + 🔥/👀参与标记
       const rowHtml = (l) => { const stg = stageOf(l); return `
         <tr class="row" data-id="${l.id}">
-          <td><div style="display:flex;align-items:center;gap:6px"><input type="checkbox" class="rowchk" ${selectedIds.has(String(l.id))?'checked':''} onclick="event.stopPropagation()" onchange="toggleSel(${l.id},this.checked)"><div class="co-name" title="${esc(l.company_name)||''}">${isDue(l)?`<span class="due-flag" title="该跟进了：${esc(l.next_action)||''} (${esc(l.next_action_date)})">🔔 </span>`:""}${esc(l.company_name)||"<span class='muted'>—</span>"}${l.has_click?`<span title="点击过开发信（强意向）" style="margin-left:4px">🔥</span>`:(l.has_open?`<span title="打开过开发信" style="margin-left:4px">👀</span>`:"")}</div></div>${(()=>{const fb=unscoredRowExtra(l);if(l.website){const w=safeHref(l.website);const inner=w?`<a class="wsite" href="${esc(w)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="margin:0;display:inline-block;max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(hostOf(l.website))}</a>`:`<span class="wsite" title="链接协议不合法，已按纯文本显示" style="margin:0;display:inline-block;max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(hostOf(l.website))}</span>`;return `<span style="display:flex;align-items:center;gap:6px;margin-left:22px;min-width:0">${inner}${fb}</span>`;}return fb?`<span style="display:flex;margin-left:22px">${fb}</span>`:"";})()}${(current==='replied'&&(l.latest_reply_cat||l.latest_reply_summary))?`<div style="margin-left:22px;margin-top:3px;display:flex;align-items:center;gap:6px;min-width:0">${l.latest_reply_cat?`<span class="pill" style="background:${catColor[l.latest_reply_cat]||'#6b7480'};color:#fff;flex-shrink:0">${esc(catLabel[l.latest_reply_cat]||l.latest_reply_cat)}</span>`:''}${l.latest_reply_summary?`<span class="co-name muted" style="font-size:12px" title="${esc(l.latest_reply_summary)}">🤖 ${esc(l.latest_reply_summary)}</span>`:''}</div>`:''}${reviewRowExtra(l)}</td>
+          <td><div style="display:flex;align-items:center;gap:6px"><input type="checkbox" class="rowchk" ${selectedIds.has(String(l.id))?'checked':''} onclick="event.stopPropagation()" onchange="toggleSel(${l.id},this.checked)"><div class="co-name" title="${esc(l.company_name)||''}">${isDue(l)?`<span class="due-flag" title="该跟进了：${esc(l.next_action)||''} (${esc(l.next_action_date)})">🔔 </span>`:""}${esc(l.company_name)||"<span class='muted'>—</span>"}${l.has_click?`<span title="点击过开发信（强意向）" style="margin-left:4px">🔥</span>`:(l.has_open?`<span title="打开过开发信" style="margin-left:4px">👀</span>`:"")}</div></div>${(()=>{const fb=unscoredRowExtra(l);if(l.website){const w=safeHref(l.website);const inner=w?`<a class="wsite" href="${esc(w)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="margin:0;display:inline-block;max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(hostOf(l.website))}</a>`:`<span class="wsite" title="链接协议不合法，已按纯文本显示" style="margin:0;display:inline-block;max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(hostOf(l.website))}</span>`;return `<span style="display:flex;align-items:center;gap:6px;margin-left:22px;min-width:0">${inner}${fb}</span>`;}return fb?`<span style="display:flex;margin-left:22px">${fb}</span>`:"";})()}${(current==='replied'&&(l.latest_reply_cat||l.latest_reply_summary))?`<div style="margin-left:22px;margin-top:3px;display:flex;align-items:center;gap:6px;min-width:0">${l.latest_reply_cat?`<span class="pill" style="background:${catColor[l.latest_reply_cat]||'#6b7480'};color:var(--bg);flex-shrink:0">${esc(catLabel[l.latest_reply_cat]||l.latest_reply_cat)}</span>`:''}${l.latest_reply_summary?`<span class="co-name muted" style="font-size:12px" title="${esc(l.latest_reply_summary)}">🤖 ${esc(l.latest_reply_summary)}</span>`:''}</div>`:''}${reviewRowExtra(l)}</td>
           <td>${scoreBadge(l.match_score)}</td>
           <td class="stgcol"><span class="stg ${stg.cls}">${stg.badge}</span>${stg.sub?`<span class="stg-sub">${stg.sub}</span>`:""}${readyReplyBtn(l)}</td>
           <td>${l.email?esc(l.email):"<span class='miss'>缺邮箱</span>"}</td>
@@ -2169,6 +2207,25 @@
     const CH_COLS = { ch_linkedin:["linkedin","LinkedIn"], ch_whatsapp:["whatsapp","WhatsApp"], ch_facebook:["facebook","Facebook"], ch_instagram:["instagram","Instagram"], ch_phone:["phone","电话"] };
     // 统一「漏斗=筛选」图标（Feather filter，与排序三角 ▲/▼ 明显不同形）
     const FUNNEL_SVG = `<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="21 4 3 4 10 12.5 10 19 14 21 14 12.5"/></svg>`;
+
+    // ══ C5-4v：导航/页头图标 —— 单色线条，跟上面那个漏斗同一套画法 ══
+    //   `stroke="currentColor"` = 图标跟着文字颜色走，选中态/悬停态不用另配一份颜色。
+    //   ⚠️ 只换**导航与页头**的 emoji；行内徽章（🔥 有意向 / 💬 询价 等）本批不动 ——
+    //      那些是内容里的语义标记，不是界面骨架，混在一起改会把范围撑爆。
+    const ico = (d, size = 18) =>
+      `<svg class="nav-ico" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+    const ICON = {
+      // 待办事项：清单 + 勾（check-square 变体）
+      todo:    ico(`<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>`),
+      // 数据看板：柱状图（bar-chart）
+      dash:    ico(`<line x1="6" y1="20" x2="6" y2="13"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="18" y1="20" x2="18" y2="9"/>`),
+      // 机器房：齿轮（settings 简化版，去掉细齿以免 18px 下糊成一团）
+      machine: ico(`<circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.6 1.6 0 0 0 .32 1.77l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.6 1.6 0 0 0 15 19.4a1.6 1.6 0 0 0-1 1.47V21a2 2 0 1 1-4 0v-.09A1.6 1.6 0 0 0 9 19.4a1.6 1.6 0 0 0-1.77.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.6 1.6 0 0 0 4.6 15a1.6 1.6 0 0 0-1.47-1H3a2 2 0 1 1 0-4h.09A1.6 1.6 0 0 0 4.6 9a1.6 1.6 0 0 0-.33-1.77l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.6 1.6 0 0 0 9 4.6a1.6 1.6 0 0 0 1-1.47V3a2 2 0 1 1 4 0v.09a1.6 1.6 0 0 0 1 1.47 1.6 1.6 0 0 0 1.77-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.6 1.6 0 0 0 19.4 9v0a1.6 1.6 0 0 0 1.47 1H21a2 2 0 1 1 0 4h-.09a1.6 1.6 0 0 0-1.47 1z"/>`),
+      // 设置：滑杆（sliders）—— 与机器房的齿轮明显不同形，避免两个"齿轮感"图标撞脸
+      gear:    ico(`<line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>`),
+      // 补货：加号圆（plus-circle）
+      plus:    ico(`<circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>`, 16),
+    };
     const FILT_COL = { 1:"score", 2:"stage", 3:"email", 4:"category", 5:"country", 6:"ch_linkedin", 7:"ch_whatsapp", 8:"ch_facebook", 9:"ch_instagram", 10:"ch_phone" };  // 阶段列筛选恢复：与左栏漏斗互补——漏斗快切状态、阶段列多维交叉精筛，可叠加 国家/分类/邮箱/评分(AND)
     const SEL_OF = { country:"f-country", category:"f-type", email:"f-email", score:"f-score" };
     function buildHeaderFilters(){
@@ -2420,7 +2477,7 @@
             <div class="dp-left">
               ${/* 批㉖：列表上的三按钮墙收进这里 —— 抓取失败线索的**唯一**处理块（错误全文+改网址+人工批准+忽略）。 */''}
               ${(['analyzed','pending'].includes(lead.status) && a.match_score == null) ? `<div class="dp-card" style="border:1px solid #ecc4be">
-                <div class="k" style="color:#b0452e">⚠️ 抓取失败处理</div>
+                <div class="k" style="color:var(--red)">⚠️ 抓取失败处理</div>
                 <div class="hint" style="margin:4px 0 8px;white-space:pre-wrap">${esc(a.reason || '官网抓不到（原因未记录）')}</div>
                 <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
                   <input id="ff-url" class="inlinput" style="flex:1;min-width:220px" placeholder="改成正确的官网地址" value="${esc(lead.website)||''}">
@@ -2746,7 +2803,7 @@
       if (s == null) return '<span class="muted" title="未打分（多半是官网抓不到，不是不合格）">—</span>';
       // ⭐ 两档制：颜色就是决策 —— 绿=机器会自动发它，红=进翻牌堆等你复核。中间没有第三种颜色。
       const color = s >= SCORE_LINE ? "var(--green)" : "var(--red)";
-      return `<span class="pill" style="background:${color};color:#fff">${s}</span>`;
+      return `<span class="pill" style="background:${color};color:var(--bg)">${s}</span>`;
     };
 
     // 单条 AI 分析
@@ -2951,7 +3008,7 @@
         ? _fcKwRows.map(k=>{
             const on = _fcKwChecked.has(k.keyword);
             const stat = (k.sent_count>0)   // 已有发送数据才显示统计；新词不再显示"新词"标签（#45 Joe 嫌多余）
-              ? ` <span style="color:var(--muted);font-size:11px">发${k.sent_count}·回${k.reply_count}·${Math.round((k.reply_rate||0)*100)}%</span>`
+              ? ` <span style="color:var(--muted);font-size:12px">发${k.sent_count}·回${k.reply_count}·${Math.round((k.reply_rate||0)*100)}%</span>`
               : ``;
             return `<span class="kwitem ${on?'on':''}" data-kw="${esc(k.keyword)}" title="权重 ${k.weight!=null?k.weight:1}（按回复率自动加权）"><label><input type="checkbox" ${on?'checked':''} onchange="fcKwToggle(this)"> ${esc(k.keyword)}</label>${stat}${_fcKwManage?`<i onclick="delKeyword(${k.id})" title="删除">×</i>`:''}</span>`;
           }).join("")
@@ -3067,22 +3124,11 @@
           };
       } }
       renderBacklog(cfg.backlog);   // 批④ 积压刹车条
-      // 队列⑦ 每周自动刷新目录（零 Serper，默认开）——勾选即存，不必等「保存配置」
-      { const da=$("#fc-dir-auto"); if(da){
-          da.checked = cfg.dirAutoRefresh !== false;
-          const lastEl=$("#fc-dir-last");
-          if(lastEl) lastEl.textContent = cfg.dirLastRefresh
-            ? `（零 Serper；上次刷新 ${String(cfg.dirLastRefresh).slice(0,10)}，距上次 >7 天才真跑）`
-            : `（零 Serper；还没自动刷新过，开着的话后台会跑第一次）`;
-          da.onchange = async () => {
-            // 同 #dp-auto：关掉 = 停掉一路进货（免费目录），必须显式二次确认
-            if (!da.checked && !confirm("这会停止「每周自动刷新免费目录」——那是一路零 Serper 成本的新线索来源。\n确定要关闭吗？")) {
-              da.checked = true; return;
-            }
-            await fetch("/api/settings/search",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({dirAutoRefresh:da.checked})});
-            const m=$("#fc-free-msg"); if(m){ m.textContent = da.checked?"✅ 已开启每周自动刷新":"⚠️ 已关闭每周自动刷新"; setTimeout(()=>{ if(m) m.textContent=""; },2500); }
-          };
-      } }
+      // C5-4v（总工裁定）：「每周自动刷新免费目录」的 JS 接线**连 confirm 逻辑一并删除**。
+      //   它的 label 早在 C2-A 就撤了，抓取函数 C5-3 也删了 ⇒ 这段是**孤立接线**：
+      //   绑不到任何元素，却让读代码的人以为那个开关还在。
+      //   ⚠️ settings 键 `directory_autorefresh_enabled` 与后端 cron 闸**保留**；
+      //      将来接 IAQ 目录时前端连同入口一起新做（见 discover.ts 注册表处的注释）。
       // C5-3：NMEA / rvwithtito 两个免费目录源按钮的绑定已随死代码一并删除
       //   （按钮 C2-A 就撤了，函数壳留到本批）。将来接 IAQ 行业目录源时，
       //   从 discover.ts 的 ENABLED_DIRECTORY_SOURCES 注册表加起。
@@ -3130,7 +3176,9 @@
     // ══ C5-3：「➕ 补货」弹窗 ══
     //   打开时才读一次配置（关键词/国家/预算是估算的分母，不能拿旧值算）。
     window.openRestock = async () => {
-      $("#restock-overlay").classList.add("show");
+      const _ov=$("#restock-overlay");
+      _ov.classList.add("show");
+      _ov.classList.remove("rs-running");   // 重新打开 → 回到两卡（上一轮的结果态到此为止）
       const cfg = await loadSearchCfg();
       // ⚠️ 「今日还剩 X 次」的分母/分子都来自同一份 cfg.serper —— 与机器房读同一个字段。
       //    这是**决策时点的瞬态展示**（总工已批），机器房仍是它唯一的常驻展示位。
@@ -3201,7 +3249,11 @@
       const kws = getSelectedKeywords();
       if (_fcKwRows.length && !kws.length) { $("#dp-msg").textContent = "请至少勾选一个关键词"; return; }
       pipelineRunning = true;
-      ["dp-run","dp-save"].forEach(id=>$("#"+id).disabled=true);
+      // C5-4v B：跑起来 → 两卡收起，只显示进度区。**跑完不自动展开**：
+      //   Joe 要能看完"新增 N 家 → 去待分析"再走，展开回去会把结果挤没。
+      //   下次开弹窗时 openRestock 会清掉这个类。
+      { const ov=$("#restock-overlay"); if(ov) ov.classList.add("rs-running"); }
+      ["dp-run","dp-save"].forEach(id=>{ const e=$("#"+id); if(e) e.disabled=true; });
       $("#dp-msg").textContent = "";
       { const rb=$("#dp-result"); if(rb) rb.innerHTML = ""; }
       $("#dp-progress").style.display = "block";
@@ -3251,7 +3303,10 @@
         loadStats(); loadList(); loadFacets();
       } finally {
         pipelineRunning = false;
-        ["dp-run","dp-save"].forEach(id=>$("#"+id).disabled=false);
+        // ⚠️ `dp-save` 现在住在设置页方向盘，弹窗单独打开时它可能不在 DOM 里 ——
+        //    原来这行是 `$("#"+id).disabled=false` 无守卫，一旦取到 null 就抛，
+        //    而它在 finally 里 ⇒ **会把真正的错误吞掉换成一个 TypeError**。
+        ["dp-run","dp-save"].forEach(id=>{ const e=$("#"+id); if(e) e.disabled=false; });
       }
     }
     // ⭐ 折叠一律用 `div + hidden`，**不用 `<details>` 的原生折叠**：本地渲染器不实现它 ——
@@ -3305,10 +3360,10 @@
         if (tbl && tbl.parentNode) tbl.parentNode.insertBefore(el, tbl);
       }
       if (!orphans.length){ el.style.display='none'; return; }
-      el.style.display=''; el.style.cssText += ";margin:0 0 10px;border:1px solid #e6d3a3;background:#f7efdd;border-radius:8px;padding:10px 12px";
-      el.innerHTML = `<div style="font-weight:600;color:#8a5a00;margin-bottom:6px">⚠️ ${orphans.length} 封回复没匹配到线索 —— 这是真人给你回的信，别让它烂在这</div>`
+      el.style.display=''; el.style.cssText += ";margin:0 0 10px;border:1px solid #e6d3a3;background:var(--tint-amber);border-radius:8px;padding:10px 12px";
+      el.innerHTML = `<div style="font-weight:600;color:var(--amber);margin-bottom:6px">⚠️ ${orphans.length} 封回复没匹配到线索 —— 这是真人给你回的信，别让它烂在这</div>`
         + orphans.map(o=>`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid #e6d3a3">
-            <span class="pill" style="background:${catColor[o.category]||'#6b7480'};color:#fff;flex-shrink:0">${esc(catLabel[o.category]||o.category||'未分类')}</span>
+            <span class="pill" style="background:${catColor[o.category]||'#6b7480'};color:var(--bg);flex-shrink:0">${esc(catLabel[o.category]||o.category||'未分类')}</span>
             <b style="flex-shrink:0">${esc(o.from_email)}</b>
             <span class="muted" style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(o.content||'')}">${esc(o.summary||o.subject||'')}</span>
             <span style="flex:1"></span>
@@ -3525,7 +3580,7 @@
       //   老代码把 1000 静默截成 500 还回 ok:true —— "接受了请求、存了另一个数、什么都不说"
       //   正是本项目一路在修的那种病，UI 这一层同样不许犯。
       const clampNote = res.daily_send_limit_clamped
-        ? `<br><span style="color:#7a5410">⚠️ 你输入的是 ${esc(String($("#cfg-limit").value))}，超过系统上限 ${res.daily_send_limit_max}，已按 <b>${res.daily_send_limit}</b> 存入。</span>`
+        ? `<br><span style="color:var(--amber)">⚠️ 你输入的是 ${esc(String($("#cfg-limit").value))}，超过系统上限 ${res.daily_send_limit_max}，已按 <b>${res.daily_send_limit}</b> 存入。</span>`
         : "";
       $("#sendcfg-result").innerHTML = (bad.length
         ? `<span style="color:var(--danger,#c0392b)">⚠️ 有 ${bad.length} 段没存上：${esc(bad.join("；"))}</span>`
@@ -3634,7 +3689,7 @@
         if (d.replied>0) bars += `<rect x="${rx.toFixed(1)}" y="${yOf(d.replied).toFixed(1)}" width="${bw.toFixed(1)}" height="${(y0-yOf(d.replied)).toFixed(1)}" fill="#1e7a4f" rx="1"><title>${md} 回复 ${d.replied}</title></rect>`;
         if (i%3===0 || i===n-1) bars += `<text x="${cx.toFixed(1)}" y="${H-7}" font-size="9" fill="#4d5762" text-anchor="middle">${md}</text>`;
       });
-      return `<div class="dash-legend"><span><i style="background:#2f6fd6"></i>每日发送</span><span><i style="background:#1e7a4f"></i>每日回复</span><span class="muted" style="margin-left:auto">峰值 ${maxV}</span></div>
+      return `<div class="dash-legend"><span><i style="background:var(--blue)"></i>每日发送</span><span><i style="background:var(--green)"></i>每日回复</span><span class="muted" style="margin-left:auto">峰值 ${maxV}</span></div>
         <svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px;display:block">
           <line x1="${padL}" y1="${y0}" x2="${W-padR}" y2="${y0}" stroke="#e6e9ed" stroke-width="1"/>
           ${bars}
@@ -3741,8 +3796,8 @@
       const s = (t && t.sent) || {}, f = (t && t.failed) || {};
       const sent = s.followup || 0, failed = f.followup || 0;
       if (sent > 0 && failed === 0) return `今天已发出 <b>${sent}</b> 封「无回复自动跟进」（那条路不受这个开关控制）。`;
-      if (sent > 0 && failed > 0)   return `今天「无回复自动跟进」发出 <b>${sent}</b> 封、<b style="color:#b03a2e">失败 ${failed} 封</b>（那条路不受这个开关控制）。`;
-      if (failed > 0)               return `⚠️ 今天「无回复自动跟进」<b style="color:#b03a2e">一封也没发出去（${failed} 次失败）</b> —— 那条路虽不受这个开关控制，但它现在是坏的。`;
+      if (sent > 0 && failed > 0)   return `今天「无回复自动跟进」发出 <b>${sent}</b> 封、<b style="color:var(--red)">失败 ${failed} 封</b>（那条路不受这个开关控制）。`;
+      if (failed > 0)               return `⚠️ 今天「无回复自动跟进」<b style="color:var(--red)">一封也没发出去（${failed} 次失败）</b> —— 那条路虽不受这个开关控制，但它现在是坏的。`;
       return `今天「无回复自动跟进」也是 <b>0 封</b>（没有失败记录 ⇒ 是今天没有到跟进时点的线索，不是它坏了）。`;
     }
 
@@ -3792,7 +3847,7 @@
           · <b>爬坡保护</b>：${rampNote}<br>
           · <b>自动补邮箱</b>：${(H.pool||{}).find_email_enabled
               ? `已开（每轮免费抓公开联系页补进来，<b>不用 Hunter 积分</b>）${(H.pool||{}).find_email_last?` · 最近：${esc((H.pool||{}).find_email_last)}`:` · 还没补到过`}`
-              : `<span style="color:#8a5225">已关</span> —— 已批准但缺邮箱的线索将一直卡着，机器发不出去`}<br>
+              : `<span style="color:var(--amber)">已关</span> —— 已批准但缺邮箱的线索将一直卡着，机器发不出去`}<br>
           · <b>开信率不显示</b>：Apple 隐私保护与安全网关会伪造开信，冷发场景下这个数不可信，给了只会让人做错决定。
         </div>`;
     }
@@ -3813,7 +3868,7 @@
     window.openReplyInbox = async (tab) => {
       if (tab) { riTab = tab; riOpenId = null; }
       showMainView('replies');
-      const head = pageHeader('📬 回复箱','客户回信 · 一行一封（旧「已回复」页是一行一个公司）');
+      const head = pageHeader('回复箱','');
       $("#v-page").innerHTML = head + `<p class="hint">加载中…</p>`;
       const d = await fetch(`/api/replies/inbox?tab=${encodeURIComponent(riTab)}`).then(r=>r.json()).catch(e=>({error:String(e)}));
       if (d.error){ $("#v-page").innerHTML = head + `<div class="load-error">读取失败：${esc(d.error)}</div>`; return; }
@@ -3822,8 +3877,8 @@
         <div onclick="openReplyDetail(${it.id})" style="cursor:pointer;padding:10px 12px;border-bottom:1px solid var(--border)">
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             <b>${esc(it.company_name||it.from_email||'(未知)')}</b>
-            ${it.category?`<span class="pill" style="background:${catColor[it.category]||'#6b7480'};color:#fff">${esc(catLabel[it.category]||it.category)}</span>`:''}
-            ${it.handled_at?`<span class="pill" style="background:#d3e9dc;color:#1e6b45">已处理</span>`:''}
+            ${it.category?`<span class="pill" style="background:${catColor[it.category]||'#6b7480'};color:var(--bg)">${esc(catLabel[it.category]||it.category)}</span>`:''}
+            ${it.handled_at?`<span class="pill" style="background:var(--tint-green);color:var(--green)">已处理</span>`:''}
             <span class="hint">${esc((it.received_at||'').slice(0,16))}</span>
           </div>
           <div class="hint" style="margin-top:3px;color:var(--text)">${esc(it.preview||'(空)')}</div>
@@ -3860,7 +3915,7 @@ ${esc(d.ours.body||'')}</div></details>`
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             <b>${esc(d.company_name||d.from_email||'(认不出主人)')}</b>
             <span class="hint">${esc(d.from_email||'')} · ${esc((d.received_at||'').slice(0,16))}</span>
-            ${d.handled_at?`<span class="pill" style="background:#d3e9dc;color:#1e6b45">已处理 ${esc(String(d.handled_at).slice(0,16))}</span>`:''}
+            ${d.handled_at?`<span class="pill" style="background:var(--tint-green);color:var(--green)">已处理 ${esc(String(d.handled_at).slice(0,16))}</span>`:''}
           </div>
           <div class="sec-title" style="margin-top:10px">客户这次说的</div>
           <div style="white-space:pre-wrap">${esc(d.clean||'(空)')}</div>
@@ -3921,12 +3976,12 @@ ${esc(d.ours.body||'')}</div></details>`
 
     async function openDashboard(retried){
       showMainView('dashboard');
-      $("#v-page").innerHTML = pageHeader('📊 数据看板','获客漏斗与关键指标') + `<p class="hint">加载中…</p>`;
+      $("#v-page").innerHTML = pageHeader('数据看板','') + `<p class="hint">加载中…</p>`;
       const [d, H] = await Promise.all([
         fetch("/api/dashboard").then(r=>r.json()).catch(e=>({error:String(e)})),
         fetch("/api/health/sending").then(r=>r.json()).catch(()=>null),   // 健康度取不到不该拖垮整个看板
       ]);
-      if (d.error){ $("#v-page").innerHTML = pageHeader('📊 数据看板','') + `<div class="load-error">${loadErrorHtml('dash-retry', retried)}</div>`;
+      if (d.error){ $("#v-page").innerHTML = pageHeader('数据看板','') + `<div class="load-error">${loadErrorHtml('dash-retry', retried)}</div>`;
         const b=$("#dash-retry"); if(b) b.onclick=()=>openDashboard(true); return; }
       const sb = d.scoreBuckets||{}, r = d.rates||{}, f = d.funnel||{}, F = s => f[s]||0;
       // ⭐ 两档制：「高分线索(≥80)」换成「翻牌堆待复核(<60)」。
@@ -3971,14 +4026,14 @@ ${esc(d.ours.body||'')}</div></details>`
       // 近 14 天 3 色柱（新增/发信/回复）+ 日期轴
       const dl = d.daily||[]; const tmax = Math.max(1, ...dl.map(x=>Math.max(x.neu||0,x.sent||0,x.replied||0)));
       const trend = `<div style="display:flex;align-items:flex-end;gap:3px;height:84px">${dl.map(x=>`<div title="${x.date} 新增${x.neu||0}·发信${x.sent}·回复${x.replied}" style="flex:1;display:flex;align-items:flex-end;gap:1px;height:100%">
-        <div style="flex:1;background:#2f6fd6;height:${((x.neu||0)/tmax*100).toFixed(0)}%;min-height:1px"></div>
-        <div style="flex:1;background:#8a5a00;height:${(x.sent/tmax*100).toFixed(0)}%;min-height:1px"></div>
-        <div style="flex:1;background:#1e7a4f;height:${(x.replied/tmax*100).toFixed(0)}%;min-height:1px"></div></div>`).join('')}</div>
-        <div style="display:flex;gap:3px;margin-top:3px">${dl.map((x,i)=>`<div style="flex:1;text-align:center;font-size:8px;color:var(--muted)">${i%2===0?esc(x.date.slice(5)):''}</div>`).join('')}</div>
-        <div class="hint" style="margin-top:5px"><span style="color:#2f6fd6">■</span> 新增　<span style="color:#8a5a00">■</span> 发信　<span style="color:#1e7a4f">■</span> 回复</div>`;
+        <div style="flex:1;background:var(--blue);height:${((x.neu||0)/tmax*100).toFixed(0)}%;min-height:1px"></div>
+        <div style="flex:1;background:var(--amber);height:${(x.sent/tmax*100).toFixed(0)}%;min-height:1px"></div>
+        <div style="flex:1;background:var(--green);height:${(x.replied/tmax*100).toFixed(0)}%;min-height:1px"></div></div>`).join('')}</div>
+        <div style="display:flex;gap:3px;margin-top:3px">${dl.map((x,i)=>`<div style="flex:1;text-align:center;font-size:12px;color:var(--muted)">${i%2===0?esc(x.date.slice(5)):''}</div>`).join('')}</div>
+        <div class="hint" style="margin-top:5px"><span style="color:var(--blue)">■</span> 新增　<span style="color:var(--amber)">■</span> 发信　<span style="color:var(--green)">■</span> 回复</div>`;
       // 批④ 数据看板 = 体检报告：只回答"系统健康吗、哪里漏水"，不告诉你今天干嘛（那是待办事项的活）。
       // 已删：「现在最该做」（与待办事项完全重复）、「线索状态分布」（与左栏漏斗同数据两套叫法且口径打架）。
-      $("#v-page").innerHTML = pageHeader('📊 数据看板','系统健康 · 哪里漏水（今天干嘛去「今天」）') + healthHtml(H, N_MIN) + `
+      $("#v-page").innerHTML = pageHeader('数据看板','') + healthHtml(H, N_MIN) + `
         ${enoughN?'':`<div class="db-note">📐 已发 <b>${denom}</b> 家，未达统计门槛 <b>${N_MIN}</b> —— 下面的比率只给<b>计数</b>，不下结论。
           样本太小的比率会骗人（如 5/20 = 25% 退订，置信区间约 9%–49%，纯噪音）。先把量发上去，到 ${N_MIN}+ 再看。</div>`}
         <div class="kpi-row">${kpi(d.total,'线索总数')}${kpi(d.analyzedCount||0,'已分析')}${kpi(d.sentLeads||0,'已触达(家)')}${kpi(d.noEmailCount||0,'缺邮箱','#8a5225')}
@@ -4031,9 +4086,9 @@ ${esc(d.ours.body||'')}</div></details>`
     //        「322家待发送」那条假数（口径已换成真能发的 sendable）、页内动作按钮。
     async function openToday(retried){
       showMainView('today');
-      $("#v-page").innerHTML = pageHeader('📋 今天','今天先干哪一件') + `<p class="hint">加载中…</p>`;
+      $("#v-page").innerHTML = pageHeader('待办事项','') + `<p class="hint">加载中…</p>`;
       const d = await fetch("/api/today").then(r=>r.json()).catch(e=>({error:String(e)}));
-      if (d.error){ $("#v-page").innerHTML = pageHeader('📋 今天','') + `<div class="load-error">${loadErrorHtml('today-retry', retried)}</div>`;
+      if (d.error){ $("#v-page").innerHTML = pageHeader('待办事项','') + `<div class="load-error">${loadErrorHtml('today-retry', retried)}</div>`;
         const b=$("#today-retry"); if(b) b.onclick=()=>openToday(true); return; }
       const serper = d.serper||{};
       const overBudget = serper.budget!=null && serper.usedToday>=serper.budget && serper.budget>0;
@@ -4136,7 +4191,7 @@ ${esc(d.ours.body||'')}</div></details>`
               <div onclick="openReplyDetail(${it.id})" style="cursor:pointer;padding:10px 12px;border-bottom:1px solid var(--border);border-left:3px solid var(--red)">
                 <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
                   <b>${esc(it.company_name||it.from_email||'(未知)')}</b>
-                  ${it.category?`<span class="pill" style="background:${catColor[it.category]||'#6b7480'};color:#fff">${esc(catLabel[it.category]||it.category)}</span>`:''}
+                  ${it.category?`<span class="pill" style="background:${catColor[it.category]||'#6b7480'};color:var(--bg)">${esc(catLabel[it.category]||it.category)}</span>`:''}
                   <span class="hint">${esc((it.received_at||'').slice(0,16))}</span>
                 </div>
                 <div class="hint" style="margin-top:3px;color:var(--text)">${esc(it.preview||'(空)')}</div>
@@ -4159,7 +4214,7 @@ ${esc(d.ours.body||'')}</div></details>`
         <button class="tri-go" onclick="gotoGroup('review')">去看看 →</button></div>`;
       }
 
-      $("#v-page").innerHTML = pageHeader('📋 今天','三句话看完：机器干了什么 · 谁在等你 · 要不要动手')
+      $("#v-page").innerHTML = pageHeader('待办事项','')
         + `<div class="say-list">
              <div class="say ${notIgnited?'say-mute':''}"><span class="say-i">📤</span><span class="say-t">${sentLine}</span></div>
              <div class="say ${hot>0?'say-hot':''}"><span class="say-i">${hot>0?'🔥':'📭'}</span><span class="say-t">${replyLine}</span></div>
@@ -4179,7 +4234,7 @@ ${esc(d.ours.body||'')}</div></details>`
     // ⚠️ 这一页**允许**出现工程术语：进来的人就是来看内部的。首页一个都不许有。
     window.openMachineRoom = async function openMachineRoom(retried){
       showMainView('machine');
-      $("#v-page").innerHTML = pageHeader('🛠 机器房','机器内部：钥匙 · 预算 · 闸门 · 班次。日常不用看') + `<p class="hint">加载中…</p>`;
+      $("#v-page").innerHTML = pageHeader('机器房','') + `<p class="hint">加载中…</p>`;
       // ⚠️ C5-3：`scfg` = /api/settings/search，**本批新增的一路**。
       //    机器房原来只读 ignition / sending / today —— 我第一版把「后台自动搜索」「轮转进度」
       //    写成 `cfg.discoveryEnabled` / `cfg.discoveryCursor`，而 `cfg` 是 sending，
@@ -4191,7 +4246,7 @@ ${esc(d.ours.body||'')}</div></details>`
         fetch("/api/today").then(r=>r.json()).catch(()=>null),
         fetch("/api/settings/search").then(r=>r.json()).catch(()=>null),
       ]);
-      if (!ign || !cfg) { $("#v-page").innerHTML = pageHeader('🛠 机器房','') + `<div class="load-error">${loadErrorHtml('mr-retry', retried)}</div>`;
+      if (!ign || !cfg) { $("#v-page").innerHTML = pageHeader('机器房','') + `<div class="load-error">${loadErrorHtml('mr-retry', retried)}</div>`;
         const b=$("#mr-retry"); if(b) b.onclick=()=>openMachineRoom(true); return; }
 
       const capRows = (ign.capabilities||[]).map(c=>`
@@ -4208,7 +4263,7 @@ ${esc(d.ours.body||'')}</div></details>`
            —— 新域一天暴增最容易被判垃圾，这道闸让它每天最多涨 50%</span>`
         : `关 · 直接用天花板 <b>${cfg.daily_send_limit}</b> 封<span class="hint">（新发件域建议开着）</span>`;
 
-      $("#v-page").innerHTML = pageHeader('🛠 机器房','机器内部：钥匙 · 预算 · 闸门 · 班次。日常不用看')
+      $("#v-page").innerHTML = pageHeader('机器房','')
         + `<div class="fc-card"><div class="sec-title">🔌 点火状态 —— ${ign.ignitedCount}/${ign.total} 项就绪${ign.coreReady?'（核心链路已通）':'（核心链路未通）'}</div>
              <table class="mr-tab"><tbody>${capRows}</tbody></table>
              <p class="hint">配法：<code>npx wrangler secret put &lt;钥匙名&gt;</code>（由 Joe 亲手配，值不经过任何窗口）</p></div>
@@ -4279,7 +4334,7 @@ ${esc(d.ours.body||'')}</div></details>`
              </div>
            </div>
 
-           <p class="hint" style="margin-top:14px"><a href="javascript:void(0)" onclick="openToday()">← 回今天</a></p>`;
+           <p class="hint" style="margin-top:14px"><a href="javascript:void(0)" onclick="openToday()">← 回待办事项</a></p>`;
       // 机器房要显示轮转进度/自动搜索状态，这些字段来自 /api/settings/search —— 由 loadSearchCfg 统一读，
       // 这里只消费。⚠️ 一处读取、两处消费，不为此开第二个后端口子。
     };
@@ -4322,24 +4377,19 @@ ${esc(d.ours.body||'')}</div></details>`
     function esc(s){ return (s==null?"":String(s)).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 
     // 显示当前登录用户（crm.airsonde.com 经 Cloudflare Access 登录时有邮箱）
-    fetch("/api/me").then(r=>r.json()).then(m=>{
-      if (m && m.email) $("#whoami").innerHTML = `👤 ${esc(m.email)} · <a href="/cdn-cgi/access/logout">退出</a>`;
-      // 左栏账号菜单的收起态文案。**取不到邮箱也要给一个可点的标签** ——
-      // 否则 Access 那边一抖，退出入口就整个消失了，而那正是最需要它的时刻。
-      const w = $("#acct-who");
-      if (w) w.textContent = (m && m.email) ? `👤 ${m.email}` : "👤 账号";
-    }).catch(() => { const w = $("#acct-who"); if (w) w.textContent = "👤 账号"; });
+    // ⚠️ C5-4v：左栏账号菜单删掉后，**这里是退出的唯一入口**。
+    //    被删的那块带着一条保护：「取不到邮箱也要给一个可点的标签 —— 否则 Access 一抖，
+    //    退出入口就整个消失，而那正是最需要它的时刻」。收敛成一处时**必须把这条保护搬过来**，
+    //    否则"合并"就等于把那个保证弄丢了（原来 #whoami 是拿不到邮箱就什么都不渲染）。
+    const _renderWhoami = (email) => {
+      const el = $("#whoami"); if (!el) return;
+      el.innerHTML = (email ? `👤 ${esc(email)}` : `👤 <span class="hint">账号读不到</span>`)
+        + ` · <a href="/cdn-cgi/access/logout">退出</a>`;   // 退出永远在，且是真 <a href>，不经 JS
+    };
+    fetch("/api/me").then(r=>r.json())
+      .then(m => _renderWhoami(m && m.email))
+      .catch(() => _renderWhoami(null));
 
-    // ⭐ 账号菜单的两个**增强**：Esc 关闭 / 点击外部关闭。
-    //   ⚠️ 它们坏了的后果只是"菜单不自动收起"（用户看得见、再点一下即可），
-    //      **绝不影响退出本身** —— 退出那一项是真 <a href>，不经任何 JS。
-    //      展开/收起本身由原生 <details> 承担，零 JS。
-    (function acctMenuEnhance(){
-      const d = document.getElementById("acct-menu");
-      if (!d) return;
-      document.addEventListener("keydown", (e) => { if (e.key === "Escape" && d.open) d.open = false; });
-      document.addEventListener("click", (e) => { if (d.open && !d.contains(e.target)) d.open = false; });
-    })();
 
     // 预加载一键开聊话术（用于 WhatsApp 预填 / 复制）
     fetch("/api/settings/sending").then(r=>r.json()).then(c=>{ if (c && c.chat_script) _chatScript = c.chat_script; }).catch(()=>{});
