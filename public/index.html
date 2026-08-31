@@ -663,7 +663,10 @@
       <div class="k muted" style="margin-top:8px">公司地址 <span class="hint">（法规要求：每封商业邮件的页脚必须有实体地址）</span></div>
       <textarea id="cfg-address" style="min-height:60px" placeholder="e.g. AirSonde, 123 Example St, City, Country"></textarea>
       <div class="k muted" style="margin-top:8px">卖点 <span class="hint">（AI 写信时可引用；⚠️ 只写站得住的事实）</span></div>
-      <textarea id="cfg-selling" style="min-height:70px" placeholder="e.g. Factory-direct IAQ monitors (CO2/PM2.5/TVOC); OEM & private-label; flexible MOQs.（认证/产能/案例未经工厂书面确认前不要写）"></textarea>
+      <!-- C6-B/P2-4：placeholder 里的 "flexible MOQs" 删掉 —— 它就在"只写站得住的事实"那句提示旁边，
+           却在**示范一句我们答不上来的商务承诺**（MOQ 是工厂问题清单三-9 未答项），
+           而这个框的内容会被 AI 直接引用进真发的开发信。Y2 清了 landing/卖点默认值，漏了这一处。 -->
+      <textarea id="cfg-selling" style="min-height:70px" placeholder="e.g. Factory-direct IAQ monitors (CO2/PM2.5/TVOC); OEM & private-label.（认证/产能/MOQ/案例未经工厂书面确认前不要写）"></textarea>
       <div class="k muted" style="margin-top:8px">开场白 <span class="hint">（「一键开聊」用；{company} 会替换成公司名）</span></div>
       <textarea id="cfg-chatscript" style="min-height:60px" placeholder="Hi {company} team — AirSonde builds air quality monitors factory-direct…"></textarea>
       <div class="k muted" style="margin-top:8px">存档邮箱 <span class="hint">（选填；填了之后每封外发都密送一份到这里）</span></div>
@@ -673,7 +676,7 @@
       <div class="sec-title" style="margin-top:20px">② 机器开关</div>
       <div class="auto-box">
         <label class="auto-row"><input type="checkbox" id="cfg-auto-approve">
-          <span><b>自动批准</b> <span class="hint">≥<span id="cfg-auto-min">60</span> 分的线索直接进「待联系」，不用你点</span></span></label>
+          <span><b>自动批准</b> <span class="hint">≥<span id="cfg-auto-min">…</span> 分的线索直接进「待联系」，不用你点</span></span></label>
         <label class="auto-row"><input type="checkbox" id="cfg-auto-send">
           <span><b>自动发送</b> <span class="hint">后台每小时自动发已批准的；退订率过高会自动停发</span></span></label>
       </div>
@@ -782,7 +785,10 @@
             <span class="hint" id="fc-profile-badge"></span>
           </div>
           <div class="hint" id="fc-profile-summary" style="margin:4px 0;cursor:pointer" onclick="toggleProfile()">（加载中…）</div>
-          <div class="hint" style="margin:3px 0 8px">所有来源（🔍关键词搜索 / 🚢NMEA / 🚐RV）抓来的线索，都用这份画像给 AI 打分——越具体越准。</div>
+          <!-- C6-B/P3-7：原文列举「🚢NMEA / 🚐RV」—— 那是上游 Wanew 的船舶电子/房车渠道，
+               C2-A 已把这两个目录按钮撤掉，这句提示没跟着撤，于是**错行业的名字一直摆在 Joe 眼前**。
+               改成不列来源：来源会变，而"都用这份画像打分"这件事不会变，本来就不该在这里点名。 -->
+          <div class="hint" style="margin:3px 0 8px">抓来的线索都用这份画像给 AI 打分——越具体越准。</div>
           <textarea id="fc-profile" class="fc-collapsed" placeholder="描述你的理想客户；留空用内置默认画像"></textarea>
         </div>
 
@@ -1898,7 +1904,11 @@
       if(r.disabled){ toolMsg("自动跟进开关是关的，未发送。"); return; }
       const skipped=(r.results||[]).filter(x=>!x.ok);
       toolMsg(`✅ 已发跟进 ${r.sent}/${r.processed} 封`);
-      await uiConfirm({ title:`${label}完成：${r.sent} 封`, body:`选中 ${ids.length} 条中实际发出 ${r.sent} 封。${ids.length-r.processed>0?`\n${ids.length-r.processed} 条未进入发送（冷却未到／已跟够次数／状态不符）。`:""}${skipSummary(skipped.map(x=>({reason:x.skipped||x.error||"未知"})))}`, confirmText:"知道了", cancelText:"关闭" });
+      // 🔴 C6-B/P1-2：这里原本是 `${label}` —— 本作用域**根本没有 label**（形参叫 _warm）。
+      //    ReferenceError 抛在**信已经发出去之后**：弹窗不出、下一行 afterMutate() 不跑，
+      //    于是列表不刷新 —— 看起来像"没发成"，其实全发了。与 `b is not defined` 同族：
+      //    页面前半段跑得好好的，错误在尾部，症状伪装成"没反应"。
+      await uiConfirm({ title:`跟进完成：${r.sent} 封`, body:`选中 ${ids.length} 条中实际发出 ${r.sent} 封。${ids.length-r.processed>0?`\n${ids.length-r.processed} 条未进入发送（冷却未到／已跟够次数／状态不符）。`:""}${skipSummary(skipped.map(x=>({reason:x.skipped||x.error||"未知"})))}`, confirmText:"知道了", cancelText:"关闭" });
       afterMutate();
     };
     function toggleScoreSort(){
@@ -3416,7 +3426,12 @@
       $("#cfg-auto-limit").disabled = _autoFollow;
       { const sync = () => { $("#cfg-auto-limit").disabled = $("#cfg-auto-follow").checked; };
         $("#cfg-auto-follow").onchange = sync; $("#cfg-auto-custom").onchange = sync; }
-      $("#cfg-auto-min").textContent = c.auto_approve_min || 70;
+      // 🔴 C6-B/P3-6：原来是 `|| 70`，而服务端真值是 **60**（AUTO_APPROVE_MIN_DEFAULT）。
+      //    字段缺失时界面会**报一个从来不存在的数**，比不显示更坏 —— Joe 会照 70 去理解自动批准线。
+      //    这里不再自己编一个兜底常数（那正是"多处各写各的默认值"那个老病）：
+      //    读不到就说读不到，让缺失可见。
+      { const v = c.auto_approve_min;
+        $("#cfg-auto-min").textContent = Number.isFinite(Number(v)) ? String(Number(v)) : "读不到"; }
       $("#cfg-auto-used").textContent = `今天已自动发 ${c.auto_sent_today || 0} 封`;
       // 产能提示 / AI 用量 / 退订样本 —— **已随 C5-2 搬去机器房**（宪法 §2 + 铁律五：一个事实一个展示位）。
       _capacity = c.capacity || null;   // 仍读进来：机器房要用
@@ -4093,7 +4108,12 @@ ${esc(d.ours.body||'')}</div></details>`
         decideHtml = `<div class="sec-title" style="margin-top:18px">等你拍板</div>
           <div class="tri-row tri-warn"><span class="tri-icon">✅</span>
             <span class="tri-text"><b>${d.reviewCount}</b> 家已打分待批准<span class="tri-sub">批过之后机器自动发信</span></span>
-            <button class="tri-go" onclick="gotoGroup('pending')">去看看 →</button></div>`;
+            <!-- 🔴 C6-B/P1-3：原来传的是 'pending'，**不是合法格 key**（TABS 里只有
+             all/unscored/review/ready/sent/replied/won/ignored/blacklisted）。
+             它**不报错**：current 被设成 "pending"，但没有任何格会高亮，列表按一个不存在的
+             状态去查 —— 用户落进一个"看不出哪里不对"的空状态。这比抛异常更难发现。
+             「等你拍板」对应的格是**待审批 = review**。 -->
+        <button class="tri-go" onclick="gotoGroup('review')">去看看 →</button></div>`;
       }
 
       $("#v-page").innerHTML = pageHeader('📋 今天','三句话看完：机器干了什么 · 谁在等你 · 要不要动手')
