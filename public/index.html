@@ -483,6 +483,54 @@
     .prog-bar { height:100%; width:0; background:var(--blue); transition:width .35s; }
     .prog-log { font-size:13px; color:#3f4a56; margin-top:8px; min-height:20px; white-space:pre-line; }
     .fld { width:80px; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:6px 8px; border-radius:6px; }
+
+    /* ══ C5-2c 设置页样式改版（Joe：「能让它的 UI 更好看一些吗」）══
+       ⚠️ **纯样式**：元素 id、保存语义、勾选即存、_cfgLoaded 闸一律没动。
+       ⚠️ 全部选择器压在 `#v-settings` / `.set-page` 里 —— textarea 的等宽字体是**全局规则**，
+          找客户页的画像/关键词框也在用它，不能为了这一页把它掀了。 */
+    #v-settings .set-page { background:var(--panel); padding:16px; border-radius:12px; }
+    .set-card { background:var(--bg); border:1px solid var(--border); border-radius:12px;
+                padding:24px; margin:0 0 16px; max-width:760px; }
+    .set-card:last-of-type { margin-bottom:0; }
+    .set-card > .sec-title { font-size:15px; font-weight:600; color:var(--text); margin:0; }
+    .set-card > .sec-sub { font-size:12px; color:var(--muted); margin:2px 0 18px; line-height:1.5; }
+    /* 统一标签网格：左标签定宽 + 右控件。上下混排的两套体系全部并到这一套。 */
+    .set-grid { display:grid; grid-template-columns:140px minmax(0,1fr); gap:14px 16px; align-items:start; }
+    .set-grid > .k { color:var(--muted); font-size:13px; padding-top:8px; line-height:1.4; }
+    .set-grid > .v { min-width:0; }
+    .set-grid > .v > .hint { margin-top:6px; }
+    /* 控件宽度按内容定，不再一律 100% —— 一个公司名的框拉满 720px 只会显得空 */
+    .set-in { width:100%; max-width:420px; background:var(--bg); border:1px solid var(--border);
+              color:var(--text); padding:7px 10px; border-radius:8px; }
+    .set-page textarea { max-width:100%; border-radius:8px; padding:10px 12px;
+                         font-family:inherit; line-height:1.6; }   /* 去等宽：观感收益最大的一行 */
+    .set-num { width:88px; background:var(--bg); border:1px solid var(--border); color:var(--text);
+               padding:7px 10px; border-radius:8px; }
+    /* 数字框 + 单位 + 建议：三者永远在同一条基线上，四行之间对齐 */
+    .set-numrow { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .set-numrow .hint { margin:0; }
+    /* 提示只剩两种：字段 hint（12px muted）与这条浅色信息条。
+       原来蓝框 .transparency + 琥珀 pill + 灰字三样并存，同一类东西三种长相。 */
+    .set-note { background:var(--panel); border:1px solid var(--border); border-radius:8px;
+                padding:10px 12px; font-size:13px; color:var(--muted); line-height:1.55; margin:0 0 16px; }
+    .set-page .transparency { background:var(--panel); border:1px solid var(--border); color:var(--muted);
+                              border-radius:8px; padding:10px 12px; font-size:13px; margin:0 0 12px; }
+    .set-page #cfg-limit-badge { background:var(--panel); border:1px solid var(--border); color:var(--muted); }
+    .set-page .auto-box { border-radius:10px; padding:12px 14px; margin:0 0 4px; }
+    .set-page .auto-row { padding:6px 0; }
+    /* 动作条：保存是唯一实心；测试卡片是动作不是设置，降为描边次级 */
+    .set-actions { position:sticky; bottom:0; background:var(--bg); border-top:1px solid var(--border);
+                   box-shadow:0 -6px 14px -10px rgba(16,20,24,.35);
+                   margin:16px 0 0; padding:14px 24px; border-radius:0 0 12px 12px;
+                   display:flex; gap:10px; flex-wrap:wrap; align-items:center; max-width:760px; }
+    .btn-secondary { background:var(--bg); border:1px solid var(--border); color:var(--text); }
+    @media (max-width:820px) {
+      #v-settings .set-page { padding:10px; }
+      .set-card { padding:18px 16px; }
+      .set-grid { grid-template-columns:1fr; gap:6px 0; }      /* 窄屏改上下排，标签仍在控件之上 */
+      .set-grid > .k { padding-top:10px; }
+      .set-actions { padding:12px 16px; }
+    }
     .inlinput { flex:1; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:7px 10px; border-radius:6px; }
     /* 数据看板 */
     .dash-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(118px,1fr)); gap:10px; margin:14px 0 6px; }
@@ -644,7 +692,8 @@
          后面每个 .value= 都不执行 → 整张表单停在占位态、一个字的错误都不显示。 -->
     <div class="load-error" id="cfg-loaderr" style="display:none"></div>
     <div class="set-page">
-      <p class="hint">养域期建议每日上限从 10–20 起步，逐周提高。公司地址是冷邮件合规（CAN-SPAM）要求，会出现在每封信页脚，请填真实地址。</p>
+      <!-- C5-2c：顶部那句通栏提示**拆开收进了各自的卡**（养域期→②机器开关，地址合规→①你是谁）。
+           它原来把两件不相干的事说在一句里，而且离对应的输入框有半屏远 —— 说明贴着字段才有用。 -->
 <!-- 熔断横幅：只在熔断时出现，必须显眼 —— 自动发送停了而 Joe 不知道，比不停还糟 -->
       <div id="brk-banner" class="brk-banner" style="display:none"></div>
 
@@ -654,79 +703,106 @@
            ⚠️ 禁词表对本页生效（熔断/爬坡/算式…），所以这里的措辞是"新域保护""自动停发"。 -->
 
       <!-- ── ① 你是谁 —— 这些字会出现在每一封信里 ── -->
-      <div class="sec-title">① 你是谁</div>
-      <p class="hint" style="margin:0 0 6px">这几项会出现在每封开发信里（页脚 + 正文），收信人看得到。</p>
-      <div class="kv" style="grid-template-columns:110px 1fr">
-        <div class="k">公司名</div><div><input id="cfg-company" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:6px"></div>
-        <div class="k">官网</div><div><input id="cfg-website" placeholder="https://airsonde.com" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:6px"></div>
+      <div class="set-card">
+        <div class="sec-title">① 你是谁</div>
+        <div class="sec-sub">这几项会出现在每封开发信里（页脚 + 正文），收信人看得到。</div>
+        <div class="set-note">公司地址是冷邮件合规（CAN-SPAM）要求，会出现在每封信页脚，请填真实地址。</div>
+        <div class="set-grid">
+          <div class="k">公司名</div>
+          <div class="v"><input id="cfg-company" class="set-in"></div>
+
+          <div class="k">官网</div>
+          <div class="v"><input id="cfg-website" class="set-in" placeholder="https://airsonde.com"></div>
+
+          <div class="k">公司地址</div>
+          <div class="v"><textarea id="cfg-address" style="min-height:72px" placeholder="e.g. AirSonde, 123 Example St, City, Country"></textarea></div>
+
+          <div class="k">卖点</div>
+          <!-- C6-B/P2-4：placeholder 里的 "flexible MOQs" 删掉 —— 它就在"只写站得住的事实"那句提示旁边，
+               却在**示范一句我们答不上来的商务承诺**（MOQ 是工厂问题清单三-9 未答项），
+               而这个框的内容会被 AI 直接引用进真发的开发信。Y2 清了 landing/卖点默认值，漏了这一处。 -->
+          <div class="v"><textarea id="cfg-selling" style="min-height:76px" placeholder="e.g. Factory-direct IAQ monitors (CO2/PM2.5/TVOC); OEM & private-label.（认证/产能/MOQ/案例未经工厂书面确认前不要写）"></textarea>
+            <div class="hint">AI 写信时可引用；⚠️ 只写站得住的事实</div></div>
+
+          <div class="k">开场白</div>
+          <div class="v"><textarea id="cfg-chatscript" style="min-height:96px" placeholder="Hi {company} team — AirSonde builds air quality monitors factory-direct…"></textarea>
+            <div class="hint">「一键开聊」用；{company} 会替换成公司名</div></div>
+
+          <div class="k">存档邮箱</div>
+          <div class="v"><input id="cfg-bcc" class="set-in" placeholder="留空 = 不存档">
+            <div class="hint">选填；填了之后每封外发都密送一份到这里</div></div>
+        </div>
       </div>
-      <div class="k muted" style="margin-top:8px">公司地址 <span class="hint">（法规要求：每封商业邮件的页脚必须有实体地址）</span></div>
-      <textarea id="cfg-address" style="min-height:60px" placeholder="e.g. AirSonde, 123 Example St, City, Country"></textarea>
-      <div class="k muted" style="margin-top:8px">卖点 <span class="hint">（AI 写信时可引用；⚠️ 只写站得住的事实）</span></div>
-      <!-- C6-B/P2-4：placeholder 里的 "flexible MOQs" 删掉 —— 它就在"只写站得住的事实"那句提示旁边，
-           却在**示范一句我们答不上来的商务承诺**（MOQ 是工厂问题清单三-9 未答项），
-           而这个框的内容会被 AI 直接引用进真发的开发信。Y2 清了 landing/卖点默认值，漏了这一处。 -->
-      <textarea id="cfg-selling" style="min-height:70px" placeholder="e.g. Factory-direct IAQ monitors (CO2/PM2.5/TVOC); OEM & private-label.（认证/产能/MOQ/案例未经工厂书面确认前不要写）"></textarea>
-      <div class="k muted" style="margin-top:8px">开场白 <span class="hint">（「一键开聊」用；{company} 会替换成公司名）</span></div>
-      <textarea id="cfg-chatscript" style="min-height:60px" placeholder="Hi {company} team — AirSonde builds air quality monitors factory-direct…"></textarea>
-      <div class="k muted" style="margin-top:8px">存档邮箱 <span class="hint">（选填；填了之后每封外发都密送一份到这里）</span></div>
-      <input id="cfg-bcc" placeholder="留空 = 不存档" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:6px">
 
       <!-- ── ② 机器开关 —— 它替你做多少 ── -->
-      <div class="sec-title" style="margin-top:20px">② 机器开关</div>
-      <div class="auto-box">
-        <label class="auto-row"><input type="checkbox" id="cfg-auto-approve">
-          <span><b>自动批准</b> <span class="hint">≥<span id="cfg-auto-min">…</span> 分的线索直接进「待联系」，不用你点</span></span></label>
-        <label class="auto-row"><input type="checkbox" id="cfg-auto-send">
-          <span><b>自动发送</b> <span class="hint">后台每小时自动发已批准的；退订率过高会自动停发</span></span></label>
-      </div>
-      <div class="kv" style="grid-template-columns:130px 1fr;margin-top:10px">
-        <div class="k">每天最多发</div>
-        <div><input id="cfg-limit" type="number" min="1" style="width:100px;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:6px"> 封
-          <span class="hint" style="margin-left:6px">手动 + 自动 + 跟进 共用这一个数</span>
-          <span id="cfg-limit-badge" class="pill" style="display:none;margin-left:8px;background:#f7efdd;color:#7a5410"></span></div>
-
-        <div class="k">其中自动发</div>
-        <div>
-          <!-- ⭐ 魔法值改明控件：原来是"填 0 = 跟随系统闸"——**一个要靠记忆才懂的约定**。
-               现在两个选项各自说人话，选中哪个就是哪个，没有隐藏含义。 -->
-          <label style="display:block;cursor:pointer;margin-bottom:4px"><input type="radio" name="autolim" id="cfg-auto-follow" value="follow"> 跟上面一样（不单独限制）</label>
-          <label style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="radio" name="autolim" id="cfg-auto-custom" value="custom"> 单独限制为
-            <input id="cfg-auto-limit" type="number" min="1" style="width:70px;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:6px"> 封</label>
-          <span class="hint" id="cfg-auto-used"></span>
+      <div class="set-card">
+        <div class="sec-title">② 机器开关</div>
+        <div class="sec-sub">养域期建议每日上限从 10–20 起步，逐周提高。</div>
+        <div class="auto-box">
+          <label class="auto-row"><input type="checkbox" id="cfg-auto-approve">
+            <span><b>自动批准</b> <span class="hint">≥<span id="cfg-auto-min">…</span> 分的线索直接进「待联系」，不用你点</span></span></label>
+          <label class="auto-row"><input type="checkbox" id="cfg-auto-send">
+            <span><b>自动发送</b> <span class="hint">后台每小时自动发已批准的；退订率过高会自动停发</span></span></label>
         </div>
+        <!-- ⚠️ 这一句是**语义说明不是装饰**：这两个开关是勾选即存（不走下面的保存钮），
+             而改版后保存是全页唯一的实心按钮 —— 不说清楚，Joe 会以为勾了还得再按保存。
+             （总工 C5-2c ③ 明确允许加这一句短说明；勾选即存的逻辑一个字没动。） -->
+        <div class="hint" style="margin:0 0 16px">这两个开关改一下就立即生效，不用按保存。</div>
+        <div class="set-grid">
+          <div class="k">每天最多发</div>
+          <div class="v"><div class="set-numrow">
+              <input id="cfg-limit" type="number" min="1" class="set-num"> <span class="hint">封</span>
+              <span id="cfg-limit-badge" class="pill" style="display:none"></span></div>
+            <div class="hint">手动 + 自动 + 跟进 共用这一个数</div></div>
 
-        <div class="k">新域保护</div>
-        <div><label style="display:flex;gap:6px;align-items:center;cursor:pointer"><input id="cfg-ramp" type="checkbox">
-          <span class="hint">开着时每天发信量最多涨 50%，避免新域名被判垃圾邮件（建议保持开启）</span></label></div>
+          <div class="k">其中自动发</div>
+          <div class="v">
+            <!-- ⭐ 魔法值改明控件：原来是"填 0 = 跟随系统闸"——**一个要靠记忆才懂的约定**。
+                 现在两个选项各自说人话，选中哪个就是哪个，没有隐藏含义。 -->
+            <label style="display:flex;gap:6px;align-items:center;cursor:pointer;margin-bottom:8px"><input type="radio" name="autolim" id="cfg-auto-follow" value="follow"> 跟上面一样（不单独限制）</label>
+            <label class="set-numrow" style="cursor:pointer"><input type="radio" name="autolim" id="cfg-auto-custom" value="custom"> 单独限制为
+              <input id="cfg-auto-limit" type="number" min="1" class="set-num"> <span class="hint">封</span></label>
+            <div class="hint" id="cfg-auto-used"></div></div>
+
+          <div class="k">新域保护</div>
+          <div class="v"><label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer"><input id="cfg-ramp" type="checkbox" style="margin-top:3px">
+            <span class="hint" style="margin:0">开着时每天发信量最多涨 50%，避免新域名被判垃圾邮件（建议保持开启）</span></label></div>
+        </div>
       </div>
 
-      <div class="k muted" style="margin-top:12px">无回复自动跟进</div>
-      <label style="display:flex;gap:8px;align-items:center;cursor:pointer;margin:4px 0">
-        <input type="checkbox" id="fu-enabled"> <span class="hint">发出去没人回，自动再发一封</span>
-      </label>
-      <div class="kv" style="grid-template-columns:130px 1fr">
-        <div class="k">几天后跟进</div><div><input id="fu-delay" type="number" min="1" max="60" class="fld"> <span class="hint">建议 3-5</span></div>
-        <div class="k">点过链接的</div><div><input id="fu-engaged-delay" type="number" min="1" max="60" class="fld"> <span class="hint">更快更暖，建议 1-2</span></div>
-        <div class="k">最多跟几次</div><div><input id="fu-max" type="number" min="1" max="5" class="fld"> <span class="hint">建议 1-2</span></div>
-        <div class="k">多久后放弃</div><div><input id="fu-noreply" type="number" min="1" max="90" class="fld"> <span class="hint">跟满还没回音就归档，免得堆在「已发送」里挡住真该看的</span></div>
+      <!-- ── ③ 无回复自动跟进 ── -->
+      <div class="set-card">
+        <div class="sec-title">③ 无回复自动跟进</div>
+        <div class="sec-sub">发出去没人回，自动再发一封。</div>
+        <label style="display:flex;gap:8px;align-items:center;cursor:pointer;margin:0 0 16px">
+          <input type="checkbox" id="fu-enabled"> <span class="hint" style="margin:0">开启自动跟进</span>
+        </label>
+        <div class="set-grid">
+          <div class="k">几天后跟进</div><div class="v"><div class="set-numrow"><input id="fu-delay" type="number" min="1" max="60" class="set-num"> <span class="hint">建议 3-5</span></div></div>
+          <div class="k">点过链接的</div><div class="v"><div class="set-numrow"><input id="fu-engaged-delay" type="number" min="1" max="60" class="set-num"> <span class="hint">更快更暖，建议 1-2</span></div></div>
+          <div class="k">最多跟几次</div><div class="v"><div class="set-numrow"><input id="fu-max" type="number" min="1" max="5" class="set-num"> <span class="hint">建议 1-2</span></div></div>
+          <div class="k">多久后放弃</div><div class="v"><div class="set-numrow"><input id="fu-noreply" type="number" min="1" max="90" class="set-num"> <span class="hint">跟满还没回音就归档</span></div></div>
+        </div>
       </div>
 
-      <div class="k muted" style="margin-top:12px">飞书通知</div>
-      <div id="notify-status" class="transparency" style="margin:6px 0"></div>
-      <label style="display:flex;gap:8px;align-items:center;cursor:pointer"><input type="checkbox" id="ntf-enabled"> <span class="hint">有客户回信/询盘时推到群里</span></label>
-
-      <div class="sec-title">👤 当前账号</div>
-      <div class="transparency" id="whoami" style="margin:6px 0 0"></div>
+      <!-- ── ④ 飞书通知 + 当前账号 ── -->
+      <div class="set-card">
+        <div class="sec-title">④ 通知与账号</div>
+        <div class="sec-sub">有客户回信/询盘时推到群里。</div>
+        <div id="notify-status" class="transparency"></div>
+        <label style="display:flex;gap:8px;align-items:center;cursor:pointer;margin:0 0 16px"><input type="checkbox" id="ntf-enabled"> <span class="hint" style="margin:0">开启飞书通知</span></label>
+        <div class="k" style="color:var(--muted);font-size:13px;margin-bottom:6px">当前账号</div>
+        <div class="transparency" id="whoami" style="margin:0"></div>
+      </div>
 
       <!-- ⚠️ 保存语义没改：**一个「保存」按钮存全部**（发信设置 + 跟进 + 飞书一起存）。
-           没把任何开关做成"点了立即生效不用保存" —— 那会让 Joe 分不清哪些改动生效了。
-           「发送测试卡片」是**动作**不是设置，所以单独留一个按钮。 -->
-      <div class="actions" style="position:sticky;bottom:0;background:var(--panel);padding:12px 0;border-top:1px solid var(--border);margin-top:18px">
+           两个引擎开关是勾选即存（批㉒），上面卡片里已明说，这里不重复。
+           「发送测试卡片」是**动作**不是设置 → 降为描边次级钮，实心只留给保存。 -->
+      <div class="set-actions">
         <button class="primary" id="save-sendcfg">保存</button>
-        <button class="btn-amber" id="ntf-test">发送测试卡片</button>
-        <span class="hint" id="sendcfg-result"></span>
-        <span class="hint" id="ntf-result"></span>
+        <button class="btn-secondary" id="ntf-test">发送测试卡片</button>
+        <span class="hint" id="sendcfg-result" style="margin:0"></span>
+        <span class="hint" id="ntf-result" style="margin:0"></span>
       </div>
     </div>
   </div>
