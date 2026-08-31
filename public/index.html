@@ -648,88 +648,71 @@
 <!-- 熔断横幅：只在熔断时出现，必须显眼 —— 自动发送停了而 Joe 不知道，比不停还糟 -->
       <div id="brk-banner" class="brk-banner" style="display:none"></div>
 
-      <!-- 自动化（两档制）：≥60 有邮箱 → 机器自动批准+自动发；<60 → 进翻牌堆等 Joe 复核 -->
-      <div class="auto-box">
-        <div class="auto-title">🤖 自动化</div>
-        <label class="auto-row"><input type="checkbox" id="cfg-auto-approve">
-          <span><b>自动批准</b> <span class="hint">≥<span id="cfg-auto-min">60</span> 分 → 直接进「待联系」；&lt;60 分进翻牌堆等你复核</span></span></label>
-        <label class="auto-row"><input type="checkbox" id="cfg-auto-send">
-          <span><b>自动发送</b> <span class="hint">后台<b>每小时</b>自动发已批准的；退订率过高会自动熔断</span></span></label>
-        <div class="auto-row" style="padding-left:24px">
-          <span class="hint">自动发送每日上限</span>
-          <input id="cfg-auto-limit" type="number" min="0" style="width:70px;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:6px;margin-left:8px">
-          <span class="hint" id="cfg-auto-src" style="margin-left:8px"></span>
-          <span class="hint" id="cfg-auto-used" style="margin-left:8px"></span>
-          <!-- ⭐ P0-1 的灵魂：填超了**当场告诉他**，绝不悄悄砍。
-               Joe 原话："把每天发多少封的权限交给我，我会根据情况自己去调整。" -->
-          <div class="hint" id="cfg-capacity" style="margin-top:6px"></div>
-          <!-- ⭐ 批⑪C：今日 AI 用量 —— 只读状态，让 Joe 自己看见批⑦ 省下的钱 -->
-          <div class="hint" id="cfg-ai-usage" style="margin-top:4px"></div>
-        </div>
-        <div class="auto-row" style="padding-left:24px"><span class="hint" id="cfg-brk-stat"></span></div>
-      </div>
+      <!-- ══ C5-2 设置页（宪法 §2）：只留 Joe 会改的三组 ══
+           搬走的东西一律进机器房：产能算式 / 熔断样本 / 爬坡明细 / 发件域今日计数 / AI 用量。
+           它们不是没用，是**回答"机器怎么想的"** —— 那是机器房的职责，不是这一页的。
+           ⚠️ 禁词表对本页生效（熔断/爬坡/算式…），所以这里的措辞是"新域保护""自动停发"。 -->
 
+      <!-- ── ① 你是谁 —— 这些字会出现在每一封信里 ── -->
+      <div class="sec-title">① 你是谁</div>
+      <p class="hint" style="margin:0 0 6px">这几项会出现在每封开发信里（页脚 + 正文），收信人看得到。</p>
       <div class="kv" style="grid-template-columns:110px 1fr">
-        <div class="k">每日发信上限</div><div><input id="cfg-limit" type="number" min="1" style="width:100px;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:6px"><span class="hint" style="margin-left:8px">系统级总闸：手动+自动+跟进 全部共用，<b>与发件邮箱无关</b></span>
-          <span id="cfg-limit-badge" class="pill" style="display:none;margin-left:8px;background:#f7efdd;color:#7a5410"></span>
-          <div class="hint" id="cfg-limit-usage" style="margin-top:4px"></div>
-          <div style="margin-top:6px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-            <label style="display:flex;gap:6px;align-items:center;cursor:pointer"><input id="cfg-ramp" type="checkbox"><span class="hint">新域爬坡保护</span></label>
-            <span class="hint" id="cfg-ramp-detail"></span>
-          </div></div>
         <div class="k">公司名</div><div><input id="cfg-company" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:6px"></div>
         <div class="k">官网</div><div><input id="cfg-website" placeholder="https://airsonde.com" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:6px"></div>
       </div>
-      <p class="hint" style="margin:2px 0 0">官网会出现在每封开发信页脚(如 airsonde.com),让收信人知道你们的正式网站。发件域独立(候选 airsonde.net,待 Joe 确认,与官网域分开)。</p>
-      <div class="k muted" style="margin-top:8px">BCC 存档邮箱（#54，选填）</div>
-      <div><input id="cfg-bcc" placeholder="留空=关；填 outbox 公共邮箱(域待定)后所有外发自动密送一份" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:6px"></div>
-      <p class="hint" style="margin:2px 0 0">开发信/跟进/回信全部密送到这个邮箱留档。建好公共邮箱再填。</p>
-      <div class="k muted" style="margin-top:8px">发件域（只读观察）</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        <span class="pill" style="background:#e3f2e9;color:#1e6b45">sales@airsonde.net · 唯一发件人</span>
-        <span class="hint" id="cfg-primary-today"></span>
-      </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:4px">
-        <span class="pill" style="background:#f7efdd;color:#7a5410">(无退役旧域)</span>
-        <span class="hint" id="cfg-legacy-today"></span>
-      </div>
-      <p class="hint" style="margin:2px 0 0">全部出站(首触/跟进/确认/回信)一律走主发件域(占位 airsonde.net,待定);AirSonde 无退役旧域。<b>日限不按发件域分</b>——见上面的系统级总闸。</p>
-      <div class="k muted">公司地址（合规必填）</div>
+      <div class="k muted" style="margin-top:8px">公司地址 <span class="hint">（法规要求：每封商业邮件的页脚必须有实体地址）</span></div>
       <textarea id="cfg-address" style="min-height:60px" placeholder="e.g. AirSonde, 123 Example St, City, Country"></textarea>
+      <div class="k muted" style="margin-top:8px">卖点 <span class="hint">（AI 写信时可引用；⚠️ 只写站得住的事实）</span></div>
+      <textarea id="cfg-selling" style="min-height:70px" placeholder="e.g. Factory-direct IAQ monitors (CO2/PM2.5/TVOC); OEM & private-label; flexible MOQs.（认证/产能/案例未经工厂书面确认前不要写）"></textarea>
+      <div class="k muted" style="margin-top:8px">开场白 <span class="hint">（「一键开聊」用；{company} 会替换成公司名）</span></div>
+      <textarea id="cfg-chatscript" style="min-height:60px" placeholder="Hi {company} team — AirSonde builds air quality monitors factory-direct…"></textarea>
+      <div class="k muted" style="margin-top:8px">存档邮箱 <span class="hint">（选填；填了之后每封外发都密送一份到这里）</span></div>
+      <input id="cfg-bcc" placeholder="留空 = 不存档" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:6px">
 
-      <div class="sec-title">⭐ 卖点 / 社会证明</div>
-      <p class="hint" style="margin:0 0 4px">AI 写开发信/跟进/回复时可引用的可信卖点（英文更佳，别夸大、别点名具体客户）。留空用内置默认。</p>
-      <!-- C4-A：占位文案换成 AirSonde 的，且**故意只举站得住的例子** —— 原来那句
-           "trusted by 100+ resellers" 是上游的社会证明，照抄到这里就是假 claim（claims 纪律）。 -->
-      <textarea id="cfg-selling" style="min-height:70px" placeholder="e.g. Factory-direct IAQ monitors (CO2/PM2.5/TVOC); OEM & private-label; flexible MOQs.（只写站得住的事实：认证/产能/案例未经工厂书面确认前不要写）"></textarea>
+      <!-- ── ② 机器开关 —— 它替你做多少 ── -->
+      <div class="sec-title" style="margin-top:20px">② 机器开关</div>
+      <div class="auto-box">
+        <label class="auto-row"><input type="checkbox" id="cfg-auto-approve">
+          <span><b>自动批准</b> <span class="hint">≥<span id="cfg-auto-min">60</span> 分的线索直接进「待联系」，不用你点</span></span></label>
+        <label class="auto-row"><input type="checkbox" id="cfg-auto-send">
+          <span><b>自动发送</b> <span class="hint">后台每小时自动发已批准的；退订率过高会自动停发</span></span></label>
+      </div>
+      <div class="kv" style="grid-template-columns:130px 1fr;margin-top:10px">
+        <div class="k">每天最多发</div>
+        <div><input id="cfg-limit" type="number" min="1" style="width:100px;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:6px"> 封
+          <span class="hint" style="margin-left:6px">手动 + 自动 + 跟进 共用这一个数</span>
+          <span id="cfg-limit-badge" class="pill" style="display:none;margin-left:8px;background:#f7efdd;color:#7a5410"></span></div>
 
-      <div class="sec-title">💬 一键开聊话术</div>
-      <p class="hint" style="margin:0 0 4px">详情弹层「一键开聊」按钮预填/复制的开场白（英文，用 {company} 占位公司名）。</p>
-      <textarea id="cfg-chatscript" style="min-height:64px" placeholder="Hi {company} team — AirSonde builds air quality monitors factory-direct…"></textarea>
+        <div class="k">其中自动发</div>
+        <div>
+          <!-- ⭐ 魔法值改明控件：原来是"填 0 = 跟随系统闸"——**一个要靠记忆才懂的约定**。
+               现在两个选项各自说人话，选中哪个就是哪个，没有隐藏含义。 -->
+          <label style="display:block;cursor:pointer;margin-bottom:4px"><input type="radio" name="autolim" id="cfg-auto-follow" value="follow"> 跟上面一样（不单独限制）</label>
+          <label style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="radio" name="autolim" id="cfg-auto-custom" value="custom"> 单独限制为
+            <input id="cfg-auto-limit" type="number" min="1" style="width:70px;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:6px"> 封</label>
+          <span class="hint" id="cfg-auto-used"></span>
+        </div>
 
-      <div class="sec-title">🔁 无回复自动跟进</div>
+        <div class="k">新域保护</div>
+        <div><label style="display:flex;gap:6px;align-items:center;cursor:pointer"><input id="cfg-ramp" type="checkbox">
+          <span class="hint">开着时每天发信量最多涨 50%，避免新域名被判垃圾邮件（建议保持开启）</span></label></div>
+      </div>
+
+      <div class="k muted" style="margin-top:12px">无回复自动跟进</div>
       <label style="display:flex;gap:8px;align-items:center;cursor:pointer;margin:4px 0">
-        <input type="checkbox" id="fu-enabled"> 开启：发出去 N 天没回复，自动发第 2 封跟进信
+        <input type="checkbox" id="fu-enabled"> <span class="hint">发出去没人回，自动再发一封</span>
       </label>
       <div class="kv" style="grid-template-columns:130px 1fr">
-        <div class="k">间隔天数</div><div><input id="fu-delay" type="number" min="1" max="60" class="fld"> <span class="hint">发出后几天没回复就跟进（建议 3-5）</span></div>
-        <div class="k">已参与跟进间隔</div><div><input id="fu-engaged-delay" type="number" min="1" max="60" class="fld"> <span class="hint">点过链接的线索多久跟进（更短更暖，建议 1-2 天）</span></div>
-        <div class="k">最多跟进次数</div><div><input id="fu-max" type="number" min="1" max="5" class="fld"> <span class="hint">每个客户最多跟进几次（建议 1-2）</span></div>
-        <div class="k">没回音归档</div><div><input id="fu-noreply" type="number" min="1" max="90" class="fld"> <span class="hint">跟进发满后再等这么多天还是没回应 → 自动归档（默认 7）。不然这批人会永远堵在「已发送」格里，把真正该看的淹掉</span></div>
+        <div class="k">几天后跟进</div><div><input id="fu-delay" type="number" min="1" max="60" class="fld"> <span class="hint">建议 3-5</span></div>
+        <div class="k">点过链接的</div><div><input id="fu-engaged-delay" type="number" min="1" max="60" class="fld"> <span class="hint">更快更暖，建议 1-2</span></div>
+        <div class="k">最多跟几次</div><div><input id="fu-max" type="number" min="1" max="5" class="fld"> <span class="hint">建议 1-2</span></div>
+        <div class="k">多久后放弃</div><div><input id="fu-noreply" type="number" min="1" max="90" class="fld"> <span class="hint">跟满还没回音就归档，免得堆在「已发送」里挡住真该看的</span></div>
       </div>
-      <p class="hint" style="margin:2px 0 0">跟进信由 AI 生成（简短礼貌），遵守每日发信上限。已回复/退订/退信的自动排除。Cron <b>每小时</b>自动跑一批。</p>
 
-      
-      <div class="sec-title">🔔 飞书通知</div>
-<p class="hint">在一个飞书群里 <b>群设置 → 群机器人 → 添加「自定义机器人」</b>，把它的 <b>Webhook 地址</b>发给管理员注入后即生效。之后：有客户「有意向/询价/投诉」回复会<b>实时</b>推到群里，每 6 小时来一条<b>简报</b>。</p>
-      <div id="notify-status" class="transparency" style="margin:12px 0"></div>
-      <div class="kv" style="grid-template-columns:130px 1fr">
-        <div class="k">启用通知</div><div><label style="cursor:pointer"><input type="checkbox" id="ntf-enabled"> 打开（关掉则不推任何消息）</label></div>
-      </div>
-      <!-- 「高分阈值」已删（两档制）：它只喂简报里的「高分客户」清单，而那个清单已经删了 ——
-           自动通道下"新出现一家 85 分"＝机器已经把信发出去了，列给你看没有动作可做。
-           简报现在报的是"机器这轮干了什么"（自动批准/自动发信）+ 翻牌堆积压。 -->
-      
+      <div class="k muted" style="margin-top:12px">飞书通知</div>
+      <div id="notify-status" class="transparency" style="margin:6px 0"></div>
+      <label style="display:flex;gap:8px;align-items:center;cursor:pointer"><input type="checkbox" id="ntf-enabled"> <span class="hint">有客户回信/询盘时推到群里</span></label>
+
       <div class="sec-title">👤 当前账号</div>
       <div class="transparency" id="whoami" style="margin:6px 0 0"></div>
 
@@ -3334,31 +3317,9 @@
         _lbadge.textContent = "未配置 · 正在沿用已退役的旧设置";
         _lbadge.style.display = "";
       } else _lbadge.style.display = "none";
-      // 用量行：闸只卡冷发，事务信单列——数字必须说清自己由什么构成，否则又是一个吓人的总数。
-      {
-        const bd = c.sent_today_breakdown || {};
-        const cold = c.cold_sent_today ?? 0, lim = c.daily_send_limit || 0;
-        const eff = c.effective_send_limit ?? lim;          // 批量通道**真正生效**的上限（含爬坡）
-        const autoLim = c.auto_send_daily_limit ?? 0;
-        // ⚠️ 剩余量必须按 **effective** 算，不能按天花板 —— 显示 1000 而后端按 45 发，
-        //    就是我们刚修完的那种"界面说谎"。爬坡在压着时要**明说是它在压**。
-        const rampNote = (c.send_ramp_enabled && c.send_ramp_cap != null && c.send_ramp_cap < lim)
-          ? `<br><span style="color:#7a5410">⚠️ 爬坡保护生效中：今天实际能发 <b>${eff}</b>（天花板 ${lim}，爬坡上限 ${c.send_ramp_cap}）</span>` : "";
-        $("#cfg-limit-usage").innerHTML =
-          `今日冷发 <b>${cold}</b> / 生效上限 <b>${eff}</b>（剩 ${Math.max(0, eff - cold)}）` +
-          (eff !== lim ? ` <span class="muted">· 天花板 ${lim}</span>` : "") +
-          ` &nbsp;·&nbsp; 首触 ${bd.initial ?? 0} + 跟进 ${bd.followup ?? 0}` +
-          ` &nbsp;·&nbsp; 事务信(确认/回信) ${bd.transactional ?? 0} <span class="muted">不占额度</span>` +
-          `<br>自动通道生效上限 <b>${Math.min(autoLim || eff, eff)}</b>` +
-          `（系统闸 ${eff} 与自动闸 ${autoLim} 取更紧者，今日自动已发 ${c.auto_sent_today ?? 0}）` + rampNote;
-        // 爬坡开关 + 算法说明（让 Joe 看得懂这个数是怎么来的，而不是一个天降的限制）
-        $("#cfg-ramp").checked = !!c.send_ramp_enabled;
-        $("#cfg-ramp-detail").innerHTML = c.send_ramp_enabled
-          ? `昨日冷发 ${c.yesterday_cold ?? 0} × ${c.send_ramp_factor ?? 1.5} → 今日爬坡上限 <b>${c.send_ramp_cap ?? "-"}</b>（地板 ${c.send_ramp_floor ?? 30}）· 关掉即直接用天花板 ${lim} · <b>不影响手动单条发送</b>`
-          : `已关闭 —— 批量通道直接用天花板 ${lim}。新发件域一天暴增易被判垃圾发信，建议保持开启。`;
-      }
-      $("#cfg-primary-today").textContent = `今日已发 ${c.primary_sent_today ?? 0}`;
-      $("#cfg-legacy-today").textContent = `今日已发 ${c.legacy_sent_today ?? 0}`;
+      // C5-2：用量明细 / 爬坡算式 / 发件域今日计数**已搬去机器房**（宪法 §2：那是"机器怎么想的"）。
+      //   这里只留 Joe 真的会动的那个开关。
+      $("#cfg-ramp").checked = !!c.send_ramp_enabled;
       _chatScript = c.chat_script || DEFAULT_CHAT;
       $("#fu-enabled").checked = !!fu.enabled;
       $("#fu-delay").value = fu.delay_days;
@@ -3376,9 +3337,11 @@
     // 而他和总工都以为设置生效了。所以这里**只说实话，不设限**。
     let _capacity = null, _sysEffective = 0;   // _sysEffective: 系统闸生效值(含爬坡)，自动闸填0时按它判产能
     function renderCapacity(){
+      // C5-2：这块的**展示位已移到机器房**（设置页只留旋钮）。函数保留供机器房调用；
+      // 它自带 `if (!el)` 守卫，但我没靠这层守卫过日子 —— 设置页里对它的调用已一并摘掉，守卫只是第二层。
       const el = $("#cfg-capacity"); if (!el || !_capacity) return;
-      // 填 0 = 跟随系统闸 → 要按**系统闸的生效值**判产能，不能拿 0 去比（"你填的 0 封能发到✓"是句废话/假话）
-      const raw = Number($("#cfg-auto-limit").value) || 0;
+      // 自动闸"跟随"时按**系统闸的生效值**判产能（拿 0 去比会得出"你填的 0 封能发到 ✓"这种废话）
+      const raw = Number(($("#cfg-auto-limit") || {}).value) || 0;
       const want = raw > 0 ? raw : (_sysEffective || 0);
       const { perDay, perRound, roundsPerDay } = _capacity;
       const base = `系统产能：每小时一班 × 每班最多约 ${perRound} 封 ≈ <b>${perDay} 封/天</b>`
@@ -3412,58 +3375,24 @@
             body:JSON.stringify({ auto_approve_enabled: a.checked })});
           const el=$("#sendcfg-result"); if(el){ el.textContent = a.checked?"✅ 自动批准已开启":"✅ 自动批准已关闭"; setTimeout(()=>{ if(el) el.textContent=""; },3000); }
         }; }
-      // 自动闸默认跟随系统闸 —— 这个数打哪来必须写清楚，否则它就是下一个"没人说话的隐形瓶颈"
-      //（上一个是 auto=200 把系统闸 1000 悄悄压成 200）。填 0 = 回到跟随。
-      _sysEffective = c.effective_send_limit ?? c.daily_send_limit ?? 0;
-      // ⚠️ 跟随状态下**输入框必须是 0**，不能回填解析出来的值 ——
-      //    否则 Joe 下次点保存就把"跟随"固化成一个钉死的数字，等于亲手重造隐形瓶颈。
+      // ⭐ C5-2：自动闸从"填 0 = 跟随"改成**两个单选**。
+      //   原设计要靠记忆才懂（0 是一个有隐藏含义的魔法值），而且极易反噬：
+      //   跟随态若把解析出来的数字回填进输入框，Joe 下次一点保存就把"跟随"固化成钉死的数 ——
+      //   等于亲手重造那个"没人说话的隐形瓶颈"（上一个是 auto=200 把系统闸 1000 悄悄压成 200）。
+      //   改成单选之后，**选中哪个就是哪个**，没有任何隐藏约定。
       const _autoFollow = c.auto_send_daily_limit_source === "system";
-      const _autoLim = c.auto_send_daily_limit ?? 0;
-      $("#cfg-auto-limit").value = _autoFollow ? 0 : _autoLim;
-      $("#cfg-auto-src").innerHTML = _autoFollow
-        ? `<span class="muted">跟随系统闸（当前 ${_sysEffective}）· 留 0 保持跟随</span>`
-        : (_autoLim < _sysEffective
-            // 只有"比系统闸更紧"时它才真在卡人 —— 那时才该报警；反之是系统闸更紧，别把话说反
-            ? `<span style="color:#7a5410">单独设定 ${_autoLim}，比系统闸 ${_sysEffective} 更紧 → 自动通道实际按 <b>${_autoLim}</b> 发；填 0 回到跟随</span>`
-            : `<span class="muted">单独设定 ${_autoLim}，宽于系统闸 ${_sysEffective} → 实际按 <b>${_sysEffective}</b> 发（系统闸更紧）</span>`);
+      const _sysEff = c.effective_send_limit ?? c.daily_send_limit ?? 0;
+      $("#cfg-auto-follow").checked = _autoFollow;
+      $("#cfg-auto-custom").checked = !_autoFollow;
+      $("#cfg-auto-limit").value = _autoFollow ? "" : (c.auto_send_daily_limit ?? "");
+      $("#cfg-auto-limit").disabled = _autoFollow;
+      { const sync = () => { $("#cfg-auto-limit").disabled = $("#cfg-auto-follow").checked; };
+        $("#cfg-auto-follow").onchange = sync; $("#cfg-auto-custom").onchange = sync; }
       $("#cfg-auto-min").textContent = c.auto_approve_min || 70;
-      $("#cfg-auto-used").textContent = `（今日已自动发 ${c.auto_sent_today || 0} 封）`;
-      // ⭐ P0-1：产能提示。**不拦他**，只在他填的数超过物理产能时当场说清楚。
-      //   这条是这批的灵魂：不做它，我们就只是把"被硬编码的 5 砍"换成"被 wall time 砍"——换个方式骗他。
-      _capacity = c.capacity || null;
-      renderCapacity();
-      // ⭐ 批⑪C：今日 AI 用量。批⑦ 之后草稿是**发送那一刻**才写的 —— 434 家只发 48 封 = 只写 48 封。
-      //   Joe 今晚亲眼看着重扫烧了 3 小时 + ~$10，这行是给他一个不用问人就能看见省了多少的地方。
-      // ⭐ 批⑪C：**钱那行排前面** —— Joe 问的是"最近用这么多正常吗"和"是不是设了限额"，
-      //   这两件事都是钱。次数回答的是"**为什么**花这么多"（钱是结果，次数是原因），排后面。
-      const $m = (n) => `$${Number(n).toFixed(2)}`;
-      const cost = c.ai_cost || {};
-      let costLine;
-      if (cost.notIgnited) {
-        // ⭐ C2-C：**从未配置 ≠ 读取失败**。没插电的机器不报引擎故障，用中性灰而不是红。
-        //   （仍然不显示 $0 —— 见下条注释，"没花钱"和"没问到"不能长一样。）
-        costLine = `<span class="muted">AI 用量：<b>未点火</b> —— 还没配 OPENROUTER_API_KEY（不是故障）</span>`;
-      } else if (!cost.ok) {
-        // ⚠️ **绝不显示 $0** —— "今天真没花钱"和"我们没问到"长得一模一样，
-        //   而 $0 会让 Joe 以为是前者。这跟批⑧ 那个"没有新邮件 vs 取不到"是同一个病。
-        costLine = `<span style="color:var(--red,#c0392b)">⚠️ AI 用量读取失败</span>`
-                 + `<span class="muted">（${esc(String(cost.error||'').slice(0,70))}）—— 不是 $0，是没问到</span>`;
-      } else {
-        const lim = (cost.limit === null || cost.limit === undefined) ? "未设置" : $m(cost.limit);
-        costLine = `AI 用量：今日 <b>${$m(cost.daily)}</b> · 本月 <b>${$m(cost.monthly)}</b> · 限额：<b>${lim}</b>`
-          + (cost.stale
-              ? `<span style="color:var(--amber,#8a5a00)">（这次没问到，显示 ${Math.round((cost.ageMs||0)/60000)} 分钟前的数）</span>`
-              : "");
-      }
-      const u = c.ai_today || {};
-      $("#cfg-ai-usage").innerHTML = costLine
-        + `<div style="margin-top:2px">今日：分析 <b>${u.analyzed||0}</b> 家 · 写信 <b>${u.drafted||0}</b> 封`
-        + `<span class="muted">（写信改成"发送那一刻才写"了，不再给每条线索都写一封）</span></div>`;
-      const b = c.breaker || {};
-      // 退订率：样本不足就只报计数、不报率 —— 与数据看板 n<50 的口径同一条原则，别在这儿破例
-      $("#cfg-brk-stat").textContent = b.enoughSample
-        ? `熔断监控：最近 ${b.window} 封自动开发信里 ${b.unsubs} 封退订 = ${b.rate}%（阈值 ${b.thresholdPct}%）`
-        : `熔断监控：样本 ${b.window||0}/${b.windowSize||30} 封，不足 ${b.windowSize||30} 封不做判断（已退订 ${b.unsubs||0} 封）`;
+      $("#cfg-auto-used").textContent = `今天已自动发 ${c.auto_sent_today || 0} 封`;
+      // 产能提示 / AI 用量 / 退订样本 —— **已随 C5-2 搬去机器房**（宪法 §2 + 铁律五：一个事实一个展示位）。
+      _capacity = c.capacity || null;   // 仍读进来：机器房要用
+      _sysEffective = _sysEff;
       const banner = $("#brk-banner");
       if (b.trippedAt) {
         banner.style.display = "";
@@ -3494,7 +3423,9 @@
         //   之后 3 天自动发了 17 封，直到今天才被发现。
         //   → 开关改成**勾选即存 + 二次确认**（见下方 renderAutomation），不再搭这趟车。
         body:JSON.stringify({ daily_send_limit:Number($("#cfg-limit").value), company_name:$("#cfg-company").value, company_address:$("#cfg-address").value, company_website:$("#cfg-website").value, selling_points:$("#cfg-selling").value, chat_script:$("#cfg-chatscript").value, bcc_archive:$("#cfg-bcc").value, send_ramp_enabled:$("#cfg-ramp").checked,
-          auto_send_daily_limit:Number($("#cfg-auto-limit").value) }) }));
+          // C5-2：单选 → 后端语义。后端「0/空 = 跟随系统闸」的约定没变，
+          //   变的是**这个约定不再暴露给 Joe** —— 他看到的是两个说人话的选项。
+          auto_send_daily_limit: $("#cfg-auto-follow").checked ? 0 : (Number($("#cfg-auto-limit").value) || 0) }) }));
       const fu = await jf(fetch("/api/settings/followup", { method:"POST", headers:{"content-type":"application/json"},
         body:JSON.stringify({ enabled:$("#fu-enabled").checked, delay_days:Number($("#fu-delay").value), engaged_delay_days:Number($("#fu-engaged-delay").value), max_followups:Number($("#fu-max").value), no_reply_days:Number($("#fu-noreply").value) }) }));
       const ntf = await saveNotifyCfg();
@@ -4187,6 +4118,20 @@ ${esc(d.ours.body||'')}</div></details>`
                <span class="hint">只算开发信+跟进；确认信/回信不吃额度</span></div>
              <div class="mr-kv"><span>熔断器</span>${cfg.auto_send_enabled?'<b>自动发送：开</b>':'<b>自动发送：关</b>'}
                <span class="hint">最近 ${br.window ?? 30} 封自动信里 ${br.unsubs ?? 0} 封退订（${((br.rate??0)*100).toFixed(1)}%）；≥15% 自动停，停了不会自己恢复</span></div>
+           </div>
+
+           <div class="fc-card" style="margin-top:12px"><div class="sec-title">📤 今天发了多少、还能发多少？</div>
+             <div class="mr-kv"><span>今日冷发</span><b>${cfg.cold_sent_today ?? 0}</b>
+               <span class="hint">首触 ${(cfg.sent_today_breakdown||{}).initial ?? 0} + 跟进 ${(cfg.sent_today_breakdown||{}).followup ?? 0}；确认信/回信 ${(cfg.sent_today_breakdown||{}).transactional ?? 0} 封不吃额度</span></div>
+             <div class="mr-kv"><span>今天还能发</span><b>${Math.max(0, (cfg.effective_send_limit ?? cfg.daily_send_limit ?? 0) - (cfg.cold_sent_today ?? 0))}</b>
+               <span class="hint">按**生效上限**算，不是按天花板 —— 显示天花板而后端按更小的数发，就是界面说谎</span></div>
+             <div class="mr-kv"><span>自动通道今日</span><b>${cfg.auto_sent_today ?? 0}</b>
+               <span class="hint">自动闸来源：${cfg.auto_send_daily_limit_source === 'system' ? '跟随系统闸' : '单独设定 ' + (cfg.auto_send_daily_limit ?? '-')}</span></div>
+             <div class="mr-kv"><span>系统产能</span><span>${cfg.capacity ? `每小时一班 × 每班约 ${cfg.capacity.perRound} 封 ≈ <b>${cfg.capacity.perDay} 封/天</b>` : '<span class="hint">读不到</span>'}
+               <span class="hint">这是物理上限（受每班时长约束）；你设的数超过它时，超出部分顺延到后面的班次，不会丢</span></span></div>
+             <div class="mr-kv"><span>AI 花费</span><span>${cfg.ai_cost && cfg.ai_cost.notIgnited ? '<span class="hint">未点火 —— 还没配 OPENROUTER_API_KEY（不是故障）</span>' : (cfg.ai_cost && cfg.ai_cost.ok ? `今日 $${Number(cfg.ai_cost.daily).toFixed(2)} · 本月 $${Number(cfg.ai_cost.monthly).toFixed(2)}` : '<span class="hint">这次没问到（不是 $0）</span>')}</span></div>
+             <div class="mr-kv"><span>发件域今日</span><b>${cfg.primary_sent_today ?? 0}</b>
+               <span class="hint">全部出站走 sales@airsonde.net；日限不按发件域分</span></div>
            </div>
 
            <div class="fc-card" style="margin-top:12px"><div class="sec-title">🔍 找客户预算与班次</div>
