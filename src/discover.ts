@@ -22,6 +22,10 @@ export const DEFAULT_KEYWORDS = [
   "BMS integrator air quality",
   "indoor air quality services company",
   "ventilation systems installer",
+  "smart building solutions provider",
+  // ── 相邻品类 分销 / 批发 ──
+  "HVAC parts wholesale distributor",
+  "test and measurement instruments distributor",
   // ── C4-A 新增：气体检测 / 职安健（与 IAQ 同一批买家、同一条渠道）──
   "breathalyzer distributor",
   "alcohol tester wholesale",
@@ -32,6 +36,7 @@ export const DEFAULT_KEYWORDS = [
   "workplace safety compliance solutions",
   // ── 场景意图 ──
   "school air quality monitoring provider",
+  "office air quality compliance",
   "CO2 monitor bulk supplier",
 ];
 
