@@ -484,6 +484,12 @@ export async function getSerperUsage(env: Env): Promise<{ usedToday: number; bud
  *  ⚠️ 闸装在三个抓取函数**自己**身上（见下），不是装在调用点：
  *     调用点今天有 3 个，明天可能有第 4 个；守函数才守得住没想到的那一个。
  *     这是 devguard.ts 那条「往上收敛，只守出站口子」的同一条纪律。 */
+/* ⚠️ C5-3（2026-08-31）补记：**前端那两个按钮的 JS 实现已连壳删除**
+ *   （`runNmeaHarvest` / `runRvHarvest` 随「找客户」整页解散一并删掉）。
+ *   所以将来接 IAQ 行业目录时，不是"把按钮翻回来"，而是两步：
+ *     ① 在下面这个注册表里加一条来源
+ *     ② 在前端重新写一个入口（建议进「➕ 补货」弹窗，与"自动搜一轮/导入 CSV"并列）
+ *   后端管道（三个抓取函数 + SOURCE_ENDORSEMENT 背书）**一行未拆**，仍可直接复用。 */
 export const ENABLED_DIRECTORY_SOURCES: readonly string[] = [];
 export function directorySourcesEnabled(): boolean { return ENABLED_DIRECTORY_SOURCES.length > 0; }
 /** 统一的"没有已启用目录源"空结果 —— 不抛错：调用方（cron/后台按钮）该看到"没跑"，不是"炸了"。 */

@@ -599,7 +599,6 @@
       <input type="search" id="q" placeholder="搜索公司 / 邮箱 / 域名…" />
       <!-- 左栏导航的隐藏代理按钮（左栏 side-nav 的 handler 靠它们，勿删） -->
       <button id="btn-today" style="display:none">今天</button>
-      <button id="btn-discover" style="display:none">找客户</button>
       <button id="btn-dashboard" style="display:none">数据看板</button>
     </div>
   </header>
@@ -785,6 +784,60 @@
         </div>
       </div>
 
+      <!-- ══ C5-3 ②「🧭 方向盘」——机器按什么找客户 ══
+           找客户页解散后，那些**持久配置**（不是单次动作）搬到这里。
+           ⚠️ 默认收起：Joe 一个月改不了一次，但要改时它必须在。
+           ⚠️ 宪法口径：折叠收起时不计字数，只有折叠行的摘要计入 900 预算。
+           ⚠️ 里面的 id / 勾选即存 / 二次确认 / 保存逻辑**全部原样迁移**，一行没改。 -->
+      <div class="set-card">
+        <div class="sec-title" style="cursor:pointer;user-select:none" onclick="toggleWheel()">
+          <span id="wheel-caret">▸</span> 🧭 方向盘 <span class="hint" style="margin:0">（机器按什么找客户）</span>
+        </div>
+        <div class="sec-sub" id="wheel-summary" style="cursor:pointer;margin-bottom:0" onclick="toggleWheel()">（加载中…）</div>
+        <div id="wheel-body" hidden style="margin-top:16px">
+          <!-- 加载失败横幅：没有它，一次登录过期就让方向盘停在空壳态，看着像"配置全丢了" -->
+          <div class="load-error" id="fc-loaderr" style="display:none;margin-bottom:12px"></div>
+
+          <div class="sec-row"><span class="sec-title" style="margin:0">客户画像 · 打分标准</span>
+            <span class="hint" id="fc-profile-badge" style="margin:0"></span></div>
+          <div class="hint" id="fc-profile-summary" style="margin:4px 0;cursor:pointer" onclick="toggleProfile()">（加载中…）</div>
+          <div class="hint" style="margin:3px 0 8px">抓来的线索都用这份画像给 AI 打分——越具体越准。</div>
+          <textarea id="fc-profile" placeholder="描述你的理想客户；留空用内置默认画像"></textarea>
+          <span id="fc-profile-caret" hidden></span>
+
+          <div class="sec-row" style="margin-top:16px"><span class="sec-title" style="margin:0">关键词</span>
+            <span class="sec-tools"><button class="mini" type="button" onclick="fcKwAll(true)">全选</button><button class="mini" type="button" onclick="fcKwAll(false)">全不选</button><button class="mini" type="button" id="fc-kw-manage" onclick="fcToggleManage('kw')">管理</button></span></div>
+          <div id="dp-kwlist" style="margin:6px 0"></div>
+          <div id="fc-kw-editrow" style="display:none;gap:8px;margin-top:6px">
+            <input id="dp-kwnew" class="inlinput" placeholder="新增关键词，如 HVAC controls integrator">
+            <button id="dp-kwadd" class="primary">添加</button>
+            <button id="dp-kwseed">载入默认</button>
+          </div>
+
+          <div class="sec-row" style="margin-top:16px"><span class="sec-title" style="margin:0">后台自动搜索</span></div>
+          <!-- #S1：**勾选即存**，且**绝不跟着「保存配置」一起提交**。
+               它是引擎开关（运行状态），不是配置。以前被 saveSearchCfg 捎带提交 ——
+               Joe 存一次关键词，只要这个勾当时没打上，整个自动找客户就被静默写成 0，界面零提示。
+               生产真发生过。这条防线迁移时一字不动。 -->
+          <label style="display:flex;align-items:center;gap:7px;margin-top:6px;cursor:pointer;font-size:13px">
+            <input type="checkbox" id="dp-auto"> 开启后台每小时自动搜索新客户
+            <span class="hint" style="margin:0">（默认关；每轮只跑一小批，受下方预算封顶）</span>
+          </label>
+          <div class="set-numrow" style="margin-top:12px">
+            <span style="font-size:13px">搜索预算上限</span>
+            <input id="fc-serper-budget" type="number" min="0" max="2500" step="10" class="set-num" style="width:96px">
+            <span class="hint">次/天 · 到上限自动停（含手动+后台）</span>
+            <button id="fc-serper-save" class="mini">保存预算</button>
+          </div>
+          <div class="hint" style="margin-top:4px">今日已用多少 → 🛠 机器房（那里是它唯一的展示位）</div>
+
+          <div class="set-numrow" style="margin-top:16px">
+            <button id="dp-save" class="primary">💾 保存方向盘</button>
+            <span class="hint" id="dp-save-msg" style="margin:0"></span>
+          </div>
+        </div>
+      </div>
+
       <!-- ── ④ 飞书通知 + 当前账号 ── -->
       <div class="set-card">
         <div class="sec-title">④ 通知与账号</div>
@@ -806,156 +859,13 @@
       </div>
     </div>
   </div>
-      <div id="v-found" style="display:none">
-        <div class="pg-head"><button class="btn-ghost" onclick="showMainView('list')">← 返回列表</button><div class="pg-titlewrap"><span class="pg-title">🔍 找客户</span><span class="pg-sub">免费目录源优先 · 关键词搜索兜底 · 统一 AI 打分</span></div></div>
-        <!-- 批⑲b 追加：配置加载失败横幅（openDiscover 的 fetch 抛错时显示；否则隐藏）。
-             不放这条的话，一次登录过期就让整页停在空壳态，看着像"数据全丢了"。 -->
-        <div id="fc-loaderr" class="load-error" style="display:none"></div>
-
-        <!-- 批⑳ 层1 · 机器状态卡（只读）：进货机器现在在替你干什么、干到哪了。
-             数据全来自 openDiscover 的 cfg（/api/settings/search），renderMachineStatus 填充。
-             ⚠️ 不含积压（那是层2 的刹车提示）、不含"今日新进"（无现成字段，不为装饰开第二个后端口子）。 -->
-        <div class="fc-card fc-machine" id="fc-machine">
-          <div class="sec-title">🤖 进货机器状态</div>
-          <div id="fc-machine-body" class="ms-grid"><span class="hint">加载中…</span></div>
-        </div>
-
-        <!-- 批⑳ 层2 · 手动动作：你亲手补一把进货。顶上先放积压刹车提示（批④ 一行式），
-             贴着进货按钮——"进之前先看管道堵了多少，别只顾鼓励抓更多"。 -->
-        <div id="fc-backlog" class="fc-backlog" style="display:none"></div>
-
-        <!-- ⭐⭐ 批⑪A：四个动作并成一排，放页顶。
-             Joe 原话："找客户这个页面要重点优化" —— 他的问题是**太复杂**：
-             原来这四个动作散在三张卡 + 一个**埋在 26 国×24 关键词下面**的 CTA，要滚三屏才看全。
-             他要的是"给我找客户"，不是一个机器控制台。
-             ⚠️ 按钮**一个没新建**：全是把已有的 id 挪上来（#fc-nmea / #fc-rvtito / #btn-import / #dp-run），
-                所有 onclick 绑定、行为、进度条全没动 —— 只换了位置。 -->
-        <div class="fc-card">
-          <div class="sec-title">🎯 找客户 —— 选一个开始</div>
-          <!-- C2-A（2026-08-31）：撤下「抓 NMEA 船舶经销商 / 抓 rvwithtito RV 安装商」两个按钮。
-               它们是**上游 Wanew 的垂直目录**（海事 / 房车），对 AirSonde 是错行业，
-               曾灌进 261 条无关线索并反复爬第三方站。后端管道与来源背书逻辑**一行未拆**：
-               见 discover.ts 的 ENABLED_DIRECTORY_SOURCES（现为空注册表）。
-               C3 研究单找到 IAQ 行业目录后，在那份注册表里加一条 + 在这里加回按钮即可。 -->
-          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:8px">
-            <button id="btn-import">📄 导入 CSV</button>
-            <button id="dp-run" class="primary fc-cta">▶ 开始找客户</button>
-          </div>
-          <div class="hint" style="margin-top:8px">
-            CSV 是<b>自有名单</b> ·
-            「开始找客户」= 用<b>已保存的配置</b>直接跑（关键词搜索 → AI 打分 → 补邮箱），不用配任何东西。
-          </div>
-          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:6px">
-            <span class="hint" id="fc-free-msg"></span><span class="hint" id="dp-msg"></span>
-          </div>
-          <div class="prog-log" id="fc-free-log" style="margin-top:8px;display:none"></div>
-          <div id="fc-free-result" style="margin-top:8px"></div>
-        </div>
-
-        <!-- 批⑳ 层3 · ① 客户画像：默认折叠。大 textarea 是整页最大视觉重量，Joe 一个月改不了一次。
-             折叠行 = 摘要（前40字）+ 默认/自定义 标记（isDefault，现成，不为装饰时间戳开第二个后端口子）。
-             复用既有 toggleProfile / fc-collapsed（本批才补上 .fc-collapsed 的 CSS，之前它是死代码）。 -->
-        <div class="fc-card">
-          <div class="sec-title" style="cursor:pointer;user-select:none" onclick="toggleProfile()">
-            <span id="fc-profile-caret">▸</span> ① 客户画像 · 打分标准（全局）
-            <span class="hint" id="fc-profile-badge"></span>
-          </div>
-          <div class="hint" id="fc-profile-summary" style="margin:4px 0;cursor:pointer" onclick="toggleProfile()">（加载中…）</div>
-          <!-- C6-B/P3-7：原文列举「🚢NMEA / 🚐RV」—— 那是上游 Wanew 的船舶电子/房车渠道，
-               C2-A 已把这两个目录按钮撤掉，这句提示没跟着撤，于是**错行业的名字一直摆在 Joe 眼前**。
-               改成不列来源：来源会变，而"都用这份画像打分"这件事不会变，本来就不该在这里点名。 -->
-          <div class="hint" style="margin:3px 0 8px">抓来的线索都用这份画像给 AI 打分——越具体越准。</div>
-          <textarea id="fc-profile" class="fc-collapsed" placeholder="描述你的理想客户；留空用内置默认画像"></textarea>
-        </div>
-
-
-
-        <!-- ⭐⭐ 批⑪A：关键词搜索的**参数**全折进「⚙ 高级设置」，默认收起。
-             Joe 原话："找客户这个页面要重点优化" —— 他的问题是**太复杂**。
-             26 国 × 24 关键词 × 条数 × 预估 × Serper 预算 × 自动开关 —— **那些是机器的参数**，
-             不该天天摆在他眼前；他要的是"给我找客户"。
-             ⚠️ 客户画像**不折**（它在上面第 1 块）：那是 Joe 的资产，不是机器参数 —— 总工明确要过。
-             ⚠️ 参数**一个没删**，只是收起来了：他要调的时候点开就在，位置、行为、保存全没变。 -->
-        <div class="fc-card">
-          <div class="sec-title" style="cursor:pointer;user-select:none" onclick="toggleAdv()">
-            <span id="fc-adv-caret">▸</span> ⚙ 高级设置
-            <span class="hint">（国家 · 关键词 · 条数 · Serper 预算 · 自动搜索）</span>
-          </div>
-          <div id="fc-adv" hidden>
-          <div class="fc-subhead" style="margin-top:10px">手动 · 跑一次 <span class="fc-badge fc-badge-cost">花 Serper 积分</span></div>
-          <!-- 批㉑：国家勾选框墙删了。系统全包国家（Joe："我们又不挑客户"）→ 一行说明 + 单国定向。 -->
-          <div class="sec-row"><span class="sec-title">搜索范围</span></div>
-          <p class="hint" id="fc-scope-line" style="margin:2px 0 8px">覆盖目标市场 · 自动轮换 · 预算封顶</p>
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
-            <label style="display:flex;align-items:center;gap:6px;font-size:13px">🎯 只搜某国跑一次
-              <select id="fc-one-country" class="fc-add-sel"><option value="">全部市场（默认）</option></select>
-            </label>
-            <span class="hint">选了某国 = 这次手动跑只搜它；后台自动轮换永远覆盖全部市场，不受影响。</span>
-          </div>
-          <div class="sec-row"><span class="sec-title">关键词</span>
-            <span class="sec-tools"><button class="mini" type="button" onclick="fcKwAll(true)">全选</button><button class="mini" type="button" onclick="fcKwAll(false)">全不选</button><button class="mini" type="button" id="fc-kw-manage" onclick="fcToggleManage('kw')">管理</button></span></div>
-          <div id="dp-kwlist" style="margin:6px 0"></div>
-          <div id="fc-kw-editrow" style="display:none;gap:8px;margin-top:6px">
-            <input id="dp-kwnew" class="inlinput" placeholder="新增关键词，如 HVAC controls integrator">
-            <button id="dp-kwadd" class="primary">添加</button>
-            <button id="dp-kwseed">载入默认</button>
-          </div>
-          <div class="sec-title" style="margin-top:12px">本次条数：<b id="fc-perkw-val">10</b> 条 / 关键词 / 国家（1–100）</div>
-          <input id="dp-perkw" type="range" min="1" max="100" step="1" value="10" style="width:280px;max-width:100%">
-          <div class="transparency" id="dp-transparency" style="margin-top:8px"></div>
-
-          <div class="fc-subhead" style="margin-top:18px">自动 · 后台</div>
-          <!-- ⚠️ 批⑪A：这个开关原来长在「免费目录源」卡上。那张卡的**按钮**搬到页顶之后卡被删了，
-               它必须跟着进高级设置 —— **它是设置，不是动作**，不能跟着卡一起消失。
-               我批⑪B 刚总结过"别把能力跟着入口一起删掉"，删这张卡时自己又犯了一次，
-               是提交前的 id 残留自检抓住的（fc-dir-auto = 0 次）。 -->
-          <!-- C2-A：「每周自动刷新免费目录」开关一并撤下 —— 目录源注册表为空时它无事可做，
-               留着只会让人以为后台还在抓。设置项本身（directory_autorefresh_enabled）保留在库里，
-               将来接上 IAQ 目录源时把这个 label 加回来即可。 -->
-          <label style="display:flex;align-items:center;gap:7px;margin-top:6px;cursor:pointer;font-size:13px">
-            <input type="checkbox" id="dp-auto"> 开启后台每小时自动搜索新客户
-            <span class="hint">（默认关；每轮只轮转跑一小批 20 组合、受下方预算封顶）</span>
-          </label>
-          <div style="display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap;font-size:13px">
-            <span>今日 Serper 已用 <b id="fc-serper-used">–</b> 次 / 预算上限</span>
-            <input id="fc-serper-budget" type="number" min="0" max="2500" step="10" style="width:84px;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:6px">
-            <button id="fc-serper-save" class="mini">保存预算</button>
-            <span class="hint">次（到上限自动停，含手动+后台；防失控烧免费额度）</span>
-          </div>
-          </div>
-        </div>
-
-        <!-- 4) 保存配置（通用，底部） -->
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px">
-          <button id="dp-save" class="primary">💾 保存配置</button>
-          <span class="hint">保存 国家/关键词清单 + 勾选 + 条数 + 自动开关 + 预算（后台自动搜索也用它）</span>
-          <span class="hint" id="dp-save-msg"></span>
-        </div>
-
-        <!-- 批⑳ 层3 末 · 维护：全量重扫从页顶黄金位降到这里，收敛成折叠（Joe 抱怨那颗黄色大按钮占黄金位）。
-             ⚠️ 只搬位 + 收样式：onclick=startRescan()、#rescan-hint、#rescan-bar 一字未改，确认弹窗照旧。 -->
-        <div class="fc-maint">
-          <div class="sec-title" style="cursor:pointer;user-select:none" onclick="toggleMaint()">
-            <span id="fc-maint-caret">▸</span> 🔧 维护（很少用）
-          </div>
-          <div id="fc-maint-body" hidden>
-            <p class="hint" style="margin:6px 0 8px">
-              打分标准改动后，库里分数会变成<b>新旧标准的混合物</b>。全量重扫把全部线索按<b>当前最新标准</b>重打；
-              已发信/已回复/已忽略/退订的<b>只刷新分数和证据，状态一个都不动</b>，不触发任何发信。
-            </p>
-            <button class="mini" onclick="startRescan()">🔄 全量重扫</button>
-            <span class="hint" id="rescan-hint" style="margin-left:8px"></span>
-            <div id="rescan-bar" class="rescan-bar" style="display:none;margin-top:8px"></div>
-          </div>
-        </div>
-
-        <div class="fc-card" id="dp-progress" style="display:none;margin-top:12px">
-          <div class="k muted" style="margin-bottom:6px">运行进度</div>
-          <div class="prog-track"><div class="prog-bar" id="dp-bar"></div></div>
-          <div class="prog-log" id="dp-log"></div>
-          <div id="dp-result" style="margin-top:10px"></div>
-        </div>
-      </div>
+      <!-- ══ C5-3：整页「🔍 找客户」已解散（Joe：四页架构收口）══
+           它的能力**一件没丢**，分流到四处：
+             · 「再抓一批」这个动作 → 列表页工具栏「➕ 补货」+ #restock-overlay 弹窗
+             · 画像 / 关键词 / 预算 / 自动搜索开关 → 设置页「🧭 方向盘」折叠卡
+             · 状态读数（自动搜索/轮转/Serper 今日）+ 全量重扫 → 机器房
+             · 单次参数（只搜某国 · 本次条数）→ 只活在补货弹窗里
+           删之前做过入口反扫，41 个 id 逐个安置，无入口指向空地（总工已核清单）。 -->
     </div>
   </div>
 
@@ -977,6 +887,55 @@
   <!-- 数据看板弹层 -->
   <div class="overlay" id="dashboard-overlay">
     <div class="modal" id="dashboard" style="width:min(940px,96vw)"></div>
+  </div>
+
+  <!-- ══ C5-3「➕ 补货」弹窗 ══
+       找客户整页解散后，「再抓一批」这个**动作**落在这里。
+       ⚠️ 里面的控件**一个没新建**：`fc-backlog` / `dp-transparency` / `fc-one-country` /
+          `dp-perkw` / `btn-import` / `dp-run` / `dp-progress` 全是从 #v-found 原样搬来的 id，
+          onclick 绑定、runPipeline、进度条一行没改 —— 只换了住处。
+       ⚠️「只搜某国」「本次条数」是**单次参数**，从此只活在这个弹窗里（总工 C5-3 ①）。 -->
+  <div class="overlay" id="restock-overlay">
+    <div class="modal" style="width:min(680px,96vw)">
+      <button class="modal-x" type="button" onclick="closeRestock()" title="关闭">×</button>
+      <h2>➕ 补货 —— 再找一批客户</h2>
+      <!-- 积压刹车条：它的全部意义就是**拦在"再进货"这个决定前面**（总工裁定 A）。
+           ⚠️ 条里三个「去处理」链接点下去要先关弹窗再跳，否则弹窗会盖在跳转后的列表上。 -->
+      <div id="fc-backlog" class="fc-backlog" style="display:none;margin-bottom:12px"></div>
+
+      <div class="rs-sec">
+        <div class="rs-sec-t">自动搜一轮</div>
+        <div class="transparency" id="dp-transparency" style="margin:0 0 10px"></div>
+        <div class="set-numrow" style="margin-bottom:8px">
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px">🎯 只搜某国
+            <select id="fc-one-country" class="fc-add-sel"><option value="">全部市场（默认）</option></select>
+          </label>
+          <span class="hint">后台自动轮换永远覆盖全部市场，不受这里影响</span>
+        </div>
+        <div class="set-numrow" style="margin-bottom:10px">
+          <span style="font-size:13px">本次条数</span>
+          <input id="dp-perkw" type="range" min="1" max="100" step="1" value="10" style="width:220px;max-width:100%">
+          <span style="font-size:13px"><b id="fc-perkw-val">10</b> 条 / 关键词 / 国家</span>
+        </div>
+        <button id="dp-run" class="primary">▶ 开始找客户</button>
+        <span class="hint" id="dp-msg" style="margin-left:8px"></span>
+        <span class="hint" id="fc-free-msg"></span>
+      </div>
+
+      <div class="rs-sec">
+        <div class="rs-sec-t">导入 CSV</div>
+        <div class="hint" style="margin:0 0 8px">自有名单，零搜索成本。</div>
+        <button id="btn-import">📄 导入 CSV</button>
+      </div>
+
+      <div class="prog-log" id="fc-free-log" style="margin-top:8px;display:none"></div>
+      <div id="fc-free-result" style="margin-top:8px"></div>
+      <div id="dp-progress" style="display:none;margin-top:12px">
+        <div class="prog-track"><div class="prog-bar" id="dp-bar"></div></div>
+        <div class="prog-log" id="dp-log"></div>
+        <div id="dp-result" style="margin-top:10px"></div>
+      </div>
+    </div>
   </div>
 
   <!-- 导入弹层 -->
@@ -1315,8 +1274,7 @@
       // Joe 2026-08-31：导航写「待办事项」而页面标题写「今天」，同一个东西两个名字。
       //   叫法归一到**页面上那个名字**（今天），导航跟着改。
       const navTop = `<div class="side-nav" data-nav="today" onclick="document.getElementById('btn-today').click()">📋 今天</div>`
-        + `<div class="side-nav" data-nav="found" onclick="document.getElementById('btn-discover').click()">🎯 找客户</div>`
-        + `<div class="side-nav" data-nav="dashboard" onclick="document.getElementById('btn-dashboard').click()">📊 数据看板</div>`
+          + `<div class="side-nav" data-nav="dashboard" onclick="document.getElementById('btn-dashboard').click()">📊 数据看板</div>`
       // C5-1：「📬 回复箱」导航项**撤除** —— 回信列表已内嵌进「今天」页（客户回你了 = 今天最该看的事，
       //   它不该是一个要你自己想起来去点的第二个入口）。
       //   ⚠️ `openReplyInbox` / `openReplyDetail` 两个函数**保留**：详情视图仍由内嵌列表调用。
@@ -1391,6 +1349,12 @@
     // ===== 批③C 分格工具栏：每格 = 这一格的出口动作 =====
     // sel:true = 选中类（未选中时禁用，标题带条数）；否则 = 全量类（对当前格全体，始终可用）
     const GROUP_TOOLS = {
+      // ══ C5-3：「找客户」整页解散后，「再抓一批」这个动作落在这里 ══
+      //   只放在「全部」页：它不是某一格的出口动作，是**给整个库进货**。
+      //   ⚠️ 不带 `sel` —— 它跟选中集无关（进货是全量的事）。
+      all: [
+        { t:"➕ 补货", cls:"primary", fn:"openRestock()" },
+      ],
       // ⭐⭐ 批⑭②：「待分析」现在装 new + analyzed无分（抓不到官网）两类混合 → 工具栏要覆盖两者的出口。
       //   · 立即分析：new 是首次打分，无分的是重抓重试 —— 同一个动作（toolAnalyzeSel 内部按 status 走）
       //   · 🔗 改网址：无分那批的主出口（官网可能写错/换域名了）—— 改完退回 new，cron 下轮会重抓
@@ -1479,7 +1443,7 @@
         { t:"转已忽略", cls:"btn-amber", sel:true, fn:"toolStatusSel('ignored','转已忽略')" },
       ],
     };
-    // all 页无工具栏（只保留筛选）；won 无出口动作
+    // C5-3 起「全部」页有一个工具栏按钮（➕ 补货）；won 仍无出口动作
     // ⭐⭐ 批⑲ 页面一：「待分析」按**下一步动作**分两组。Joe 要每页回答两个问题：
     //   「这里面是什么信息」+「我下一步该干什么」。这一格的答案是：
     //   · 组A 排队等 AI —— **你不用做任何事**（说清楚就够了；给按钮反而制造"我是不是该做点什么"的焦虑）
@@ -1757,7 +1721,11 @@
       //   现在它降级成**「已联系」格内的一个筛选**，格没变、动作全都仍然成立（跟进/他回了/放弃），
       //   工具栏必须留着 —— 何况那个筛选的复选框**自己就长在工具栏上**：
       //   不改这一行的话，Joe 一勾它，它把自己弄消失了。
-      const defs = (current==='all') ? [] : (GROUP_TOOLS[current] || []);
+      // 🔴 C5-3：这里原来写死 `(current==='all') ? []` —— 「全部」页被**硬编码成空工具栏**，
+      //   于是我在 GROUP_TOOLS 里加的 `all: [➕ 补货]` 一个字都走不到（加了、也渲染不出来）。
+      //   真正决定"这一格有没有工具栏"的是这一行，不是那张表。
+      //   现在统一由表决定：`all` 有条目就渲染，没有就空 —— 少一处只有读代码才知道的例外。
+      const defs = GROUP_TOOLS[current] || [];
       if(!defs.length){ bar.style.display="none"; bar.innerHTML=""; return; }
       const n = selectedIds.size;
       // ⭐ 批⑬③：当前**选中集**的构成 —— 给动态标题 t() 和 hideIf() 用。
@@ -2035,7 +2003,7 @@
       sSel.innerHTML =
         `<option value="">全部评分</option>` +
         `<option value="${smin}-100" data-dup="review">≥${smin}分 · 自动通道 (${sb.bAuto||0})</option>` +
-        `<option value="0-${smin}">&lt;${smin}分 · 翻牌堆 (${sb.bFlip||0})</option>` +
+        `<option value="0-${smin}">&lt;${smin}分 · 复核 (${sb.bFlip||0})</option>` +
         `<option value="none">未打分 (${sb.bNone||0})</option>`;
       sSel.value = scur;
       syncScoreOptsToPage();
@@ -2054,7 +2022,7 @@
       box.innerHTML = `<p class="hint">加载中…</p>`;
       const d = await fetch("/api/leads/flip-pile").then(r=>r.json()).catch(e=>({error:String(e)}));
       if (d.error) { box.innerHTML = `<p class="hint">加载失败：${esc(d.error)}</p>`; return; }
-      if (!d.total) { box.innerHTML = `<div class="empty">翻牌堆是空的 —— 机器这轮没扔掉任何东西。</div>`; return; }
+      if (!d.total) { box.innerHTML = `<div class="empty">这一档是空的 —— 机器这轮没扔掉任何东西。</div>`; return; }
       box.innerHTML =
         `<div class="fp-intro">机器扔掉了 <b>${d.total}</b> 家。按"被杀原因"分组 —— <b>扫组名整组略过，只在你觉得杀错的地方点开</b>。
           <span class="hint">机器误发一封信成本低、有熔断兜底；误杀一个真客户损失一单、不可见 —— 所以这堆值得你扫一眼。</span></div>` +
@@ -2858,7 +2826,7 @@
           stopPoll();
           const s = r.stats||{};
           rescanMsg(`✅ <b>重扫完成</b> —— 全部 ${total} 家已按最新标准重打<br>`
-            + `<span class="hint">≥${SCORE_LINE} 分 <b>${s.hi||0}</b> 家（自动通道）　·　&lt;${SCORE_LINE} 分 <b>${s.lo||0}</b> 家（翻牌堆待复核）　·　`
+            + `<span class="hint">≥${SCORE_LINE} 分 <b>${s.hi||0}</b> 家（自动通道）　·　&lt;${SCORE_LINE} 分 <b>${s.lo||0}</b> 家（待你复核）　·　`
             + `官网抓不到 <b>${s.nil||0}</b> 家（未打分，不是不合格）</span><br>`
             + `<span class="hint">自动发送仍是关闭的 —— 要不要重开由你决定。</span>`);
           loadStats(); loadList(); loadFacets(); return;
@@ -2967,9 +2935,15 @@
       const big = est > 500;   // 大批量醒目提醒，防误跑烧钱
       const one = $("#fc-one-country") && $("#fc-one-country").value;
       const scope = one ? `<b>1</b> 个国家（${esc(_fcAllCountries[one]||one)}）` : `<b>${nc}</b> 个国家（全部市场）`;
-      $("#dp-transparency").innerHTML = (nc && nk)
-        ? `<span class="${big?'fc-warn':''}">本轮将执行：<b>${nk}</b> 个关键词 × ${scope} = <b>${nk*nc}</b> 次搜索，每次取 <b>${per}</b> 条 → 预计最多新增 <b>${est}</b> 家（去重后通常少很多）。${big?' ⚠️ 批量较大，注意搜索/AI 成本与时长。':''}</span>`
-        : `<span class="muted">至少勾选 1 个关键词。</span>`;
+      // C5-3：估算行并进补货弹窗，末尾补一句「今日还剩 X 次」——**决策时点**最该知道的那个数。
+      //   读的是 openRestock 存下的同一份 cfg.serper（与机器房同源），不另开端点、不自己算。
+      const _tp = $("#dp-transparency");
+      const _left = (_tp && _tp.dataset) ? _tp.dataset.left : undefined;
+      // ⚠️ 读不到就不显示 —— 绝不写 0 冒充"还剩零次"（"不知道"不许伪装成一个数）
+      const leftTxt = (_left !== undefined && _left !== "") ? ` · 今日还剩 <b>${esc(_left)}</b> 次` : ``;
+      _tp.innerHTML = (nc && nk)
+        ? `<span class="${big?'fc-warn':''}">本轮将执行：<b>${nk}</b> 个关键词 × ${scope} = <b>${nk*nc}</b> 次搜索，每次取 <b>${per}</b> 条 → 预计最多新增 <b>${est}</b> 家（去重后通常少很多）${leftTxt}。${big?' ⚠️ 批量较大，注意搜索/AI 成本与时长。':''}</span>`
+        : `<span class="muted">至少勾选 1 个关键词（在设置页 · 方向盘里选）。</span>`;
     }
 
     function renderKwInline(){
@@ -2999,26 +2973,6 @@
     // 批⑳ 层1 · 进货机器状态卡（只读）。全部字段来自 openDiscover 的 cfg（/api/settings/search）。
     //   ⚠️ 轮转分母 = keywords × allCountries（后台轮转恒用全量国家），与 discover.ts runDiscovery 的
     //      totalC=combos.length 同口径；**绝不用透明度行的 nc**（选单国定向那个会变 1，会让状态卡说谎）。
-    function renderMachineStatus(cfg){
-      const body=$("#fc-machine-body"); if(!body) return;
-      const on = !!cfg.discoveryEnabled;
-      const kwN = (cfg.keywords||[]).length;
-      const ccN = Object.keys(cfg.allCountries||{}).length;
-      const total = kwN*ccN;
-      const cursor = cfg.discoveryCursor||0;
-      const s = cfg.serper||{};
-      const budget = (s.budget!=null) ? s.budget : null;
-      const used = s.usedToday||0;
-      const overBudget = budget!=null && budget>0 && used>=budget;
-      const dirOn = cfg.dirAutoRefresh !== false;
-      const dirLast = cfg.dirLastRefresh ? String(cfg.dirLastRefresh).slice(0,10) : '还没跑过';
-      const row=(ic,lb,vl)=>`<div class="ms-row"><span class="ms-ic">${ic}</span><span class="ms-lb">${lb}</span><span class="ms-vl">${vl}</span></div>`;
-      body.innerHTML =
-        row('🔍','后台自动搜索', on?'<b class="ms-on">● 开启</b> · 每小时轮转一小批':'<b class="ms-off">○ 未开启</b> · 靠你手动跑')
-      + row('🔄','轮转进度', total?`已推进到 <b>${cursor}</b> / ${total} 组合（${kwN} 词 × ${ccN} 国，环绕）`:'—')
-      + row('🎯','今日 Serper', budget!=null?`<b>${used}</b> / ${budget} 次${overBudget?' <span class="fc-warn">已用满，明天恢复</span>':''}`:'—')
-      + row('📚','免费目录刷新', dirOn?`<b class="ms-on">● 开</b> · 上次 ${dirLast}`:'<b class="ms-off">○ 未开</b>');
-    }
     // 批④ 积压刹车条：找客户只回答"要不要再进货、进多少"——进之前先看管道里堵着多少。
     // 瓶颈常常不是线索不够（这页容易只顾鼓励你抓更多），而是没打分/缺邮箱/能发没发堵在中间。
     // 批⑳ 一行式（旧三卡瓷砖退役）：管道堵了多少 + 三个去处理入口做成内联链接（能力不删，只收敛体量）。
@@ -3029,7 +2983,9 @@
       const total=un+ne+sd;
       if(!total){ el.style.display='none'; return; }   // 管道通畅就别唠叨
       const jam=un+ne;
-      const lnk=(n,txt,grp)=> n?`<a class="bk-lnk" onclick="gotoGroup('${grp}')">${n} ${txt}</a>`:'';
+      // C5-3：积压条现在住在「➕ 补货」弹窗里 → 跳转前**先关弹窗**，
+      //   否则弹窗会盖在跳转后的列表上（总工点名的实现注意点）。
+      const lnk=(n,txt,grp)=> n?`<a class="bk-lnk" onclick="closeRestock();gotoGroup('${grp}')">${n} ${txt}</a>`:'';
       const parts=[lnk(un,'没打分','unscored'),lnk(ne,'缺邮箱','review'),lnk(sd,'能发没发','ready')].filter(Boolean);
       el.style.display='block';
       el.innerHTML = `<span class="bk-ic">${jam>200?'⚠️':'🚦'}</span><b>管道积压 ${total} 条</b>`
@@ -3041,41 +2997,6 @@
     //    下面的 onclick 绑定本来就带 null 守卫，所以这两个函数现在是留档的死代码。
     //    后端也已装闸（discover.ts ENABLED_DIRECTORY_SOURCES 为空）——**两层都关，不靠任何一层单独兜**。
     //    接上 IAQ 目录源时：注册表加一条 + 按钮加回来，这里一行不用改。
-    async function runNmeaHarvest(){
-      if (window._freeRunning) return; window._freeRunning = true;
-      const btn=$("#fc-nmea"), btn2=$("#fc-rvtito"), log=$("#fc-free-log"), res=$("#fc-free-result");
-      btn.disabled=true; btn2.disabled=true; res.innerHTML=""; log.style.display="block"; log.textContent="";
-      let total=0, base="";
-      try {
-        const affs=['Dealer','International'];
-        for (let i=0;i<affs.length;i++){
-          const aff=affs[i];
-          log.textContent = base + `抓取 NMEA ${aff} 目录中…（服务端渲染 HTML，零 Serper 费）`;
-          const r = await fetch("/api/discover/nmea",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({affcode:aff})}).then(r=>r.json()).catch(e=>({error:String(e)}));
-          if (r.error){ base += `${aff} 抓取失败：${r.error}\n`; log.textContent=base; break; }
-          total += r.inserted||0;
-          base += `${aff}：解析 ${r.fetched} 家，新增 ${r.inserted}（去重 ${r.skipped}·无站 ${r.noSite}·社媒 ${r.social}）\n`;
-          log.textContent=base; loadStats(); loadList(); loadFacets();
-          if (i<affs.length-1){
-            for (let s=10;s>0;s--){ log.textContent = base + `等待 ${s}s（遵守目录 Crawl-delay 抓取礼貌间隔）…`; await new Promise(r=>setTimeout(r,1000)); }
-            log.textContent=base;
-          }
-        }
-        res.innerHTML = `✅ NMEA 抓取完成：共新增 <b>${total}</b> 家船舶经销/安装商（零 Serper 费）。 <button class="primary" onclick="gotoGroup('unscored')">去待分析 →</button>`;
-      } finally { btn.disabled=false; btn2.disabled=false; window._freeRunning=false; }
-    }
-    async function runRvHarvest(){
-      if (window._freeRunning) return; window._freeRunning = true;
-      const btn=$("#fc-nmea"), btn2=$("#fc-rvtito"), log=$("#fc-free-log"), res=$("#fc-free-result");
-      btn.disabled=true; btn2.disabled=true; res.innerHTML=""; log.style.display="block"; log.textContent="抓取 rvwithtito RV 安装商名单中…（零 Serper 费）";
-      try {
-        const r = await fetch("/api/discover/rvwithtito",{method:"POST"}).then(r=>r.json()).catch(e=>({error:String(e)}));
-        if (r.error){ log.textContent="抓取失败："+r.error; return; }
-        log.textContent = `解析外链 ${r.fetched}，新增 ${r.inserted}（去重/黑名单跳过 ${r.skipped}·社媒 ${r.social}）`;
-        loadStats(); loadList(); loadFacets();
-        res.innerHTML = `✅ 完成：新增 <b>${r.inserted}</b> 家 RV 安装商（零 Serper 费）。 <button class="primary" onclick="gotoGroup('unscored')">去待分析 →</button>`;
-      } finally { btn.disabled=false; btn2.disabled=false; window._freeRunning=false; }
-    }
     window.delKeyword = async (id) => { await fetch(`/api/keywords/${id}`, {method:"DELETE"}); await reloadKw(); };
     // 重载关键词清单，保留当前勾选态（新加的默认勾选）
     async function reloadKw(){
@@ -3098,8 +3019,13 @@
             ? `重试还是失败，请<b>刷新页面</b>重新登录。`
             : `<button class="mini" id="${retryId}" style="margin-left:6px">点此重试</button>`);
     }
-    async function openDiscover(retried){
-      showMainView('found');
+    // ══ C5-3：原 openDiscover。找客户整页解散后它**不再是"打开一个页面"**，
+    //    而是「读一次 /api/settings/search，喂给现在存在的那些控件」。
+    //    ⚠️ 三个消费方（设置页方向盘 / 机器房 / 补货弹窗）**共用这一次读取**，
+    //       绝不为此开第二个后端口子。
+    //    ⚠️ 函数体里每一处 DOM 写入本来就带 `if(el)` 守卫 —— 所以哪些 id 此刻在页面上、
+    //       它就只填哪些，不在的自然跳过。这正是"只搬 DOM 不改行为"能成立的原因。
+    async function loadSearchCfg(retried){
       const errBox = $("#fc-loaderr");
       let cfg;
       try {
@@ -3109,16 +3035,12 @@
       } catch (e) {
         if (errBox) {
           errBox.style.display = ''; errBox.innerHTML = loadErrorHtml('fc-retry', retried);
-          const b = $("#fc-retry"); if (b) b.onclick = () => openDiscover(true);
+          const b = $("#fc-retry"); if (b) b.onclick = () => loadSearchCfg(true);
         }
-        return;   // 别继续往下渲染 —— 没数据，渲了也是空壳
+        return null;   // 别继续往下渲染 —— 没数据，渲了也是空壳
       }
       if (errBox) { errBox.style.display = 'none'; errBox.innerHTML = ''; }   // 上次失败过、这次成功 → 收起横幅
       _fcAllCountries = cfg.allCountries||{};
-      renderMachineStatus(cfg);   // 批⑳ 层1 · 进货机器状态卡（只读，全部字段来自 cfg）
-      // ⭐ 批㉑：搜索范围说明行的 N = **真数**（读 allCountries 键数，绝不写死）。
-      { const n = Object.keys(_fcAllCountries).length;
-        const el = $("#fc-scope-line"); if (el) el.innerHTML = `覆盖<b>目标市场（${n} 国）</b> · 自动轮换 · 预算封顶`; }
       // 单国定向下拉：从 allCountries 填（默认"全部市场"）
       { const sel = $("#fc-one-country");
         if (sel) {
@@ -3161,7 +3083,9 @@
             const m=$("#fc-free-msg"); if(m){ m.textContent = da.checked?"✅ 已开启每周自动刷新":"⚠️ 已关闭每周自动刷新"; setTimeout(()=>{ if(m) m.textContent=""; },2500); }
           };
       } }
-      { const n=$("#fc-nmea"); if(n) n.onclick=runNmeaHarvest; const rv=$("#fc-rvtito"); if(rv) rv.onclick=runRvHarvest; }   // 批B 免费目录源按钮
+      // C5-3：NMEA / rvwithtito 两个免费目录源按钮的绑定已随死代码一并删除
+      //   （按钮 C2-A 就撤了，函数壳留到本批）。将来接 IAQ 行业目录源时，
+      //   从 discover.ts 的 ENABLED_DIRECTORY_SOURCES 注册表加起。
       if (cfg.serper) { const u=$("#fc-serper-used"); if(u) u.textContent = cfg.serper.usedToday; const b=$("#fc-serper-budget"); if(b) b.value = cfg.serper.budget; }   // P0-c Serper 用量/预算回显
       { const sb=$("#fc-serper-save"); if(sb) sb.onclick = async () => { const v=Number($("#fc-serper-budget").value)||1000; await fetch("/api/settings/search",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({serperBudget:v})}); $("#dp-msg").textContent="Serper 预算已保存"; }; }
       const per = cfg.perKeyword || 10;
@@ -3174,7 +3098,8 @@
         const txt=(p.profile||"").trim();
         const sm=$("#fc-profile-summary"); if(sm) sm.textContent = txt ? (txt.slice(0,40)+(txt.length>40?'…':'')) : '（未设置，用内置默认画像）';
         const bd=$("#fc-profile-badge"); if(bd) bd.textContent = p.isDefault ? '· 默认画像' : '· 已自定义';
-      }).catch(()=>{});
+        renderWheelSummary(cfg, !p.isDefault);   // C5-3：方向盘折叠行摘要（真值派生）
+      }).catch(()=>{ renderWheelSummary(cfg, null); });   // 画像读不到就说读不到，别当成"默认"
       // 每次进入默认"管理关"（关键词的日常勾选态，藏增删）
       _fcKwManage=false;
       { const b=$("#fc-kw-manage"); if(b){ b.textContent='管理'; b.classList.remove('mini-on'); } const r=$("#fc-kw-editrow"); if(r) r.style.display='none'; }
@@ -3197,8 +3122,49 @@
       $("#dp-log").textContent = "";
       $("#dp-msg").textContent = "";
       { const rb=$("#dp-result"); if(rb) rb.innerHTML = ""; }
+      // ⚠️ 必须把 cfg 交回去：三个消费方（补货弹窗/方向盘/机器房）都要用它。
+      //   我改了函数头忘了改函数尾 —— 调用方拿到 undefined，「今日还剩 X 次」就静默不显示，
+      //   而且**看着完全正常**（那一段本来就设计成"读不到就不显示"）。
+      return cfg;
     }
-    $("#btn-discover").onclick = openDiscover;
+    // ══ C5-3：「➕ 补货」弹窗 ══
+    //   打开时才读一次配置（关键词/国家/预算是估算的分母，不能拿旧值算）。
+    window.openRestock = async () => {
+      $("#restock-overlay").classList.add("show");
+      const cfg = await loadSearchCfg();
+      // ⚠️ 「今日还剩 X 次」的分母/分子都来自同一份 cfg.serper —— 与机器房读同一个字段。
+      //    这是**决策时点的瞬态展示**（总工已批），机器房仍是它唯一的常驻展示位。
+      const st = $("#dp-transparency");
+      if (cfg && cfg.serper && st) {
+        const left = Math.max(0, (cfg.serper.budget ?? 0) - (cfg.serper.usedToday ?? 0));
+        st.dataset.left = String(left);
+      }
+      updateTransparency();
+    };
+    window.closeRestock = () => $("#restock-overlay").classList.remove("show");
+    $("#restock-overlay").onclick = (e) => { if (e.target.id === "restock-overlay") closeRestock(); };
+
+    // ══ C5-3：设置页「🧭 方向盘」折叠 ══
+    //   ⚠️ 展开时才去读配置：这一卡默认收起，进设置页就把关键词/画像全拉一遍是白花的往返。
+    window.toggleWheel = async () => {
+      const b = $("#wheel-body"), c = $("#wheel-caret");
+      if (!b) return;
+      const opening = b.hidden;
+      b.hidden = !b.hidden;
+      if (c) c.textContent = b.hidden ? "▸" : "▾";
+      if (opening) await loadSearchCfg();
+    };
+    // 折叠行摘要 = **真值派生**（宪法铁律三：状态由真实配置派生，禁止写死）。
+    // 收起时它是这一卡唯一计入 900 字预算的东西，所以要短、且每一项都是他真会看的。
+    function renderWheelSummary(cfg, prof){
+      const el = $("#wheel-summary"); if (!el) return;
+      if (!cfg) { el.textContent = "（读不到配置——展开看详情）"; return; }
+      const kwN = Array.isArray(cfg.activeKeywords) ? cfg.activeKeywords.length : (cfg.keywords||[]).length;
+      const ccN = Object.keys(cfg.allCountries||{}).length;
+      const bud = (cfg.serper && cfg.serper.budget != null) ? cfg.serper.budget : "–";
+      el.textContent = `画像:${prof===null ? "读不到" : (prof ? "已自定义" : "默认")} · 关键词 ${kwN} · 市场 ${ccN} 国 · 预算 ${bud}/天 · 后台自动搜索:${cfg.discoveryEnabled ? "开" : "关"}`;
+    }
+
     $("#dp-kwadd").onclick = async () => {
       const kw = $("#dp-kwnew").value.trim(); if (!kw) return;
       await fetch("/api/keywords", {method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({keyword:kw})});
@@ -3288,17 +3254,10 @@
         ["dp-run","dp-save"].forEach(id=>$("#"+id).disabled=false);
       }
     }
-    // ⭐ 批⑪A：「⚙ 高级设置」折叠。
-    //   ⚠️ **没用 `<details>` 的原生折叠**：本地渲染器不实现它 —— 实测造了一个干净的 details，
-    //      `open=false` 时子元素仍有 21px 高度（不是我的 CSS 有鬼，我把所有 details 相关规则都查过了）。
-    //      Joe 的 Chrome 大概率正常，但**我在这里验不了它** —— 而"我验不了"不能变成"我假设它行"。
-    //      一个 div + hidden，行为在哪都一样，而且我验得了。
-    window.toggleAdv = () => {
-      const b = $("#fc-adv"), c = $("#fc-adv-caret");
-      if (!b) return;
-      b.hidden = !b.hidden;
-      if (c) c.textContent = b.hidden ? "▸" : "▾";
-    };
+    // ⭐ 折叠一律用 `div + hidden`，**不用 `<details>` 的原生折叠**：本地渲染器不实现它 ——
+    //   实测造了一个干净的 details，`open=false` 时子元素仍有 21px 高度（不是 CSS 的鬼）。
+    //   Joe 的 Chrome 大概率正常，但**我在这里验不了它** —— 而"我验不了"不能变成"我假设它行"。
+    //   （C5-3：原 toggleAdv 随「高级设置」卡一并删除；toggleWheel/toggleMaint 沿用同一写法。）
 
     // ⭐ 批⑪A：「仅搜索（不分析）」已删 —— 它**专造没打分的线索**，是"78 家未打分堆在待审批"那个坑的来源之一。
     //   删之前连根拔查过了：`analyze` 是**纯前端参数**，后端 runDiscovery 根本没有它
@@ -3443,6 +3402,12 @@
       renderAutomation(c);
       await loadNotifyCfg();          // 飞书那块也一起刷新
       _cfgLoaded = true;              // 全部字段都真填上了，才允许保存
+      // C5-3：方向盘**收起时**只露一行摘要，而那一行是计入 900 字预算的唯一内容 ——
+      //   它必须是真值派生（铁律三），所以进设置页就得把配置读一次。
+      //   ⚠️ 不 await：方向盘读不到不该拖住整页设置（它自己会写「读不到」，不会假装是"默认"）。
+      { const wb=$("#wheel-body"), wc=$("#wheel-caret");
+        if (wb && !wb.hidden) { wb.hidden = true; if (wc) wc.textContent = "▸"; } }
+      loadSearchCfg().catch(()=>renderWheelSummary(null, null));
     };
     $("#btn-settings").onclick = () => openSettings();
     document.addEventListener("input", (e) => { if (e.target && e.target.id === "cfg-auto-limit") renderCapacity(); });
@@ -3678,12 +3643,14 @@
 
     // 主内容视图切换：list(线索列表) / today(今日待办整页) / dashboard(数据看板整页)
     window.showMainView = (v) => {
-      const list = document.getElementById('v-list'), page = document.getElementById('v-page'), found = document.getElementById('v-found');
+      const list = document.getElementById('v-list'), page = document.getElementById('v-page');
       const settings = document.getElementById('v-settings');   // 批⑩A：设置整页
       if (!list || !page) return;
-      list.style.display='none'; page.style.display='none'; if(found) found.style.display='none'; if(settings) settings.style.display='none';
+      // C5-3：`found` 变量随 #v-found 一并删除。⚠️ 这一行原来还留着 `if(found) …` ——
+      //   `found` 已不是声明过的变量了，`if(found)` 会抛 ReferenceError（不是 undefined 那种温和的），
+      //   **整个视图切换当场死掉**。删元素必须连着删对它的每一处引用，不能只删声明。
+      list.style.display='none'; page.style.display='none'; if(settings) settings.style.display='none';
       if (v === 'list' || v === 'due') { list.style.display=''; page.innerHTML=''; }   // 批③B due=列表视图，但左栏高亮在导航项
-      else if (v === 'found') { if(found) found.style.display=''; page.innerHTML=''; }
       else if (v === 'settings') { if(settings) settings.style.display=''; page.innerHTML=''; }
       else { page.style.display=''; }
       activeView = v;              // #42 记录当前视图
@@ -4102,7 +4069,7 @@ ${esc(d.ours.body||'')}</div></details>`
         //   但 Joe 定性它是"信息不全"不是"故障" → 它不该在待办里当警报叫。
         //   它现在回「待分析」格正常待着（待分析 = new + 无分），Joe 从那儿处理。
         //   ⭐ 但 gotoGroup('noscore') 这个**子筛选入口保留**（待分析格里"只看抓不到官网的"）。
-        { n:overBudget?1:0,            cls:'tri-warn', icon:'⚠️', text:()=>`今日 Serper 搜索预算已用满（${serper.usedToday}/${serper.budget}）`, sub:'自动搜索已停，明天恢复；要继续可去找客户页调高预算', go:'去找客户', fn:"openDiscover()" },
+        { n:overBudget?1:0,            cls:'tri-warn', icon:'⚠️', text:()=>`今日 Serper 搜索预算已用满（${serper.usedToday}/${serper.budget}）`, sub:'自动搜索已停，明天恢复；要继续到设置页 · 方向盘调高预算', go:'去调预算', fn:"openSettings()" },
       ].filter(x=>x.n>0);
 
       // ================= C2-D 操作员首页：三句话 =================
@@ -4213,10 +4180,16 @@ ${esc(d.ours.body||'')}</div></details>`
     window.openMachineRoom = async function openMachineRoom(retried){
       showMainView('machine');
       $("#v-page").innerHTML = pageHeader('🛠 机器房','机器内部：钥匙 · 预算 · 闸门 · 班次。日常不用看') + `<p class="hint">加载中…</p>`;
-      const [ign, cfg, today] = await Promise.all([
+      // ⚠️ C5-3：`scfg` = /api/settings/search，**本批新增的一路**。
+      //    机器房原来只读 ignition / sending / today —— 我第一版把「后台自动搜索」「轮转进度」
+      //    写成 `cfg.discoveryEnabled` / `cfg.discoveryCursor`，而 `cfg` 是 sending，
+      //    那两个字段**根本不存在** ⇒ 会永远显示"○ 未开启 / —"，而且看着完全合理。
+      //    （断言产出不断言字段名：写进模板前先确认这个变量真的装着那个端点的返回。）
+      const [ign, cfg, today, scfg] = await Promise.all([
         fetch("/api/ignition").then(r=>r.json()).catch(()=>null),
         fetch("/api/settings/sending").then(r=>r.json()).catch(()=>null),
         fetch("/api/today").then(r=>r.json()).catch(()=>null),
+        fetch("/api/settings/search").then(r=>r.json()).catch(()=>null),
       ]);
       if (!ign || !cfg) { $("#v-page").innerHTML = pageHeader('🛠 机器房','') + `<div class="load-error">${loadErrorHtml('mr-retry', retried)}</div>`;
         const b=$("#mr-retry"); if(b) b.onclick=()=>openMachineRoom(true); return; }
@@ -4264,16 +4237,48 @@ ${esc(d.ours.body||'')}</div></details>`
                <span class="hint">全部出站走 sales@airsonde.net；日限不按发件域分</span></div>
            </div>
 
-           <div class="fc-card" style="margin-top:12px"><div class="sec-title">🔍 找客户预算与班次</div>
+           <!-- C5-3 ③：找客户页的「🤖 进货机器状态」四行并进这一块 —— 两块本来就重叠
+                （「今日 Serper used/budget」两边各显示一次，是同一个数两个展示位，铁律五）。
+                合并后 **Serper 今日用量在全站只有这一个展示位**；补货弹窗里的"还剩 X 次"是
+                决策时点的瞬态展示，读同一个字段，总工已批。
+                标题改问句：机器房回答的是问题，不是陈列仪表。 -->
+           <div class="fc-card" style="margin-top:12px"><div class="sec-title">🔍 机器今天在找客户吗？</div>
+             <div class="mr-kv"><span>后台自动搜索</span>${!scfg ? '<span class="hint">读不到</span>' : (scfg.discoveryEnabled ? '<b class="ms-on">● 开启</b>' : '<b class="ms-off">○ 未开启</b>')}
+               <span class="hint">${!scfg ? '这次没问到 /api/settings/search（不是"关着"）' : (scfg.discoveryEnabled ? '每小时轮转一小批；开关在设置页 · 方向盘' : '靠你手动点「➕ 补货」；开关在设置页 · 方向盘')}</span></div>
              <div class="mr-kv"><span>Serper 今日</span><b>${serper.usedToday ?? 0} / ${serper.budget ?? '-'}</b>
                <span class="hint">用满就停到明天；每轮只跑一小批关键词×国家组合，避免一次烧光</span></div>
+             <div class="mr-kv"><span>轮转进度</span>${(() => {
+                 if (!scfg) return '<span class="hint">读不到</span>';
+                 const kwN=(scfg.keywords||[]).length, ccN=Object.keys(scfg.allCountries||{}).length, total=kwN*ccN;
+                 return total ? `<b>${scfg.discoveryCursor||0}</b> / ${total}<span class="hint">${kwN} 词 × ${ccN} 国，环绕推进</span>`
+                              : '<b>—</b><span class="hint">还没有关键词或市场清单</span>';
+               })()}</div>
              <div class="mr-kv"><span>后台班次</span><b>每小时一轮</b>
                <span class="hint">找客户/目录只在 0、6、12、18 点那四轮跑（爬别人的站要守礼貌节奏）</span></div>
              <div class="mr-kv"><span>目录源</span><b>未启用</b>
                <span class="hint">上游那两个是海事/房车目录，对 AirSonde 是错行业，已撤（C2-A）；找到 IAQ 行业目录后可接回</span></div>
            </div>
 
+           <!-- C5-3 ③：维护块整块从找客户页搬来。⚠️ **只搬位**：onclick=startRescan()、
+                #rescan-hint、#rescan-bar、确认弹窗、断点续跑，一字未改。 -->
+           <div class="fc-maint" style="margin-top:12px">
+             <div class="sec-title" style="cursor:pointer;user-select:none" onclick="toggleMaint()">
+               <span id="fc-maint-caret">▸</span> 🔧 维护（很少用）
+             </div>
+             <div id="fc-maint-body" hidden>
+               <p class="hint" style="margin:6px 0 8px">
+                 打分标准改动后，库里分数会变成<b>新旧标准的混合物</b>。全量重扫把全部线索按<b>当前最新标准</b>重打；
+                 已发信/已回复/已忽略/退订的<b>只刷新分数和证据，状态一个都不动</b>，不触发任何发信。
+               </p>
+               <button class="mini" onclick="startRescan()">🔄 全量重扫</button>
+               <span class="hint" id="rescan-hint" style="margin-left:8px"></span>
+               <div id="rescan-bar" class="rescan-bar" style="display:none;margin-top:8px"></div>
+             </div>
+           </div>
+
            <p class="hint" style="margin-top:14px"><a href="javascript:void(0)" onclick="openToday()">← 回今天</a></p>`;
+      // 机器房要显示轮转进度/自动搜索状态，这些字段来自 /api/settings/search —— 由 loadSearchCfg 统一读，
+      // 这里只消费。⚠️ 一处读取、两处消费，不为此开第二个后端口子。
     };
 
     $("#btn-today").onclick = openToday;
