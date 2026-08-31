@@ -21,6 +21,25 @@ export function scoreModel(env: { SCORE_MODEL?: string }): string { return env.S
 /** 写信用哪个模型（env 优先，缺省走真源常量）。 */
 export function emailModel(env: { EMAIL_MODEL?: string }): string { return env.EMAIL_MODEL || DEFAULT_EMAIL_MODEL; }
 
+// ---- token 额度：**推理型模型要留出思考的地方** ---------------------------
+// 🔴 2026-08-31 Joe 连撞两次「OpenRouter 返回空内容」：打分（flash + 600 + json 模式）正常，
+//    写信（pro + **500**）必空。查 OpenRouter 公开 models 端点：两个模型的 supported_parameters
+//    里**都有 `reasoning` / `reasoning_effort`** ⇒ 都是推理型。推理 token 也算在 max_tokens 里，
+//    500 的额度可以被思考**整个吃光**，正文一个字都轮不到 → content 空。
+//
+// ⚠️ 爆炸半径不止 Joe 撞到的那一条：`emailModel` 有**五个**调用点，原额度 500/250/260/400/1000，
+//    全都在同一个坑上。只修 writeEmail 等于修了触发调查的那一列，另外四列照样会塌。
+//
+// max_tokens 是**上限不是目标**：模型只写 130 词就停，不会因为额度大而多花钱；
+//    只有真的思考很久才会多计费（pro 输出 $3.96/M ⇒ 3000 token ≈ $0.012 一封）。
+// ⚠️ 这几个数是**按"思考 + 正文都装得下"取的**，不是实测最优值 —— 真实的 reasoning 用量
+//    要等第一次成功后从 usage.completion_tokens_details.reasoning_tokens 读回来再校准。
+const TOK_EMAIL    = 3000;   // 开发信：90-140 词正文 ≈ 200 token，其余全留给思考
+const TOK_FOLLOWUP = 2000;   // 跟进信 40-70 词
+const TOK_REPLY    = 2500;   // 回复草稿 60-120 词
+const TOK_TRANSLATE= 3000;   // 中译：输出长度≈输入，留两倍余量
+const TOK_SCORE    = 2000;   // 打分：600 目前够用，但它跟写信是同一个坑，一并抬（json 输出仍很短）
+
 // 冲刺1a：社会证明/卖点（可信、匿名，不点名具体客户）。用户可在"发信设置"里改。
 // ⚠️ AirSonde 卖点**草稿**：故意只写保守的中性描述，上游那种"top-selling/100+ resellers"社会证明
 //   对 AirSonde 是**假 claim**，一条都没搬。真实卖点（认证/产能/案例）待 Joe 逐条核实后在发信设置里填。
@@ -70,8 +89,34 @@ async function chat(env: Env, model: string, messages: ChatMsg[], opts: { json?:
     throw new Error(`OpenRouter ${res.status}: ${t.slice(0, 300)}`);
   }
   const data: any = await res.json();
-  const content = data?.choices?.[0]?.message?.content;
-  if (!content) throw new Error("OpenRouter 返回空内容");
+  const choice = data?.choices?.[0];
+  const msg = choice?.message ?? {};
+  // 有的 provider 把 content 拆成 [{type:"text",text:"…"}]，不是裸字符串
+  const content = typeof msg.content === "string"
+    ? msg.content
+    : Array.isArray(msg.content)
+      ? msg.content.map((p: any) => (typeof p === "string" ? p : p?.text || "")).join("")
+      : "";
+  if (!content.trim()) {
+    // 🔴 2026-08-31：这里原来只抛「OpenRouter 返回空内容」——**把所有证据都扔了**。
+    //    Joe 连撞两次，总工让我去 tail 里找 finish_reason，可代码从没记过它，tail 里当然没有。
+    //    一条不说明自己为什么发生的错误，等于逼下一个人重跑一遍才能开始查。
+    //    ⇒ 空内容时必须把「怎么判断是哪种空」的三个量一起说出来：
+    //      · finish_reason=length → 被 max_tokens 截断（思考把额度吃光了）
+    //      · finish_reason=stop 且 reasoning 有字 → 模型把产出留在了 reasoning 字段
+    //      · 两者都不是 → 是别的（provider 路由/内容过滤），至少 usage 能说话
+    const fr = choice?.finish_reason ?? "(无)";
+    const nfr = choice?.native_finish_reason ?? "(无)";
+    const reasoningLen = String(msg.reasoning || msg.reasoning_content || "").length;
+    const u = data?.usage || {};
+    // ⛔ 绝不把 reasoning 当正文用：那是模型的思考过程，发给真客户就是事故。
+    throw new Error(
+      `OpenRouter 返回空内容（model=${model} · finish_reason=${fr}/${nfr} · ` +
+      `max_tokens=${body.max_tokens} · 用量 prompt=${u.prompt_tokens ?? "?"} ` +
+      `completion=${u.completion_tokens ?? "?"} reasoning=${u.completion_tokens_details?.reasoning_tokens ?? "?"} · ` +
+      `reasoning 字段 ${reasoningLen} 字）`
+    );
+  }
   return content;
 }
 
@@ -200,7 +245,7 @@ export async function scoreLead(
   const raw = await chat(env, model, [
     { role: "system", content: sys },
     { role: "user", content: user },
-  ], { json: true, maxTokens: 600 });
+  ], { json: true, maxTokens: TOK_SCORE });
 
   const obj = extractJson(raw);
   const cc = String(obj.country_code ?? "").trim().toLowerCase();
@@ -289,7 +334,7 @@ export async function writeEmail(
   return (await chat(env, model, [
     { role: "system", content: sys },
     { role: "user", content: user },
-  ], { maxTokens: 500 })).trim();
+  ], { maxTokens: TOK_EMAIL })).trim();
 }
 
 // #44 把英文开发信翻译成中文（纯展示，供用户理解；绝不影响实际发送的英文原文）
@@ -303,7 +348,7 @@ export async function translateToChinese(env: Env, text: string): Promise<string
   return (await chat(env, model, [
     { role: "system", content: sys },
     { role: "user", content: user },
-  ], { maxTokens: 1000 })).trim();
+  ], { maxTokens: TOK_TRANSLATE })).trim();
 }
 
 // 写"跟进信"：第一封没回复时的第二次触达，要短、礼貌、不施压
@@ -328,7 +373,7 @@ export async function writeFollowup(env: Env, brandName: string, company: string
   return (await chat(env, model, [
     { role: "system", content: sys },
     { role: "user", content: user },
-  ], { maxTokens: 250 })).trim();
+  ], { maxTokens: TOK_FOLLOWUP })).trim();
 }
 
 // engaged「趁热跟进」：收件人点了冷邮件里的链接=有意向，写一封短而暖的跟进。
@@ -358,7 +403,7 @@ export async function writeWarmFollowup(env: Env, brandName: string, company: st
   return (await chat(env, model, [
     { role: "system", content: sys },
     { role: "user", content: user },
-  ], { maxTokens: 260 })).trim();
+  ], { maxTokens: TOK_FOLLOWUP })).trim();
 }
 
 // 阶段三.2 给客户回复起草一封建议回复（供人工审核后发送）
@@ -387,7 +432,7 @@ export async function writeReplyDraft(env: Env, brandName: string, company: stri
   return (await chat(env, model, [
     { role: "system", content: sys },
     { role: "user", content: user },
-  ], { maxTokens: 400 })).trim();
+  ], { maxTokens: TOK_REPLY })).trim();
 }
 
 function clampScore(v: any): number {
