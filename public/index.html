@@ -30,7 +30,7 @@
     .side { width:178px; background:var(--surface-2); border:.5px solid var(--border); border-radius:12px; padding:12px; flex-shrink:0; overflow:auto;
             display:flex; flex-direction:column; }   /* 批③：flex 把底部⚙设置顶到底 */
     .side-settings { margin-top:10px; padding-top:10px; border-top:1px solid var(--border); flex-shrink:0; display:block; }
-    .side-settings .gear-btn { width:100%; text-align:left; }
+    .side-settings .gear-btn { width:100%; text-align:left; display:flex; align-items:center; gap:9px; }
     /* 账号菜单：原生 <details>，展开收起零 JS。收起态仍显示当前登录人（"我以谁的身份在操作"不能藏）。 */
       color:var(--text); padding:7px 12px; border-radius:8px; font-size:13px; display:flex; align-items:center;
       justify-content:space-between; gap:6px; }
@@ -822,7 +822,7 @@
            ⚠️ 里面的 id / 勾选即存 / 二次确认 / 保存逻辑**全部原样迁移**，一行没改。 -->
       <div class="set-card">
         <div class="sec-title" style="cursor:pointer;user-select:none" onclick="toggleWheel()">
-          <span id="wheel-caret">▸</span> 🧭 方向盘 <span class="hint" style="margin:0">（机器按什么找客户）</span>
+          <span id="wheel-caret">▸</span> ④ 方向盘 <span class="hint" style="margin:0">（机器按什么找客户）</span>
         </div>
         <div class="sec-sub" id="wheel-summary" style="cursor:pointer;margin-bottom:0" onclick="toggleWheel()">（加载中…）</div>
         <div id="wheel-body" hidden style="margin-top:16px">
@@ -871,7 +871,7 @@
 
       <!-- ── ④ 飞书通知 + 当前账号 ── -->
       <div class="set-card">
-        <div class="sec-title">④ 通知与账号</div>
+        <div class="sec-title">⑤ 通知与账号</div>
         <div class="sec-sub">有回信/询盘时推到群里。</div>
         <div id="notify-status" class="transparency"></div>
         <label style="display:flex;gap:8px;align-items:center;cursor:pointer;margin:0 0 16px"><input type="checkbox" id="ntf-enabled"> <span class="hint" style="margin:0">开启飞书通知</span></label>
@@ -3464,6 +3464,10 @@
         if (wb && !wb.hidden) { wb.hidden = true; if (wc) wc.textContent = "▸"; } }
       loadSearchCfg().catch(()=>renderWheelSummary(null, null));
     };
+    { const gb=$("#btn-settings");
+      // C5-4v C.6：左栏「设置」也是导航项 → 单色线条图标。用 sliders 而非齿轮，
+      //   免得跟机器房那颗齿轮撞脸：两个"齿轮感"图标并排，扫视时分不出哪个是哪个。
+      if(gb) gb.innerHTML = `${ICON.gear}<span>设置</span>`; }
     $("#btn-settings").onclick = () => openSettings();
     document.addEventListener("input", (e) => { if (e.target && e.target.id === "cfg-auto-limit") renderCapacity(); });
     // ⭐ P0-1 的灵魂：**宁可告诉他做不到，也不能悄悄砍成 N 还让他以为发了 500。**
