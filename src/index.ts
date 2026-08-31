@@ -2132,13 +2132,22 @@ app.get("/api/ignition", (c) => c.json(ignitionReport(c.env)));
 // ⚠️ 它回答的是一个**别的字段都答不了**的问题：「我现在打到的，是不是我刚部署的那个进程？」
 //   这台机器上真发生过：8788 端口答话的是**另一个窗**的 worker，而仓名字段"看着也对"。
 //   boot id 变了 = 换进程了；没变 = 还是老的那个。
-const BOOT_ID = crypto.randomUUID().slice(0, 8);
+// 🔴 必须**惰性生成**：Workers 禁止在全局作用域产生随机值
+//   （`Disallowed operation called within global scope … generating random values`）。
+//   我第一版写成模块顶层的 `const BOOT_ID = crypto.randomUUID()` ⇒ **worker 整个起不来**，
+//   而 `tsc` 与 `wrangler deploy --dry-run` **都是绿的** —— 这正是本仓那条铁律的由来：
+//   **动完 .ts 必须真起一次 dev 确认 boot，不认 dry-run 的绿灯。**
+let _bootId = "";
+function bootId(): string {
+  if (!_bootId) _bootId = crypto.randomUUID().slice(0, 8);   // 首次请求时才生成 = 在 handler 里
+  return _bootId;
+}
 
 app.get("/api/_whoami", (c) => c.json({
   // C1 进程身份（验收判据）：repo/db 与 wrangler.jsonc 同一次部署单元，改绑定必改这里。
   repo: "airsonde-crm",
   db: "airsonde_crm",
-  bootId: BOOT_ID,
+  bootId: bootId(),
   marker: BUILD_MARKER,
   guard: devGuardOn(c.env),
   // 能力面全部只报有无（布尔），绝不报值。C1 锁死态：以下应全为 false。
