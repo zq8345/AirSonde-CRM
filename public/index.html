@@ -3393,6 +3393,12 @@
       // 产能提示 / AI 用量 / 退订样本 —— **已随 C5-2 搬去机器房**（宪法 §2 + 铁律五：一个事实一个展示位）。
       _capacity = c.capacity || null;   // 仍读进来：机器房要用
       _sysEffective = _sysEff;
+      // 🔴 C5-2 事故：熔断**明细**搬去机器房时，把 `const b = c.breaker` 一起删了，
+      //    可这条**横幅**是要留在设置页的（它说的是"自动发送现在停着"= 开关旁边的状态，
+      //    不是机器内部）。结果整个 renderAutomation 抛 `b is not defined`，
+      //    后面的保存绑定全没挂上 —— 而页面**看上去是好的**（字段都填着）。
+      //    ⇒ 删展示位时必须回头看**同一函数里还有谁在用那个变量**，不能只看 DOM id。
+      const b = c.breaker || {};
       const banner = $("#brk-banner");
       if (b.trippedAt) {
         banner.style.display = "";
