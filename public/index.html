@@ -590,7 +590,7 @@
   <header>
     <!-- 批③顶栏收口：顶栏 = logo + 搜索，右侧空。
          所有动作都回到它所属的阶段页；设置移到左栏底部。
-         群发→待发送页「发送选中」（批⑩B：全部发送已删，要发全部点表头全选框）；回复箱→已回复页；批量分析→待分析页；批量找邮箱/Hunter→待审批页；导入CSV→找客户页。 -->
+         群发→待发送页「发送选中」（批⑩B：全部发送已删，要发全部点表头全选框）；回复箱→已回复页；批量分析→待分析页；批量找邮箱/Hunter→待审批页；导入CSV→「➕ 补货」弹窗（C5-3 起）。 -->
     <!-- 字标：Joe 定稿绿版（1686×351，浅色底用绿）。**按高约束**：顶栏内容高度预算 38px
          （由搜索框撑，不是文字的 22.5px）→ 取 28px 高、等比宽≈134px，落在左栏 178px 容器内，
          顶栏高度一个像素不涨（改前后实测均 66px）。max-width 兜住极端窄屏。 -->
@@ -674,7 +674,7 @@
         <thead><tr><th><input type="checkbox" id="sel-all" title="全选当前筛选" onclick="event.stopPropagation();toggleSelAll(this.checked)"> 公司</th><th>评分</th><th>阶段</th><th>邮箱</th><th>分类</th><th>国家</th><th class="chcol">LinkedIn</th><th class="chcol">WhatsApp</th><th class="chcol">Facebook</th><th class="chcol">Instagram</th><th class="chcol">电话</th><th>录入时间</th></tr></thead>
         <tbody id="rows"></tbody>
       </table>
-      <div class="empty" id="empty" style="display:none">暂无数据。去左栏「🎯 找客户」加线索——免费目录源（零成本）／导入 CSV（自有名单）／关键词搜索。</div>
+      <div class="empty" id="empty" style="display:none">暂无数据。点上方「➕ 补货」加线索——自动搜一轮，或导入自有名单 CSV。</div>
       </div>
       <div id="v-page" style="display:none"></div>
   <!-- ⚙ 设置整页（批⑩A：原「发信设置」+「飞书通知」两个弹层合并而来） -->
