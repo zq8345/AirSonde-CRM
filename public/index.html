@@ -3500,9 +3500,15 @@
     // 飞书通知设置
     async function loadNotifyCfg(){
       const c = await fetch("/api/settings/notify").then(r=>r.json());
+      // 状态从**真源派生**：webhook 的唯一真源是 env secret（`LARK_WEBHOOK_URL`），全仓没有 settings 源。
+      // ⚠️ 三种状态必须分开说 —— 原来「没配」和「配了但值粘歪了」共用一句话，
+      //    会把刚配过的人送去再配一遍一模一样的值。
+      const _sh = c.urlShape || {};
       $("#notify-status").innerHTML = c.configured
-        ? `✅ 已连接飞书机器人（webhook 已配置${c.hasSecret?"，含签名校验":""}）。可点「发送测试卡片」验证。`
-        : `⚠️ 还没配 webhook —— 在飞书群建「自定义机器人」，把 Webhook 地址发给管理员。配好前不会推送。`;
+        ? `✅ 已连接飞书机器人（webhook 已配置在保险柜里${c.hasSecret?"，含签名校验":""}）。可点「发送测试卡片」验证。`
+        : (_sh.present
+            ? `🔴 <b>webhook 已配置，但值不是可用的 http(s) 地址</b>（${esc(String(_sh.scheme||"?"))}）—— 多半是粘贴时带了空格/引号/换行。请重新 <code>wrangler secret put LARK_WEBHOOK_URL</code>。`
+            : `⚠️ 还没配 webhook —— 在飞书群建「自定义机器人」，拿到 Webhook 地址后用 <code>wrangler secret put LARK_WEBHOOK_URL</code> 配进保险柜（值不经过这个界面）。配好前不会推送。`);
       $("#ntf-enabled").checked = !!c.enabled;
       $("#ntf-result").textContent = "";
     }

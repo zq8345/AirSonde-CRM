@@ -3,8 +3,31 @@
 // 未配置 webhook 时所有发送静默跳过，可安全先部署后填地址。
 import type { Env } from "./index";
 
+/** webhook URL 的**形状**（只报形状，绝不报值 —— `_whoami` 类端点的老规矩）。
+ *
+ *  为什么需要它：原来只回一个 true/false，于是「根本没配」和
+ *  「配了但值粘歪了（前后带空格/引号/换行）」**在界面上长得一模一样** ——
+ *  都是一句"还没配 webhook"，而 Joe 明明刚亲手配过，于是他合理地怀疑系统坏了。
+ *  ⚠️ 一个配置错误必须说得出**自己错在哪一类**，否则排查只能靠猜。 */
+export function larkUrlShape(env: Env): { present: boolean; usable: boolean; neededTrim: boolean; scheme: string } {
+  const raw = String(env.LARK_WEBHOOK_URL ?? "");
+  const trimmed = raw.trim().replace(/^['"]|['"]$/g, "");   // 顺手剥掉粘贴常带的引号
+  const usable = /^https?:\/\//.test(trimmed);
+  return {
+    present: raw.length > 0,
+    usable,
+    neededTrim: raw.length > 0 && trimmed !== raw,          // 值本身没问题，只是带了空白/引号
+    scheme: usable ? trimmed.slice(0, trimmed.indexOf(":")) : (trimmed ? "(不是 http/https 开头)" : "(空)"),
+  };
+}
+
+/** 取真正可用的 webhook URL（trim + 去引号）。⚠️ 容错但**不掩盖**：形状问题由 larkUrlShape 如实报出。 */
+export function larkWebhookUrl(env: Env): string {
+  return String(env.LARK_WEBHOOK_URL ?? "").trim().replace(/^['"]|['"]$/g, "");
+}
+
 export function larkConfigured(env: Env): boolean {
-  return !!(env.LARK_WEBHOOK_URL && /^https?:\/\//.test(env.LARK_WEBHOOK_URL));
+  return larkUrlShape(env).usable;
 }
 
 // Lark 自定义机器人签名：key = `${timestamp}\n${secret}`，对空串做 HmacSHA256，再 base64
@@ -26,7 +49,7 @@ export async function larkSend(env: Env, message: any): Promise<{ ok: boolean; e
     body = { ...message, timestamp: String(ts), sign: await larkSign(env.LARK_WEBHOOK_SECRET, ts) };
   }
   try {
-    const res = await fetch(env.LARK_WEBHOOK_URL, {
+    const res = await fetch(larkWebhookUrl(env), {   // 用清洗过的值：前后空白/引号不该让通知整条哑掉
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),

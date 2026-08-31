@@ -19,9 +19,9 @@ import { ingestReplies, matchReplyToLead } from "./replies";
 import { ensureReplyColumns, stripQuoted, previewOf, isNoiseReply, tabOf, type InboxTab } from "./reply-inbox";
 import { installFetchMeter, meteredDB, mark as subMark, reset as subReset, summary as subSummary } from "./subreq";
 import { categorizeCustomerType, classifyKillReason, KILL_REASONS } from "./taxonomy";
-import { larkConfigured, larkSend, digestCard, testCard, inboundCard } from "./notify";
+import { larkConfigured, larkUrlShape, larkSend, digestCard, testCard, inboundCard } from "./notify";
 import { catalogHtml } from "./landing";
-import { isIgnited, ignitionReport, notIgnitedReason } from "./ignition";
+import { isIgnited, ignitionReport, notIgnitedReason, normalizeEnv, dirtySecretKeys } from "./ignition";
 import { handleResendEvent, verifyResendSignature } from "./webhook";
 import { larkAppConfigured, sendAppCard, syncLeadsToBitable, verifyLarkCallback, doneCard, testAppCard, bitableFieldsCheck, replyDoneCardV2, patchCardMessage, replyWorkbenchCard } from "./lark-app";
 
@@ -2105,7 +2105,9 @@ app.get("/api/settings/notify", async (c) => {
   // notify_high_score_min 已删（两档制）：它只喂简报的「高分客户」清单，而那个清单已经删了 ——
   // 自动通道下"新出现一家 85 分"＝机器已经把信发出去了，列给 Joe 看没有动作含义。
   return c.json({
-    configured: larkConfigured(c.env),        // 是否已配 webhook（secret 存在与否）
+    configured: larkConfigured(c.env),        // 是否已配 webhook（**唯一真源 = env secret**，全仓没有 settings 源）
+    // ⭐ 形状诊断：区分「根本没配」与「配了但值粘歪了」。只报布尔，**绝不报值**。
+    urlShape: larkUrlShape(c.env),
     hasSecret: !!c.env.LARK_WEBHOOK_SECRET,
     enabled: (await getSetting(c.env, "notify_enabled", "1")) !== "0",
   });
@@ -2164,9 +2166,15 @@ app.post("/api/notify/test", async (c) => {
     !webhook.ok && /未配置/.test(String(webhook.error || "")) ? "LARK_WEBHOOK_URL" : null,
     !appBot.ok && /未配置/.test(String(appBot.error || "")) ? "LARK_APP_ID/SECRET" : null,
   ].filter(Boolean);
+  // ⭐ 「配了但用不了」必须与「没配」分开报：secret 存在却不匹配 http(s):// ⇒ 多半是粘贴时带了
+  //   空白/引号/换行。这种情况报"还没配"会把人送去重配一遍一模一样的值。
+  const shape = larkUrlShape(c.env);
+  const shapeHint = (!webhook.ok && shape.present && !shape.usable)
+    ? `LARK_WEBHOOK_URL 已配置但**不是一个可用的 http(s) 地址**（scheme=${shape.scheme}）—— 多半是粘贴时带了空格/引号/换行，请重新 wrangler secret put 一次`
+    : undefined;
   return c.json({
-    ok, webhook, appBot,
-    error: ok ? undefined : (reasons.join("；") || undefined),
+    ok, webhook, appBot, urlShape: shape,
+    error: ok ? undefined : ([shapeHint, ...reasons].filter(Boolean).join("；") || undefined),
     notIgnited: ok ? undefined : (notIgnited.length ? notIgnited : undefined),
   }, ok ? 200 : 500);
 });
@@ -3643,7 +3651,11 @@ async function scheduled(event: ScheduledController, env: Env, ctx: ExecutionCon
 //    拒绝启动（`Incorrect type for map entry`），且 dry-run 抓不到。改这里必须真起 8788。
 // devguard：本地进程的出站闸门。装在入口 = fetch 和 scheduled(cron) **两条路都兜住**，
 //    不是只兜 HTTP 那条（③ 号事故就是 cron 路径推的飞书）。生产 DEV_LOCAL 不存在 → 空操作。
+// ⭐ normalizeEnv 也装在这个入口，理由与 devguard 完全相同：**fetch 和 scheduled 两条路都要兜住**。
+//    它洗掉密钥值上的 BOM/空白/引号（2026-08-31 生产实证：OpenRouter key 头部粘了 UTF-8 BOM，
+//    authorization 头非法；同一批钥匙里 LARK_WEBHOOK_URL 因此过不了 http 正则、界面报"还没配"）。
+//    ⚠️ 洗归洗，**脏了的那几把会在点火面板上被点名**（dirtySecretKeys）——不掩盖。
 export default {
-  fetch: (req: Request, env: Env, ctx: ExecutionContext) => { installDevEgressGuard(env); return app.fetch(req, env, ctx); },
-  scheduled: (event: ScheduledController, env: Env, ctx: ExecutionContext) => { installDevEgressGuard(env); return scheduled(event, env, ctx); },
+  fetch: (req: Request, env: Env, ctx: ExecutionContext) => { const e = normalizeEnv(env); installDevEgressGuard(e); return app.fetch(req, e, ctx); },
+  scheduled: (event: ScheduledController, env: Env, ctx: ExecutionContext) => { const e = normalizeEnv(env); installDevEgressGuard(e); return scheduled(event, e, ctx); },
 };

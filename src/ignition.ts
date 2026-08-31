@@ -21,6 +21,64 @@
 
 import type { Env } from "./index";
 
+// ============================================================================
+// 密钥值清洗 —— BOM / 空白 / 引号
+// ============================================================================
+//
+// 🔴 真事（2026-08-31，`wrangler tail` 抓到的生产日志原话）：
+//   `A header value for "authorization" contains non-ASCII characters:
+//    "Bearer ﻿sk-or-v1-465…" (raw bytes: …\x20\xef\xbb\xbf\x73\x6b…)`
+//   `\xef\xbb\xbf` = **UTF-8 BOM**，粘在了密钥的最前面。
+//
+// 怎么来的：密钥先落进一个 .txt，而 PowerShell 的 `Out-File`/`>` 默认写 **UTF-8 with BOM**；
+//   从文件头部复制第一行时，那三个不可见字节跟着一起进了 `wrangler secret put`。
+//   **屏幕上完全看不出来** —— 值看着一模一样。
+//
+// 后果按钥匙不同，症状各不相同、且都不指向真因：
+//   · OPENROUTER：authorization 头非法 ⇒ AI 打分/写信全挂，看着像"额度问题"
+//   · LARK_WEBHOOK_URL：BOM 开头 ⇒ 过不了 `/^https?:\/\//` ⇒ 界面说"**还没配**"，而人明明刚配过
+//   · LARK_WEBHOOK_SECRET：签名用错串 ⇒ 飞书回 19021，看着像"密钥错了"
+//   · RESEND / SERPER：同理
+//
+// ⚠️ 修法上的取舍：**洗干净它，但绝不假装没发生过**。
+//   只洗不报 = 下一次换钥匙又中招且更难查；只报不洗 = 让一个不可见字符继续瘫痪整套系统。
+//   所以：`cleanSecret` 负责洗，`dirtySecretKeys` 负责让它在点火面板上现形。
+const SECRET_LIKE_KEYS = [
+  "OPENROUTER_API_KEY", "RESEND_API_KEY", "SEARCH_API_KEY", "EMAIL_FINDER_API_KEY",
+  "LARK_IMAP_PASS", "LARK_IMAP_PASS2", "LARK_WEBHOOK_URL", "LARK_WEBHOOK_SECRET",
+  "RESEND_WEBHOOK_SECRET", "LARK_APP_ID", "LARK_APP_SECRET", "LARK_VERIFICATION_TOKEN",
+  "INBOUND_TOKEN", "ADMIN_PASSWORD", "ACCESS_AUD",
+] as const;
+
+/** 洗掉 BOM(U+FEFF) / 前后空白 / 成对引号。⚠️ 只动两端，中间一个字节不碰。 */
+export function cleanSecret(v: unknown): string {
+  return String(v ?? "").replace(/^﻿+/, "").trim().replace(/^(['"])([\s\S]*)\1$/, "$2").trim();
+}
+
+/** 哪几把钥匙的值"脏"了（洗过之后不等于原值）——**只报名字，绝不报值**。 */
+export function dirtySecretKeys(env: any): string[] {
+  return SECRET_LIKE_KEYS.filter((k) => {
+    const raw = env?.[k];
+    return typeof raw === "string" && raw.length > 0 && cleanSecret(raw) !== raw;
+  });
+}
+
+/** ⭐ **唯一咽喉点**：在 worker 入口把所有密钥类值洗一遍，下游一律拿干净值。
+ *  ⛔ 不在 10 个消费点各写一次 `.trim()` —— 那种写法的第五个点必漏（这仓的老病）。
+ *  bindings（DB / ASSETS）是对象引用，浅拷贝原样带过去。 */
+export function normalizeEnv<T extends object>(env: T): T {
+  const out: any = { ...env };
+  // ⚠️ 脏名单必须**在洗之前**算：洗完再问"谁脏了"永远得到空集
+  //    —— 那是拿被测物洗过之后的样子当证据，等于把自己的证据毁掉。
+  const dirty = dirtySecretKeys(env);
+  for (const k of SECRET_LIKE_KEYS) {
+    if (typeof out[k] === "string") out[k] = cleanSecret(out[k]);
+  }
+  out.__dirtySecrets = dirty;                 // 只带名字，不带值
+  if (dirty.length) console.warn(`⚠️ 密钥值带了 BOM/空白/引号（已自动清洗，但请重配以免下次再中）：${dirty.join(", ")}`);
+  return out as T;
+}
+
 export interface Capability {
   /** 稳定 id（前端/日志/whoami 都用它，别改） */
   id: "send" | "reply" | "ai" | "search" | "notify" | "appbot" | "inbound" | "emailfinder";
@@ -88,6 +146,9 @@ export function ignitionReport(env: Env): {
   coreReady: boolean;
   /** 还差的钥匙名（去重，按 CAPABILITIES 顺序）—— 点火清单直接用它 */
   missingKeys: string[];
+  /** ⚠️ 值带了 BOM/空白/引号的钥匙名（已在入口自动洗掉，但**必须让人看见**：
+   *  下次换钥匙时同样的粘贴习惯会再中一次，而屏幕上看不出来） */
+  dirtyKeys: string[];
 } {
   const capabilities = CAPABILITIES.map<CapabilityStatus>((c) => {
     const missing = missingKeys(env, c.id);
@@ -100,6 +161,8 @@ export function ignitionReport(env: Env): {
     total: capabilities.length,
     coreReady: capabilities.filter((c) => c.core).every((c) => c.ignited),
     missingKeys: missing,
+    // 入口洗之前记下来的那份（见 normalizeEnv）。直接问此刻的 env 只会得到空集。
+    dirtyKeys: Array.isArray((env as any).__dirtySecrets) ? (env as any).__dirtySecrets : [],
   };
 }
 
