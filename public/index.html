@@ -778,6 +778,18 @@
              而改版后保存是全页唯一的实心按钮 —— 不说清楚，Joe 会以为勾了还得再按保存。
              （总工 C5-2c ③ 明确允许加这一句短说明；勾选即存的逻辑一个字没动。） -->
         <div class="hint" style="margin:0 0 16px">这两个改一下就生效，不用保存。</div>
+        <!-- C5-6：待审批的三段分层说明**从列表搬到这里**（列表回到平铺）。
+             ⚠️ 只做说明，**不做成可调旋钮** —— 分数线是系统常量，Joe 没要求可调，别扩。
+             ⚠️ 铁律三：分数由真值派生 —— 上限沿用 cfg-auto-min 那条真值链（后端 auto_approve_min），
+                下限与 reviewBandOf 用同一个常量。三个数字没有一个是就地写死的。 -->
+        <div class="set-grid" style="margin-bottom:16px">
+          <div class="k">评分分层</div>
+          <div class="v">
+            <div class="hint" style="margin:0 0 4px">≥<b id="rb-hi">…</b> 分 —— 建议批准；「自动批准」开着时机器直接收走，不用你点</div>
+            <div class="hint" style="margin:0 0 4px"><b id="rb-mid">…</b> 分 —— 需你人工看（多为信息不全，AI 没看清 ≠ 不合格）</div>
+            <div class="hint" style="margin:0">≤<b id="rb-lo">…</b> 分 —— 建议忽略；忽略可恢复（进「已忽略」随时退回）</div>
+          </div>
+        </div>
         <div class="set-grid">
           <div class="k">每天最多发</div>
           <div class="v"><div class="set-numrow">
@@ -1545,11 +1557,14 @@
     //   交互稿原写的是 ≥60 / 40-55 / ≤30 —— 那样 **31-39 和 56-59 落不进任何一段**，
     //   这些线索会在页面上**凭空消失**，直接违反 Joe「每条线索都必须在某个格子里、算进总数」。
     //   （旧 prompt 的"中等合格"区间就是 45-69，所以 56-59 库里真的会有人。）总工已批这个改法。
+    // C5-6：分档边界提成常量 —— 设置页那块「评分分层」说明要用同一个数。
+    //   ⚠️ 抄第二遍就会漂：这里改了 30，说明文字还写着 30，而它们说的已经不是同一件事。
+    const REVIEW_LO_MAX = 30;                       // ≤ 它 = 建议忽略
     function reviewBandOf(l){
       const s = Number(l.match_score);
       if (l.match_score == null || Number.isNaN(s)) return 'mid';   // 理论上待审批都有分；真没分也别让它消失
       if (s >= APPROVE_MIN) return 'hi';
-      if (s <= 30) return 'lo';
+      if (s <= REVIEW_LO_MAX) return 'lo';
       return 'mid';
     }
     // 打分理由：列表里只铺一行，全文挂 title（点开详情页看完整版）
@@ -1567,29 +1582,13 @@
         <button class="btn-amber mini" onclick="event.stopPropagation();rowIgnore(${l.id})">忽略</button>
       </div>`;
     }
-    function renderReviewGroups(leads, rowHtml){
-      const hi  = leads.filter(l => reviewBandOf(l) === 'hi');
-      const mid = leads.filter(l => reviewBandOf(l) === 'mid');
-      const lo  = leads.filter(l => reviewBandOf(l) === 'lo');
-      const head = (title, n, hint, btn, aid) => `<tr class="grp-head" id="${aid||''}"><td colspan="99">
-        <b>${title}</b><span class="grp-n">${n}</span><span class="hint">${hint}</span>${btn||""}</td></tr>`;
-      // Joe 2026-08-31（原话：「系统废话特别多，我看的很恼火」）：空段**自己就是信息**。
-      //   段头已经写着 0，底下再补一句"这一段现在是空的 —— …会落在这里"，是给沉默配旁白。
-      //   ⇒ 空段不再输出解说行。函数壳保留，让下面三个调用点仍读得懂各段语义。
-      const gone = (_txt) => "";
-      const btn = (cls, label, ids, emptyWhy) => ids.length
-        ? ` <button class="${cls} mini" onclick="${label.startsWith('全部批准')?'grpApproveAll':'grpIgnoreAll'}('${ids.join(",")}')">${label}（${ids.length}）</button>`
-        : ` <button class="${cls} mini" disabled title="${emptyWhy}">${label}（0）<span class="btn-why">· 本段为空</span></button>`;
-      return head(`① 建议批准（≥${APPROVE_MIN} 分）`, hi.length, "AI 判定合格，可整段批准去联系",
-                  btn("btn-green","全部批准", hi.map(l=>l.id), "本段现在没有线索"), "gj-review-hi")
-        + (hi.length ? hi.map(rowHtml).join("") : gone(`这一段现在是空的 —— AI 打 ≥${APPROVE_MIN} 分的会落在这里`))
-        // ⚠️ 这一段**故意不给段级批量钮**：它就是要 Joe 一条条看的（交互稿明确要求）
-        + head("② 需人工看（31-59 分）", mid.length, "40-55 多为「信息不全」——AI 没看清，不是不合格；这一段要你一条条看，所以没有整段按钮", "", "gj-review-mid")
-        + (mid.length ? mid.map(rowHtml).join("") : gone("这一段现在是空的 —— 拿不准的线索会落在这里等你判断"))
-        + head("③ 建议忽略（≤30 分）", lo.length, "AI 判定不合格。忽略是<b>可恢复</b>的（进「已忽略」，随时能退回待审批）",
-               btn("btn-amber","全部忽略", lo.map(l=>l.id), "本段现在没有线索"), "gj-review-lo")
-        + (lo.length ? lo.map(rowHtml).join("") : gone("这一段现在是空的 —— AI 打 ≤30 分的会落在这里"));
-    }
+    // ══ C5-6（Joe 指令）：待审批的**三段分层撤出列表**，回到平铺表格（默认按评分降序，高分自然在顶）══
+    //   能力核算 —— 这不是删能力：
+    //     · 段级「全部批准/全部忽略」→ 工具栏「批准选中/忽略选中」+ 表头全选框 完整覆盖
+    //     · 「只看某一段」→ 评分筛选覆盖
+    //     · 服务端 approveGateReason 护栏**一行未动**（真正的闸从来在后端）
+    //   ⚠️ `reviewRowExtra` 与 `reviewBandOf` **保留**：31-59 那批行内的 AI 理由 + 批准/忽略小按钮
+    //      是逐条判断要用的**证据**，不是段头解说；分层的说明搬去设置页（一个事实一个展示位）。
     // ⭐⭐ 批⑲ 页面三：「待联系」按**联系方式**分三组 —— 这一格的问题是"用什么办法碰他"。
     //   优先级**互斥**（总工已批）：A 有邮箱 > B 无邮箱但有社媒/电话 > C 两者皆无。
     //   互斥且穷尽 ⇒ 三组之和 == 该格总数（可撞不变量）。
@@ -2169,7 +2168,6 @@
       // ⭐ 批⑲ 页面一：「待分析」换成**按下一步动作分组**的视图；其余格保持原来的平铺表格，一个字不动。
       $("#rows").innerHTML =
           current === 'unscored' ? renderUnscoredGroups(leads, rowHtml)
-        : current === 'review'   ? renderReviewGroups(leads, rowHtml)
         : current === 'ready'    ? renderReadyGroups(leads, rowHtml)
         : leads.map(rowHtml).join("");
       renderGroupJump(current, leads);   // 批㉓ 组间跳转条（仅三分组视图显示，真值计数）
@@ -3531,7 +3529,15 @@
       //    这里不再自己编一个兜底常数（那正是"多处各写各的默认值"那个老病）：
       //    读不到就说读不到，让缺失可见。
       { const v = c.auto_approve_min;
-        $("#cfg-auto-min").textContent = Number.isFinite(Number(v)) ? String(Number(v)) : "读不到"; }
+        const ok = Number.isFinite(Number(v));
+        const hi = ok ? Number(v) : null;
+        $("#cfg-auto-min").textContent = ok ? String(hi) : "读不到";
+        // C5-6：分层说明的三个数**全部派生**——上限来自这同一个真值，
+        //   中段与下限由 REVIEW_LO_MAX 推出（与 reviewBandOf 单源）。读不到就说读不到。
+        const set = (id, txt) => { const e=$("#"+id); if(e) e.textContent = txt; };
+        set("rb-hi",  ok ? String(hi) : "读不到");
+        set("rb-mid", ok ? `${REVIEW_LO_MAX + 1}-${hi - 1}` : "读不到");
+        set("rb-lo",  String(REVIEW_LO_MAX)); }
       $("#cfg-auto-used").textContent = `今天已自动发 ${c.auto_sent_today || 0} 封`;
       // 产能提示 / AI 用量 / 退订样本 —— **已随 C5-2 搬去机器房**（宪法 §2 + 铁律五：一个事实一个展示位）。
       _capacity = c.capacity || null;   // 仍读进来：机器房要用
