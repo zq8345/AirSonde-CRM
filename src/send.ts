@@ -801,7 +801,10 @@ export async function sendInboundConfirmation(env: Env, lead: { id: number; emai
   const body =
     "Hi there,\n\n" +
     "Thanks for requesting our wholesale price list for air quality monitors. We've received your request — our team will email you the catalog and trade pricing shortly.\n\n" +
-    "AirSonde builds IAQ monitors factory-direct — OEM/ODM private-label, flexible MOQs, and integration-ready hardware for brands, distributors, and HVAC integrators worldwide.\n\n" +
+    // C6-B/P2-4：删 "flexible MOQs" —— 与 Y2 同一处理（landing.ts / openrouter.ts 卖点默认值已删）。
+    //   MOQ 是工厂问题清单三-9 **未答**的商务承诺，我们不知道真实数字。整句撤掉，不做保守暗示。
+    //   ⚠️ 本函数其余文案仍是待 Joe 审的占位草稿，这次**只删这一句红线**，不重写全文。
+    "AirSonde builds IAQ monitors factory-direct — OEM/ODM private-label and integration-ready hardware for brands, distributors, and HVAC integrators worldwide.\n\n" +
     "Talk soon,\nThe AirSonde Team";
   return await deliverEmail(env, lead, subject, body, "confirmation");
 }
