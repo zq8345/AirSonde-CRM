@@ -32,10 +32,15 @@
   //   RESEND_API_KEY / LARK_WEBHOOK / LARK_IMAP_PASS / SEARCH_API_KEY / OPENROUTER_API_KEY
   //   一律**不配** = fail-closed。飞书 webhook 绝不复用 Wanew 的，等 Joe 建新群再配。
   "vars": {
-    // 该 OpenRouter 账号被美国厂商(Anthropic/OpenAI/Google)按区域 ToS 拒绝(403)，
-    // 只能用中国厂商模型。打分=DeepSeek(便宜)，写信=Qwen 高阶(质量好)。（上游实测结论，沿用）
-    "SCORE_MODEL": "deepseek/deepseek-chat",
-    "EMAIL_MODEL": "qwen/qwen3.7-max",
+    // 该 OpenRouter 账号被美国厂商(Anthropic/OpenAI/Google)按区域 ToS 拒绝(403)，只能用中国厂商模型。
+    // 分工：打分量大用便宜的 Flash，写信量小用贵的 Pro（一封信的质量值这个差价）。
+    // ⚠️ 模型 ID 写**明确版本号**，不用 `deepseek-chat` 这类会飘的别名 ——
+    //    上游栽过：模型下架/改名后症状像"余额不足"，实为 model-not-found，旗舰全挂。
+    // ✅ 2026-08-31 我自己拉 OpenRouter 公开 models 端点复核（396 个模型里逐一比对 id）：
+    //    · deepseek-v4-flash-0731  存在 · 输入 $0.065/M · 输出 $0.18/M · ctx 1.31M
+    //    · deepseek-v4-pro-0813    存在 · 输入 $1.32/M  · 输出 $3.96/M · ctx 1.05M
+    "SCORE_MODEL": "deepseek/deepseek-v4-flash-0731",
+    "EMAIL_MODEL": "deepseek/deepseek-v4-pro-0813",
     "SITE_URL": "https://airsonde.com",
 
     // 发信身份（C2-B 定案 2026-08-31）：发件人 = sales@airsonde.net（真源在 send.ts SENDER_PRIMARY）。

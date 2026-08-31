@@ -6,7 +6,7 @@ import { getSetting, setSetting, addSuppressedEmail, brandForLead } from "./send
 import { larkConfigured, larkSend, replyCard } from "./notify";
 import { sendAppCard, actionReplyCard, replyWorkbenchCard } from "./lark-app";
 import { getProfile } from "./service";
-import { writeReplyDraft } from "./openrouter";
+import { scoreModel, writeReplyDraft } from "./openrouter";
 
 const OR_URL = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -27,7 +27,7 @@ interface ImapAccount { label: string; user?: string; pass?: string; cursorKey: 
 // AI 分类：把回复归为 interested/inquiry/not_interested/complaint/other + 一句话摘要
 async function classify(env: Env, subject: string, body: string): Promise<{ category: string; summary: string }> {
   if (!env.OPENROUTER_API_KEY) return { category: "other", summary: "" };
-  const model = env.SCORE_MODEL || "deepseek/deepseek-chat";
+  const model = scoreModel(env);
   const sys =
     `你是 AirSonde(空气质量检测仪 ODM/OEM 供应商)的销售助手。把客户对我们开发信的回复分类。` +
     `只输出 JSON，字段：category(必须是 interested/inquiry/not_interested/complaint/other 之一)、summary(中文一句话概括客户意图)。` +

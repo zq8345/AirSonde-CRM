@@ -4,6 +4,23 @@ import { companyFromDomain } from "./discover";
 
 const OR_URL = "https://openrouter.ai/api/v1/chat/completions";
 
+// ---- 模型 ID：**单一真源** -------------------------------------------------
+// ⚠️ 曾经是 10 处各写各的 `env.X || "老 id"` 兜底散在 4 个文件里 —— 这仓栽过同一种病
+//    （daily_send_limit 多处各读各的 → 静默砍到 10 封/天，三天没人发现）。
+//    env 没配时该用哪个模型是**一个事实**，就该只有一个地方说了算。
+// ⚠️ 写**明确版本号**，不用 `deepseek-chat` 这类会飘的别名：模型下架/改名后
+//    症状长得像"余额不足"，实为 model-not-found，整条 AI 链全挂（上游真事）。
+// ✅ 2026-08-31 拉 OpenRouter 公开 models 端点复核（396 个模型逐一比对 id）：
+//    · flash-0731 存在 · 输入 $0.065/M · 输出 $0.18/M
+//    · pro-0813   存在 · 输入 $1.32/M  · 输出 $3.96/M
+//    分工：打分量大走 Flash，写信量小走 Pro（一封信的质量值这个差价）。
+export const DEFAULT_SCORE_MODEL = "deepseek/deepseek-v4-flash-0731";
+export const DEFAULT_EMAIL_MODEL = "deepseek/deepseek-v4-pro-0813";
+/** 打分用哪个模型（env 优先，缺省走真源常量）。 */
+export function scoreModel(env: { SCORE_MODEL?: string }): string { return env.SCORE_MODEL || DEFAULT_SCORE_MODEL; }
+/** 写信用哪个模型（env 优先，缺省走真源常量）。 */
+export function emailModel(env: { EMAIL_MODEL?: string }): string { return env.EMAIL_MODEL || DEFAULT_EMAIL_MODEL; }
+
 // 冲刺1a：社会证明/卖点（可信、匿名，不点名具体客户）。用户可在"发信设置"里改。
 // ⚠️ AirSonde 卖点**草稿**：故意只写保守的中性描述，上游那种"top-selling/100+ resellers"社会证明
 //   对 AirSonde 是**假 claim**，一条都没搬。真实卖点（认证/产能/案例）待 Joe 逐条核实后在发信设置里填。
@@ -135,7 +152,7 @@ export async function scoreLead(
   source?: string | null,
   sourceDetail?: string | null
 ): Promise<ScoreResult> {
-  const model = env.SCORE_MODEL || "deepseek/deepseek-chat";
+  const model = scoreModel(env);
   const endorsement = sourceEndorsement(source, sourceDetail);
   // ⚠️ AirSonde 打分规则**草稿**（C1 搬迁时按上游 Starlink 规则逐段映射到 IAQ 域，结构骨架一字未动；
   //   域内判据待 Joe 审 + 真实线索数据校准。上游骨架的由来（中间分/纠偏/一票压低的不对称代价）见各段注释。）
@@ -228,7 +245,7 @@ export async function writeEmail(
   score: ScoreResult,
   website?: string | null
 ): Promise<string> {
-  const model = env.EMAIL_MODEL || "qwen/qwen3.7-max";
+  const model = emailModel(env);
   const selling = await getSellingPoints(env);
   // 脏名（页面标题/文章标题）→ 兜底成域名主体或 "team"，别让称呼当场社死
   const safeCompany = cleanCompanyName(company, website);
@@ -277,7 +294,7 @@ export async function writeEmail(
 
 // #44 把英文开发信翻译成中文（纯展示，供用户理解；绝不影响实际发送的英文原文）
 export async function translateToChinese(env: Env, text: string): Promise<string> {
-  const model = env.EMAIL_MODEL || "qwen/qwen3.7-max";
+  const model = emailModel(env);
   const sys =
     `你是专业中英翻译。把下方 <<<UNTRUSTED_TEXT>>> 到 <<<END>>> 之间的英文商务开发信翻译成自然、通顺、地道的简体中文。` +
     `保留 Subject 行（译成「主题：…」）。只输出中文译文，不要输出原文、不要解释、不要加任何前后缀说明。\n` +
@@ -291,7 +308,7 @@ export async function translateToChinese(env: Env, text: string): Promise<string
 
 // 写"跟进信"：第一封没回复时的第二次触达，要短、礼貌、不施压
 export async function writeFollowup(env: Env, brandName: string, company: string, originalEmail: string): Promise<string> {
-  const model = env.EMAIL_MODEL || "qwen/qwen3.7-max";
+  const model = emailModel(env);
   const selling = await getSellingPoints(env);
   const sys =
     `You write a very short, polite B2B follow-up email for ${brandName} (an air quality monitor manufacturer, OEM/ODM & wholesale). ` +
@@ -317,7 +334,7 @@ export async function writeFollowup(env: Env, brandName: string, company: string
 // engaged「趁热跟进」：收件人点了冷邮件里的链接=有意向，写一封短而暖的跟进。
 // 隐性引用点击（"Thanks for taking a look…"），绝不点破"看到你点了/追踪"；只推经销价单/dropship；结尾一个低门槛问题。
 export async function writeWarmFollowup(env: Env, brandName: string, company: string, profile: string, originalEmail: string): Promise<string> {
-  const model = env.EMAIL_MODEL || "qwen/qwen3.7-max";
+  const model = emailModel(env);
   const selling = await getSellingPoints(env);
   const sys =
     `You write a short, warm B2B follow-up email for ${brandName} (an air quality monitor manufacturer, OEM/ODM & wholesale). ` +
@@ -346,7 +363,7 @@ export async function writeWarmFollowup(env: Env, brandName: string, company: st
 
 // 阶段三.2 给客户回复起草一封建议回复（供人工审核后发送）
 export async function writeReplyDraft(env: Env, brandName: string, company: string, profile: string, originalEmail: string, customerReply: string): Promise<string> {
-  const model = env.EMAIL_MODEL || "qwen/qwen3.7-max";
+  const model = emailModel(env);
   const selling = await getSellingPoints(env);
   const sys =
     `You draft a reply on behalf of ${brandName} (an air quality monitor manufacturer, OEM/ODM & wholesale) to a prospect who responded to our ` +

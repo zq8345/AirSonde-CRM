@@ -1,7 +1,7 @@
 // 分析流水线：抓官网 → 打分 → 写信 → 写库
 import type { Env } from "./index";
 import { scrapeSite, type ScrapeResult } from "./scrape";
-import { scoreLead, writeEmail } from "./openrouter";
+import { scoreLead, writeEmail, scoreModel } from "./openrouter";
 import { categorizeCustomerType } from "./taxonomy";
 import { inferCountryFromWebsite, COUNTRIES } from "./discover";
 
@@ -248,8 +248,8 @@ export async function analyzeLead(env: Env, lead: any, opts: { scoreOnly?: boole
       lead.id, score.customer_type, category, score.match_score, score.needed_products,
       score.reason,
       opts.scoreOnly
-        ? `${env.SCORE_MODEL || "deepseek/deepseek-chat"}（重扫·只刷新分数）`
-        : `${env.SCORE_MODEL || "deepseek/deepseek-chat"}（打分；开发信在发送时生成）`
+        ? `${scoreModel(env)}（重扫·只刷新分数）`
+        : `${scoreModel(env)}（打分；开发信在发送时生成）`
     ).run();
 
     // 已分析且未被人工处理过的，推进到 analyzed（仍属「待审核」分组）
