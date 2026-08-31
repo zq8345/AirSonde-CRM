@@ -209,11 +209,21 @@
     .say-mute { border-left:3px solid var(--muted); }   /* 未点火：不是故障，别用红黄 */
     .say-hot:hover, .say-act:hover, .say-mute:hover { border-color:var(--blue); }
     /* 机器房：允许密集，进来的人就是来看内部的 */
-    .mr-tab { width:100%; border-collapse:collapse; font-size:13px; margin-top:8px; }
-    .mr-tab td { padding:6px 8px; border-bottom:1px solid var(--border); vertical-align:top; }
-    .mr-kv { display:grid; grid-template-columns:120px 1fr; gap:6px 12px; padding:8px 0;
+    /* C5-9 ①：点火表原来第四列（unlocks 说明）把表撑出白卡右侧悬空 ——
+       `width:100%` 管不住内容更宽的表格，得 table-layout:fixed 才真按比例分。
+       说明文字收进 title 悬浮，不再占独立列。 */
+    .mr-tab { width:100%; table-layout:fixed; border-collapse:collapse; font-size:13px; margin-top:8px; }
+    .mr-tab td { padding:7px 8px; border-bottom:1px solid var(--border); vertical-align:middle;
+                 overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .mr-tab td:first-child { width:28px; text-align:center; }
+    .mr-tab td:nth-child(3) { color:var(--muted); }
+    .mr-kv { display:grid; grid-template-columns:140px minmax(0,1fr); gap:4px 16px; padding:9px 0;
              border-bottom:1px solid var(--border); font-size:13px; align-items:baseline; }
-    .mr-kv > span:first-child { color:var(--muted); }
+        .mr-kv > span:first-child { color:var(--muted); }
+    /* C5-9 ②：hint 是第三个子元素 —— 两列网格会把它甩到**标签列下面**，
+       于是每一行都变成"标签 / 值 / 说明"三段错位，整页节奏就碎了。
+       钉进第 2 列，永远跟着值走。 */
+    .mr-kv > :nth-child(n+3) { grid-column:2; }
     /* 熔断横幅：自动发送被停了而 Joe 不知道，比不停还糟 → 这里要抢注意力 */
     .brk-banner { background:var(--tint-red); border:1px solid #ecc4be; color:var(--red); border-radius:8px;
       padding:10px 12px; margin:10px 0; font-size:13px; line-height:1.6; }
@@ -226,7 +236,12 @@
     .chcol { width:120px; }
     th.chcol { text-align:left; overflow:hidden; text-overflow:ellipsis; }
     .chacct { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-decoration:none; font-size:13px; }
-    .main table { min-width:1620px; }
+    /* 🔴 C5-9①：这条原来是 `.main table` —— 它是给**客户列表**那张宽表设的，
+       却命中了 `.main` 里的每一张 <table>，包括机器房的点火表 ⇒ 那张表被强行撑到
+       1620px，溢出白卡右侧 487px（Joe 截图指认的就是这个）。
+       我先加了 `table-layout:fixed` 想约束它 —— 没用，因为**输的不是布局算法，是 min-width**。
+       ⇒ 把作用域收回到它真正要管的那张表。 */
+    #v-list table { min-width:1620px; }
     .main th { white-space:nowrap; }
     .co-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     /* 表头内置筛选 */
@@ -4259,10 +4274,12 @@ ${esc(d.ours.body||'')}</div></details>`
       if (!ign || !cfg) { $("#v-page").innerHTML = pageHeader('机器房','') + `<div class="load-error">${loadErrorHtml('mr-retry', retried)}</div>`;
         const b=$("#mr-retry"); if(b) b.onclick=()=>openMachineRoom(true); return; }
 
+      // C5-9 ①：四列 → 三列。第四列（unlocks 说明）正是把表撑出白卡右侧的那一列，
+      //   而它回答的是"配了能干嘛"—— 那是**决定要不要配**时才想知道的，收进 title 悬浮足够。
       const capRows = (ign.capabilities||[]).map(c=>`
-        <tr><td>${c.ignited?'✅':'○'}</td><td>${esc(c.label)}${c.core?' <span class="hint">核心</span>':''}</td>
-        <td>${c.ignited?'<span class="hint">已配</span>':`<code>${esc(c.missing.join(' + '))}</code>`}</td>
-        <td class="hint">${esc(c.unlocks)}</td></tr>`).join('');
+        <tr title="${esc(c.unlocks)}"><td>${c.ignited?'✅':'○'}</td>
+        <td>${esc(c.label)}${c.core?' <span class="hint">核心</span>':''}</td>
+        <td>${c.ignited?'已配':`<code>${esc(c.missing.join(' + '))}</code>`}</td></tr>`).join('');
 
       const serper = (today&&today.serper)||{};
       const br = cfg.breaker||{};
@@ -4276,30 +4293,31 @@ ${esc(d.ours.body||'')}</div></details>`
       $("#v-page").innerHTML = pageHeader('机器房','')
         + `<div class="fc-card"><div class="sec-title">🔌 点火状态 —— ${ign.ignitedCount}/${ign.total} 项就绪${ign.coreReady?'（核心链路已通）':'（核心链路未通）'}</div>
              <table class="mr-tab"><tbody>${capRows}</tbody></table>
-             <p class="hint">配法：<code>npx wrangler secret put &lt;钥匙名&gt;</code>（由 Joe 亲手配，值不经过任何窗口）</p></div>
+             <p class="hint">配法：<code>npx wrangler secret put &lt;钥匙名&gt;</code></p></div>
 
-           <div class="fc-card" style="margin-top:12px"><div class="sec-title">🚦 发信闸门</div>
-             <div class="mr-kv"><span>天花板（你设的）</span><b>${cfg.daily_send_limit} 封/天</b>
-               <span class="hint">${cfg.daily_send_limit_source==='configured'?'已由你配置':'⚠️ 谁都没配过，现在用的是代码默认值'}</span></div>
-             <div class="mr-kv"><span>新域爬坡</span><span>${ramp}</span></div>
-             <div class="mr-kv"><span>今日冷发用量</span><b>${cfg.cold_sent_today ?? 0}</b>
-               <span class="hint">只算开发信+跟进；确认信/回信不吃额度</span></div>
-             <div class="mr-kv"><span>熔断器</span>${cfg.auto_send_enabled?'<b>自动发送：开</b>':'<b>自动发送：关</b>'}
-               <span class="hint">最近 ${br.window ?? 30} 封自动信里 ${br.unsubs ?? 0} 封退订（${((br.rate??0)*100).toFixed(1)}%）；≥15% 自动停，停了不会自己恢复</span></div>
-           </div>
-
-           <div class="fc-card" style="margin-top:12px"><div class="sec-title">📤 今天发了多少、还能发多少？</div>
-             <div class="mr-kv"><span>今日冷发</span><b>${cfg.cold_sent_today ?? 0}</b>
-               <span class="hint">首触 ${(cfg.sent_today_breakdown||{}).initial ?? 0} + 跟进 ${(cfg.sent_today_breakdown||{}).followup ?? 0}；确认信/回信 ${(cfg.sent_today_breakdown||{}).transactional ?? 0} 封不吃额度</span></div>
-             <div class="mr-kv"><span>今天还能发</span><b>${Math.max(0, (cfg.effective_send_limit ?? cfg.daily_send_limit ?? 0) - (cfg.cold_sent_today ?? 0))}</b>
-               <span class="hint">按**生效上限**算，不是按天花板 —— 显示天花板而后端按更小的数发，就是界面说谎</span></div>
-             <div class="mr-kv"><span>自动通道今日</span><b>${cfg.auto_sent_today ?? 0}</b>
-               <span class="hint">自动闸来源：${cfg.auto_send_daily_limit_source === 'system' ? '跟随系统闸' : '单独设定 ' + (cfg.auto_send_daily_limit ?? '-')}</span></div>
-             <div class="mr-kv"><span>系统产能</span><span>${cfg.capacity ? `每小时一班 × 每班约 ${cfg.capacity.perRound} 封 ≈ <b>${cfg.capacity.perDay} 封/天</b>` : '<span class="hint">读不到</span>'}
-               <span class="hint">这是物理上限（受每班时长约束）；你设的数超过它时，超出部分顺延到后面的班次，不会丢</span></span></div>
-             <div class="mr-kv"><span>AI 花费</span><span>${cfg.ai_cost && cfg.ai_cost.notIgnited ? '<span class="hint">未点火 —— 还没配 OPENROUTER_API_KEY（不是故障）</span>' : (cfg.ai_cost && cfg.ai_cost.ok ? `今日 $${Number(cfg.ai_cost.daily).toFixed(2)} · 本月 $${Number(cfg.ai_cost.monthly).toFixed(2)}` : '<span class="hint">这次没问到（不是 $0）</span>')}</span></div>
-             <div class="mr-kv"><span>发件域今日</span><b>${cfg.primary_sent_today ?? 0}</b>
-               <span class="hint">全部出站走 sales@airsonde.net；日限不按发件域分</span></div>
+           <!-- C5-9 ③（铁律五）：「🚦 发信闸门」与「📤 今天发了多少」并成一张 ——
+                「今日冷发」原来在两张卡各出现一次，是同一个数两个展示位。
+                C5-9 ②：统一三段式「标签 | 值(加粗) | 一句 hint」，hint 跟在值侧，
+                绝不在标签列下竖叠（整页节奏碎就是那么来的）。
+                C5-9 ④：hint ≤1 句 ≤20 字；写给开发者的自辩句全删（代码注释里有，不占屏幕）。 -->
+           <div class="fc-card" style="margin-top:12px"><div class="sec-title">📤 今天能发多少？</div>
+             <div class="mr-kv"><span>天花板</span><b>${cfg.daily_send_limit} 封/天</b>
+               <span class="hint">${cfg.daily_send_limit_source==='configured'?'你配的':'⚠️ 没人配过，用的默认值'}</span></div>
+             <div class="mr-kv"><span>今日生效上限</span><b>${cfg.effective_send_limit ?? cfg.daily_send_limit ?? '-'} 封</b>
+               <span class="hint">${cfg.send_ramp_enabled ? '新域保护开着，每天最多涨 50%' : '新域保护关着，直接用天花板'}</span></div>
+             <div class="mr-kv"><span>今日冷发</span><b>${cfg.cold_sent_today ?? 0} 封</b>
+               <span class="hint">首触 ${(cfg.sent_today_breakdown||{}).initial ?? 0} + 跟进 ${(cfg.sent_today_breakdown||{}).followup ?? 0}</span></div>
+             <div class="mr-kv"><span>今天还能发</span><b>${Math.max(0, (cfg.effective_send_limit ?? cfg.daily_send_limit ?? 0) - (cfg.cold_sent_today ?? 0))} 封</b>
+               <span class="hint">按生效上限算，不是天花板</span></div>
+             <div class="mr-kv"><span>自动通道今日</span><b>${cfg.auto_sent_today ?? 0} 封</b>
+               <span class="hint">${cfg.auto_send_daily_limit_source === 'system' ? '跟随系统闸' : '单独设定 ' + (cfg.auto_send_daily_limit ?? '-')}</span></div>
+             <div class="mr-kv"><span>自动发送</span><b>${cfg.auto_send_enabled?'开':'关'}</b>
+               <span class="hint">近 ${br.window ?? 30} 封退订 ${((br.rate??0)*100).toFixed(1)}%；≥15% 自动停</span></div>
+             <div class="mr-kv"><span>系统产能</span><b>${cfg.capacity ? `约 ${cfg.capacity.perDay} 封/天` : '读不到'}</b>
+               <span class="hint">超出的顺延到后面班次，不会丢</span></div>
+             <div class="mr-kv"><span>AI 花费</span>${cfg.ai_cost && cfg.ai_cost.notIgnited ? '<b>未点火</b><span class="hint">还没配 OPENROUTER_API_KEY</span>' : (cfg.ai_cost && cfg.ai_cost.ok ? `<b>今日 $${Number(cfg.ai_cost.daily).toFixed(2)}</b><span class="hint">本月 $${Number(cfg.ai_cost.monthly).toFixed(2)}</span>` : '<b>读不到</b><span class="hint">这次没问到，不是 $0</span>')}</div>
+             <div class="mr-kv"><span>发件域今日</span><b>${cfg.primary_sent_today ?? 0} 封</b>
+               <span class="hint">全部走 sales@airsonde.net</span></div>
            </div>
 
            <!-- C5-3 ③：找客户页的「🤖 进货机器状态」四行并进这一块 —— 两块本来就重叠
@@ -4309,9 +4327,9 @@ ${esc(d.ours.body||'')}</div></details>`
                 标题改问句：机器房回答的是问题，不是陈列仪表。 -->
            <div class="fc-card" style="margin-top:12px"><div class="sec-title">🔍 机器今天在找客户吗？</div>
              <div class="mr-kv"><span>后台自动搜索</span>${!scfg ? '<span class="hint">读不到</span>' : (scfg.discoveryEnabled ? '<b class="ms-on">● 开启</b>' : '<b class="ms-off">○ 未开启</b>')}
-               <span class="hint">${!scfg ? '这次没问到 /api/settings/search（不是"关着"）' : (scfg.discoveryEnabled ? '每小时轮转一小批；开关在设置页 · 方向盘' : '靠你手动点「➕ 补货」；开关在设置页 · 方向盘')}</span></div>
+               <span class="hint">${!scfg ? '这次没问到（不是"关着"）' : '开关在设置页 · 方向盘'}</span></div>
              <div class="mr-kv"><span>Serper 今日</span><b>${serper.usedToday ?? 0} / ${serper.budget ?? '-'}</b>
-               <span class="hint">用满就停到明天；每轮只跑一小批关键词×国家组合，避免一次烧光</span></div>
+               <span class="hint">用满停到明天</span></div>
              <div class="mr-kv"><span>轮转进度</span>${(() => {
                  if (!scfg) return '<span class="hint">读不到</span>';
                  const kwN=(scfg.keywords||[]).length, ccN=Object.keys(scfg.allCountries||{}).length, total=kwN*ccN;
@@ -4322,9 +4340,9 @@ ${esc(d.ours.body||'')}</div></details>`
                               : '<b>—</b><span class="hint">还没有关键词或市场清单</span>';
                })()}</div>
              <div class="mr-kv"><span>后台班次</span><b>每小时一轮</b>
-               <span class="hint">找客户/目录只在 0、6、12、18 点那四轮跑（爬别人的站要守礼貌节奏）</span></div>
+               <span class="hint">找客户只在 0/6/12/18 点跑</span></div>
              <div class="mr-kv"><span>目录源</span><b>未启用</b>
-               <span class="hint">上游那两个是海事/房车目录，对 AirSonde 是错行业，已撤（C2-A）；找到 IAQ 行业目录后可接回</span></div>
+               <span class="hint">上游那两个是错行业，已撤</span></div>
            </div>
 
            <!-- C5-3 ③：维护块整块从找客户页搬来。⚠️ **只搬位**：onclick=startRescan()、
@@ -4334,10 +4352,7 @@ ${esc(d.ours.body||'')}</div></details>`
                <span id="fc-maint-caret">▸</span> 🔧 维护（很少用）
              </div>
              <div id="fc-maint-body" hidden>
-               <p class="hint" style="margin:6px 0 8px">
-                 打分标准改动后，库里分数会变成<b>新旧标准的混合物</b>。全量重扫把全部线索按<b>当前最新标准</b>重打；
-                 已发信/已回复/已忽略/退订的<b>只刷新分数和证据，状态一个都不动</b>，不触发任何发信。
-               </p>
+               <p class="hint" style="margin:6px 0 8px">按当前标准把全部线索重打分。已发信/已回复的只刷新分数，状态不动，不触发发信。</p>
                <button class="mini" onclick="startRescan()">🔄 全量重扫</button>
                <span class="hint" id="rescan-hint" style="margin-left:8px"></span>
                <div id="rescan-bar" class="rescan-bar" style="display:none;margin-top:8px"></div>
