@@ -1250,7 +1250,9 @@
       const navTop = `<div class="side-nav" data-nav="today" onclick="document.getElementById('btn-today').click()">📋 待办事项</div>`
         + `<div class="side-nav" data-nav="found" onclick="document.getElementById('btn-discover').click()">🎯 找客户</div>`
         + `<div class="side-nav" data-nav="dashboard" onclick="document.getElementById('btn-dashboard').click()">📊 数据看板</div>`
-        + `<div class="side-nav" data-nav="replies" onclick="openReplyInbox('pending')">📬 回复箱</div>`
+      // C5-1：「📬 回复箱」导航项**撤除** —— 回信列表已内嵌进「今天」页（客户回你了 = 今天最该看的事，
+      //   它不该是一个要你自己想起来去点的第二个入口）。
+      //   ⚠️ `openReplyInbox` / `openReplyDetail` 两个函数**保留**：详情视图仍由内嵌列表调用。
       // C2-D：机器房排在最后 —— 它是"需要时才进去"的页，不是每天要看的
       + `<div class="side-nav" data-nav="machine" onclick="openMachineRoom()">🛠 机器房</div>`
         + `<div class="side-div"></div>`;
@@ -3853,6 +3855,9 @@ ${esc(d.ours.body||'')}</div></details>`
         const res = await fetch(`/api/replies/${id}/draft`, { method:"POST" }).then(r=>r.json()).catch(e=>({error:String(e)}));
         clearInterval(tick);
         const w = $("#ri-draft-wrap"); if(!w) return;
+        // C2-C 点火语义（C5-1 把这条补到回信详情上）：**未点火不是故障**，
+        // 用中性灰说清差哪把钥匙，而不是在 Joe 的主页面上摆一条永远治不好的红字。
+        if (res.notIgnited){ w.innerHTML = `<div class="hint">🔌 AI 还没点火 —— ${esc(res.error||"差 OPENROUTER_API_KEY")}。你可以直接手写回信。</div>`; return; }
         if (res.error){ w.innerHTML = `<div class="load-error">起草失败：${esc(res.error)}</div>`; return; }
         draft = res.draft || "";
       }
@@ -4094,13 +4099,47 @@ ${esc(d.ours.body||'')}</div></details>`
           </div>`).join('')
         : '';
 
+      // ── C5-1：回信区内嵌（回复箱并入本页，导航项已撤）────────────────────
+      // ⚠️ 按宪法铁律四：**空的时候整块不出现**。三句话已经说了"还没有人回信"，
+      //    再摆一个空标题既是噪音、又白吃字数预算。
+      let inboxHtml = "";
+      try {
+        const inbox = await fetch("/api/replies/inbox?tab=pending").then(r=>r.json()).catch(()=>null);
+        const list = (inbox && inbox.items) || [];
+        if (list.length) {
+          inboxHtml = `<div class="sec-title" style="margin-top:18px">客户回信 —— <b>${list.length}</b> 条等你处理</div>
+            <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden">` +
+            list.slice(0, 12).map(it=>`
+              <div onclick="openReplyDetail(${it.id})" style="cursor:pointer;padding:10px 12px;border-bottom:1px solid var(--border);border-left:3px solid var(--red)">
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                  <b>${esc(it.company_name||it.from_email||'(未知)')}</b>
+                  ${it.category?`<span class="pill" style="background:${catColor[it.category]||'#6b7480'};color:#fff">${esc(catLabel[it.category]||it.category)}</span>`:''}
+                  <span class="hint">${esc((it.received_at||'').slice(0,16))}</span>
+                </div>
+                <div class="hint" style="margin-top:3px;color:var(--text)">${esc(it.preview||'(空)')}</div>
+              </div>`).join('') +
+            `</div><div id="ri-detail" style="margin-top:12px"></div>`;
+        }
+      } catch { /* 回信区拿不到不该拖垮整页 —— 三句话仍要出得来 */ }
+
+      // ── C5-1：等你拍板区（同样，空则不出现）──────────────────────────
+      let decideHtml = "";
+      if (!notIgnited && d.reviewCount > 0) {
+        decideHtml = `<div class="sec-title" style="margin-top:18px">等你拍板</div>
+          <div class="tri-row tri-warn"><span class="tri-icon">✅</span>
+            <span class="tri-text"><b>${d.reviewCount}</b> 家已打分待批准<span class="tri-sub">批过之后机器自动发信</span></span>
+            <button class="tri-go" onclick="gotoGroup('pending')">去看看 →</button></div>`;
+      }
+
       $("#v-page").innerHTML = pageHeader('📋 今天','三句话看完：机器干了什么 · 谁在等你 · 要不要动手')
         + `<div class="say-list">
              <div class="say ${notIgnited?'say-mute':''}"><span class="say-i">📤</span><span class="say-t">${sentLine}</span></div>
-             <div class="say ${hot>0?'say-hot':''}" ${hot>0?`onclick="gotoGroup('replied')" style="cursor:pointer"`:''}><span class="say-i">${hot>0?'🔥':'📭'}</span><span class="say-t">${replyLine}</span></div>
+             <div class="say ${hot>0?'say-hot':''}"><span class="say-i">${hot>0?'🔥':'📭'}</span><span class="say-t">${replyLine}</span></div>
              <div class="say ${notIgnited?'say-mute':(items.length?'say-act':'')}" ${notIgnited?`onclick="openMachineRoom()" style="cursor:pointer"`:''}><span class="say-i">${notIgnited?'🔌':'👉'}</span><span class="say-t">${todoInner}</span></div>
            </div>`
         + (rows ? `<div class="tri-list" style="margin-top:14px">${rows}</div>` : '')
+        + inboxHtml
+        + decideHtml
         // ⚠️ 这句自己也**不许带术语** —— 我第一版写成"（预算/熔断/爬坡/点火明细）"，
         //    被自己那条"首页禁术语"判据当场抓住。判据管的是整页，不是只管上面三句。
         + `<p class="hint" style="margin-top:16px">想看机器内部怎么跑的 → <a href="javascript:void(0)" onclick="openMachineRoom()">🛠 机器房</a></p>`;

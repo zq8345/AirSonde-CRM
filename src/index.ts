@@ -2370,6 +2370,12 @@ app.post("/api/replies/:id/draft", async (c) => {
        FROM replies r LEFT JOIN leads l ON l.id = r.lead_id WHERE r.id = ?`
   ).bind(id).first<any>();
   if (!reply) return c.json({ error: "not found" }, 404);
+  // ⭐ C5-1 发现并修：AI 未点火时这里原来抛进 catch → **500 + 红色"起草失败"**。
+  //   那违反 C2-C 那条规则（未配置 ≠ 故障），而回信详情现在**内嵌在「今天」页**里 ——
+  //   等于每天在 Joe 的主页面上摆一条永远治不好的红字。**200 + 说清差什么**，让前端用中性文案。
+  if (!isIgnited(c.env, "ai")) {
+    return c.json({ ok: false, notIgnited: true, error: notIgnitedReason(c.env, "ai") });
+  }
   const profile = await getProfile(c.env);
   let original = "";
   if (reply.lead_id) {
