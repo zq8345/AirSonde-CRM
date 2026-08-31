@@ -3372,7 +3372,11 @@
       const $m = (n) => `$${Number(n).toFixed(2)}`;
       const cost = c.ai_cost || {};
       let costLine;
-      if (!cost.ok) {
+      if (cost.notIgnited) {
+        // ⭐ C2-C：**从未配置 ≠ 读取失败**。没插电的机器不报引擎故障，用中性灰而不是红。
+        //   （仍然不显示 $0 —— 见下条注释，"没花钱"和"没问到"不能长一样。）
+        costLine = `<span class="muted">AI 用量：<b>未点火</b> —— 还没配 OPENROUTER_API_KEY（不是故障）</span>`;
+      } else if (!cost.ok) {
         // ⚠️ **绝不显示 $0** —— "今天真没花钱"和"我们没问到"长得一模一样，
         //   而 $0 会让 Joe 以为是前者。这跟批⑧ 那个"没有新邮件 vs 取不到"是同一个病。
         costLine = `<span style="color:var(--red,#c0392b)">⚠️ AI 用量读取失败</span>`
@@ -3944,8 +3948,23 @@ ${esc(d.ours.body||'')}</div></details>`
             <button class="tri-go" onclick="${x.fn}">${esc(x.go)} →</button>
           </div>`).join('')
         : `<div class="tri-empty">今天没你的事，机器在跑。<br><span class="hint">想加线索去「🎯 找客户」；想看健康度去「📊 数据看板」。</span></div>`;
+      // ⭐ C2-C 点火清单：机器还没插电时，待办第一句该是「差这几把钥匙」，
+      //   而不是一堆看不懂的红字。**未点火不进上面的告警列表**（那是故障区），单独一块中性色。
+      let ignHtml = "";
+      try {
+        const ign = await fetch("/api/ignition").then(r=>r.json()).catch(()=>null);
+        if (ign && !ign.coreReady) {
+          const off = (ign.capabilities||[]).filter(c=>!c.ignited);
+          ignHtml = `<div class="tri-row" style="border-left:3px solid var(--muted)">
+            <span class="tri-icon">🔌</span>
+            <span class="tri-text"><b>机器还没点火</b> —— ${ign.ignitedCount}/${ign.total} 项能力就绪，还差 ${off.length} 项
+              <span class="tri-sub">${off.map(c=>`${esc(c.label)}（差 ${esc(c.missing.join('/'))}）`).join(' · ')}</span>
+              <span class="tri-sub">这不是故障，是还没配钥匙 —— 配齐前机器不产出属正常。</span></span>
+          </div>`;
+        }
+      } catch { /* 点火面板拿不到不该拖垮整个待办页 */ }
       $("#v-page").innerHTML = pageHeader('📋 待办事项','只有两类：客户回你了 · 机器停摆了 —— 其余的数字左栏格子上都写着')
-        + `<div class="tri-list">${rows}</div>`;
+        + `<div class="tri-list">${ignHtml}${rows}</div>`;
     }
     $("#btn-today").onclick = openToday;
     $("#today-overlay").onclick = (e) => { if (e.target.id==="today-overlay") closeToday(); };

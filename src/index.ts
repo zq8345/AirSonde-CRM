@@ -21,6 +21,7 @@ import { installFetchMeter, meteredDB, mark as subMark, reset as subReset, summa
 import { categorizeCustomerType, classifyKillReason, KILL_REASONS } from "./taxonomy";
 import { larkConfigured, larkSend, digestCard, testCard, inboundCard } from "./notify";
 import { catalogHtml } from "./landing";
+import { isIgnited, ignitionReport, notIgnitedReason } from "./ignition";
 import { handleResendEvent, verifyResendSignature } from "./webhook";
 import { larkAppConfigured, sendAppCard, syncLeadsToBitable, verifyLarkCallback, doneCard, testAppCard, bitableFieldsCheck, replyDoneCardV2, patchCardMessage, replyWorkbenchCard } from "./lark-app";
 
@@ -1245,7 +1246,12 @@ app.get("/api/today", async (c) => {
     breakerReason: await getSetting(c.env, "auto_send_trip_reason", ""),
     replyFailLast: await getSetting(c.env, "reply_fail_last", ""),
     // IMAP 小修②：横幅判据=连败轮数（≥2 才亮），replyFailLast 降级为横幅的证据文本。
-    replyFailStreak: Number(await getSetting(c.env, "reply_fail_streak", "0")) || 0,
+    // ⭐ C2-C：**未点火时恒报 0** —— 未点火不是故障，横幅不该亮。
+    //   这里不只是"前端别显示"：数字本身就不该带着未点火期间的旧账出门
+    //   （否则 Joe 配上钥匙的第一天，会看到一条"已连续 465 轮失败"的欢迎横幅）。
+    replyFailStreak: isIgnited(c.env, "reply")
+      ? (Number(await getSetting(c.env, "reply_fail_streak", "0")) || 0)
+      : 0,
     // 批⑭②：alerts.noScore 撤了 —— 「抓不到官网」不再当系统警报（它是"信息不全"不是"故障"）。
     //   那批线索在「待分析」格里正常处理，不在待办里叫。
   };
@@ -2105,6 +2111,11 @@ app.post("/api/settings/notify", async (c) => {
 //   ⚠️ 但那个字段有个真实用途：确认"本地进程指向的是 sink 不是 Joe 的真群"（③ 号事故就是这么发生的）。
 //   所以换成**一个布尔**：只回答"是不是指向本地 sink"，信息量从 32 字符降到 1 bit，
 //   既留住那个安全用途，又不泄露任何可定位的东西。
+// ---- 点火状态：这台机器插上电没有 ----------------------------------------
+// ⭐ C2-C：一处真源（ignition.ts）供三方共用 —— 告警要不要吼、面板怎么显示、_whoami 报什么。
+//   ⚠️ 只报**钥匙名**，绝不报值（`_whoami` 类端点的老规矩）。
+app.get("/api/ignition", (c) => c.json(ignitionReport(c.env)));
+
 app.get("/api/_whoami", (c) => c.json({
   // C1 进程身份（验收判据）：repo/db 与 wrangler.jsonc 同一次部署单元，改绑定必改这里。
   repo: "airsonde-crm",
@@ -3073,12 +3084,14 @@ async function scheduled(event: ScheduledController, env: Env, ctx: ExecutionCon
   //    以前调用方只读 `r.ingested`，`r.error` 根本没人看，连 console.error 都不会打。
   //    catch 是摆设（没东西抛给它）。这就是"静默断了不知道多久"的机制。
   try {
-    if (!env.LARK_IMAP_PASS) {
-      // 以前这里是 `if (env.LARK_IMAP_PASS) {...}` —— 没配就**整段跳过、一声不吭**。
-      console.error("replies: 缺少 LARK_IMAP_PASS，收回复整段跳过");
-      await recordReplyFailure(env, "缺少 LARK_IMAP_PASS（IMAP 密码没配），收回复功能整个没在跑");
-      await bumpReplyFailStreak(env);   // 配置缺失=持续性失败，横幅两轮内必亮
-      await alertReplyFailure(env, "缺少 LARK_IMAP_PASS（IMAP 密码没配），收回复功能整个没在跑");
+    if (!isIgnited(env, "reply")) {
+      // ⭐ C2-C：**从未点火 ≠ 故障**。这里原来会 record + bump + alert，于是"IMAP 密码还没配"
+      //   被累计成「收客户回复失败（已连续 465 轮）」，天天一条黄色告警。
+      //   一台还没插电的机器不该报引擎故障 —— 更要命的是**它让真故障失去意义**：
+      //   天天都红的灯，真红的那天没人会看。
+      //   现在：只打一行日志，不计轮数、不推告警；面板由 /api/ignition 显示「未点火 · 差这把钥匙」。
+      //   ⚠️ 钥匙一旦配上，下面 else 分支照旧：**配了而失败仍然是故障，仍然吼**。
+      console.log(`replies skipped: ${notIgnitedReason(env, "reply")}`);
     } else {
       // ⭐ P0-1：cron 给它 25s 时间盒 —— 一轮总共 15 分钟，它排 step 0，慢一分半后面就少发两三封。
       //   实测批⑧ 改成整批 FETCH 后整个会话 7.9s，25s 有 3 倍余量。超了也不丢：游标可续，下班（1 小时后）接着收。
@@ -3527,7 +3540,14 @@ async function scheduled(event: ScheduledController, env: Env, ctx: ExecutionCon
   try {
     const stallRounds = Math.max(2, Number(await getSetting(env, "stall_alert_rounds", "6")) || 6);
     const produced = !!(inserted || analyzed || replies || autoApproved || autoSent || emailsFound);
-    if (produced) {
+    const ign = ignitionReport(env);
+    if (!ign.coreReady) {
+      // ⭐ C2-C：核心链路（搜→打分→发→收）还没点火时，**零产出是预期，不是停摆**。
+      //   这道告警的本意是"机器在装样子跑"，而现在机器根本还没插电 —— 报"停摆"是假故障。
+      //   ⚠️ 计数器也一并归零：留着它，钥匙配上的那天会**带着一串未点火期间的旧账**立刻触发告警。
+      await setSetting(env, "stall_streak", "0");
+      console.log(`stall-watch skipped: 核心链路未点火（还差 ${ign.missingKeys.join(" / ")}）—— 零产出属预期`);
+    } else if (produced) {
       await setSetting(env, "stall_streak", "0");
     } else {
       const streak = (Number(await getSetting(env, "stall_streak", "0")) || 0) + 1;

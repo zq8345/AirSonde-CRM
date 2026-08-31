@@ -416,6 +416,8 @@ export interface AiUsage {
   limit?: number | null;  // null = 没设限额
   ageMs?: number;      // 这组数是多久以前取的（0 = 刚取）
   stale?: boolean;     // true = 这次没取到，显示的是旧值
+  /** C2-C：true = 这把能力**从未点火**（key 没配），不是故障 —— 前端据此改用中性文案 */
+  notIgnited?: boolean;
   error?: string;
 }
 
@@ -443,7 +445,10 @@ export async function getAiUsage(
   };
   if (age < AI_USAGE_TTL_MS) { const c = parseCache(); if (c) return c; }
 
-  if (!env.OPENROUTER_API_KEY) return { ok: false, error: "缺少 OPENROUTER_API_KEY" };
+  // ⭐ C2-C：**从未配置 ≠ 读取失败**。带 notIgnited 标记回去，前端据此显示
+  //   「未点火 · 差 OPENROUTER_API_KEY」而不是红色的"AI 用量读取失败"。
+  //   ⚠️ 仍然走 ok:false —— 调用方"没有可信数字"这一点没变（绝不返回 0 冒充"今天没花钱"）。
+  if (!env.OPENROUTER_API_KEY) return { ok: false, notIgnited: true, error: "未点火：AI 打分与写信还差 OPENROUTER_API_KEY（从未配置，不是故障）" };
   try {
     const res = await fetch("https://openrouter.ai/api/v1/key", {
       headers: { authorization: `Bearer ${env.OPENROUTER_API_KEY}` },
