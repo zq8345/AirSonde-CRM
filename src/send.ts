@@ -295,6 +295,23 @@ export type LimitSource = "configured" | "legacy" | "default";
 //   10 → 30 → 45 → 67 → 101 → … 约十天爬到 1000，天花板始终是 Joe 的。
 // ⚠️ 只约束**批量**通道。手动单条(sendLead)本就不过任何日限 —— 豁免是结构性的，
 //    不需要为它加特例判断（加 if 才是病）。
+/**
+ * C5-22：读一个**数值型业务旋钮**。未配置时回落到常量。
+ *
+ * ⚠️ 派单纪律原话："系统不得写死任何业务限制"。反扫（2026-09-01）查出四类写死的业务量：
+ *   爬坡地板/系数、断路器窗口/阈值、Serper 日预算 —— 它们此前只在设置 API 里**只读地露出来**，
+ *   Joe 看得见却改不了。看得见改不了比看不见更糟：它长得像个旋钮。
+ * ⚠️ 仍然带上下界：那不是"业务限制"，是**防手滑**（把阈值设成 0 或 900% 会让断路器失去意义）。
+ *   界限写在这里，界面上也会显示，不做隐形约束。
+ */
+export async function numSetting(env: Env, key: string, fallback: number, min: number, max: number): Promise<number> {
+  const raw = (await getSetting(env, key, "")).trim();
+  if (raw === "") return fallback;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+}
+
 export const RAMP_FLOOR = 30;      // 地板：昨天发 0 也允许今天 30，否则一停就永远起不来
 export const RAMP_FACTOR = 1.5;    // 每天最多涨 50%
 
@@ -338,7 +355,10 @@ export async function systemDailySendLimit(env: Env): Promise<SendLimitInfo> {
   const rampEnabled = (await getSetting(env, "send_ramp_enabled", "1")) !== "0";
   if (!rampEnabled) return { limit, source, rampEnabled, rampCap: null, effective: limit, yesterdayCold: 0 };
   const yesterdayCold = await coldSentOnDay(env, "-1 day");
-  const rampCap = Math.max(RAMP_FLOOR, Math.floor(yesterdayCold * RAMP_FACTOR));
+  // C5-22：地板与系数改为 Joe 可设（未配置回落到常量）。
+  const floor  = await numSetting(env, "send_ramp_floor", RAMP_FLOOR, 1, 5000);
+  const factor = await numSetting(env, "send_ramp_factor", RAMP_FACTOR, 1, 10);
+  const rampCap = Math.max(floor, Math.floor(yesterdayCold * factor));
   return { limit, source, rampEnabled, rampCap, effective: Math.min(limit, rampCap), yesterdayCold };
 }
 
@@ -437,6 +457,10 @@ export interface BreakerStatus {
  */
 export async function getBreakerStatus(env: Env): Promise<BreakerStatus> {
   const since = await getSetting(env, "auto_send_resumed_at", "");
+  // C5-22：窗口与阈值改为 Joe 可设（未配置回落到常量）。下界不是业务限制，是防手滑 ——
+  //   窗口 <5 或阈值设成 0/1 会让断路器变成随机噪声开关，那等于没有断路器。
+  const winSize  = Math.floor(await numSetting(env, "breaker_window", BREAKER_WINDOW, 5, 1000));
+  const threshold = await numSetting(env, "breaker_threshold", BREAKER_THRESHOLD, 0.01, 0.9);
   // ⚠️⚠️ 下面那个 `e.status='sent'` 是**语义要件，不是顺手写的过滤条件。别删、别改成"尝试过的"。**
   //
   // 窗口的分母必须是「**真发出去的**信」，不是「尝试发的」——
@@ -462,14 +486,14 @@ export async function getBreakerStatus(env: Env): Promise<BreakerStatus> {
                        OR lower(COALESCE(l.email,'')) IN (SELECT email FROM suppressed_emails WHERE reason='unsubscribe')
                      THEN 1 ELSE 0 END) AS u
      FROM w JOIN leads l ON l.id = w.lead_id`
-  ).bind(since, since, BREAKER_WINDOW).first<{ n: number; u: number }>();
+  ).bind(since, since, winSize).first<{ n: number; u: number }>();
   const window = row?.n ?? 0;
   const unsubs = row?.u ?? 0;
-  const enoughSample = window >= BREAKER_WINDOW;
+  const enoughSample = window >= winSize;
   const rate = window > 0 ? unsubs / window : 0;
   // ⚠️ 样本不足**不熔断**：这跟数据看板 n<50 只显示计数、不显示率是同一条原则，别在这儿破例。
   //    5 封里 2 封退订说明不了任何事，据此停掉自动发送只会变成随机噪声开关。
-  return { window, unsubs, rate, enoughSample, shouldTrip: enoughSample && rate >= BREAKER_THRESHOLD };
+  return { window, unsubs, rate, enoughSample, shouldTrip: enoughSample && rate >= threshold };
 }
 
 // 发信核心：落 queued 记录 → 调 Resend → 回写 email 状态。不改 lead 状态（调用方决定）。

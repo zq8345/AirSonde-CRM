@@ -3457,6 +3457,199 @@ async function alertSendLimitUnconfigured(env: Env, limit: number, source: strin
   } catch (e) { console.error("alertSendLimitUnconfigured:", e); }   // 告警失败不能拖垮 cron
 }
 
+/**
+ * 分析待分析线索 —— **整点班与每分钟快 tick 共用同一份**。
+ * ⚠️ C5-22 之前这段长在 cron 里。抽出来不是为了好看：快 tick 也要分析，抄第二份就是两份逻辑，
+ *    而这仓已经为"多处各写各的"付过好几次学费（详情页抄漏 match_score 那次就是最近的一回）。
+ * @param max 本次最多分析几条。**这是平台限制不是业务旋钮**（业务旋钮在 settings，归 Joe）。
+ */
+async function analyzePending(env: Env, max: number, opts: { budget?: RoundBudget; concurrency?: number } = {}): Promise<{ ok: number; fetchSkipped: number; attempts: number }> {
+  let attempts = 0, fetchSkipped = 0, analyzed = 0;
+  // ⭐ 本轮已试过的 id 必须排除掉。抓站失败的线索**故意留在 status='new'**（等下一轮 cron 重试），
+  //    而本 while 每批都按 `status='new' ORDER BY id ASC` 重取 —— 不排除的话同一批抓不到的线索
+  //    会在**同一轮里**被反复取到，几个来回就把 fetch_fail_count 的 3 次上限烧穿，
+  //    "留着下轮重试"直接变成"一轮内判死"，比不修还糟。
+  const tried = new Set<number>();
+  while (attempts < max) {
+    if (opts.budget && !opts.budget.has(25_000)) break;   // C5-22：时间见底就把活留给下一次调用，不硬撑
+    let batch: any[] = [];
+    try {
+      const take = Math.min(8, max - attempts);
+      const skip = [...tried];
+      const rows = await env.DB.prepare(
+        skip.length
+          ? `SELECT * FROM leads WHERE status='new' AND id NOT IN (${skip.map(() => "?").join(",")}) ORDER BY id ASC LIMIT ?`
+          : "SELECT * FROM leads WHERE status='new' ORDER BY id ASC LIMIT ?"
+      ).bind(...skip, take).all();
+      batch = rows.results as any[];
+    } catch (e) { console.error("analyze-fetch:", e); break; }
+    if (!batch.length) break;
+    let okThisBatch = 0, hardFail = 0;
+    for (const lead of batch) {
+      attempts++; tried.add(Number(lead.id));
+      try {
+        const out = await analyzeLead(env, lead);
+        if (out.ok) {
+          analyzed++; okThisBatch++;
+        } else if (out.fetchFailed) {
+          // 抓不到是**这个站**的问题（限流/挂了/拦 UA），不是模型挂了 → 跳过继续，别拖累整轮
+          fetchSkipped++;
+          console.log(`analyze skip(fetch): #${lead.id} ${lead.website || ""} ${out.error || ""}`);
+        } else {
+          hardFail++; // 模型/DB 失败 → 多半是持久问题（OpenRouter 挂、额度尽）
+        }
+      } catch (e) { hardFail++; console.error("analyze:", lead.id, e); }
+    }
+    // 只有「真失败」（模型/DB）且本批零成功才停 —— 那多半是 OpenRouter 挂了，继续只是空转烧子请求。
+    // 全是抓站失败 → **继续下一批**：它们已进 tried 不会被重取，后面的正常线索不该被这几条卡死。
+    if (okThisBatch === 0 && hardFail > 0) break;
+  }
+  if (fetchSkipped) console.log(`analyze: ${fetchSkipped} 条因官网抓不到跳过（未打分，等下轮重试）`);
+  return { ok: analyzed, fetchSkipped, attempts };
+}
+
+/**
+ * 自动批准一轮 —— **整点班与每分钟快 tick 共用同一份**（C5-19 的"打分完成即批"就靠它落地：
+ * 触发时机从每小时变成每分钟，**闸一个没变**，走的仍是 approveGateReason 那条既有护栏）。
+ * @returns 实际批准了几条
+ */
+async function autoApproveRound(env: Env): Promise<number> {
+  let n = 0;
+      const autoMin = await getAutoApproveMin(env);
+      const cands = (await env.DB.prepare(
+        // ⭐ 批⑨①：`AND l.email IS NOT NULL AND l.email != ''` 已删 —— 无邮箱但 ≥60 的
+        //   （生产实测 96 家，其中 65 家有社媒能碰）现在也进 approved=「待联系」，等 Joe 手动碰。
+        //   不放它们进来，批⑨ 整个白做：它的全部意义就是"96 家有社媒的公司要有家"。
+        //   发邮件的闸在 sendApprovedBatch（同批加的 email 过滤），它们进不了邮件发送池。
+        `SELECT l.id, l.email, a.match_score FROM leads l JOIN lead_analysis a ON a.lead_id=l.id
+          WHERE l.status='analyzed' AND a.match_score >= ?
+          ORDER BY a.match_score DESC, l.id ASC LIMIT 50`
+      ).bind(autoMin).all()).results as any[];
+      for (const c of cands) {
+        // 同一条护栏：任何一项不过（未打分/<60）都不批准，理由照打。
+        // 批⑨①：缺邮箱**不再是**不批准的理由 —— 它只决定能不能走邮件那条路，不决定值不值得碰。
+        const why = approveGateReason(c.email, c.match_score ?? null);
+        if (why) { console.log(`auto-approve skip #${c.id}: ${why}`); continue; }
+        const r = await env.DB.prepare(
+          "UPDATE leads SET status='approved', updated_at=datetime('now') WHERE id=? AND status='analyzed'"
+        ).bind(c.id).run();
+        if (r.meta.changes === 1) n++;
+      }
+      if (n) console.log(`auto-approve: ${n} 条 ≥${autoMin}分 → 待联系（含无邮箱的：它们等 Joe 手动碰社媒）`);
+  return n;
+}
+
+// ══════════════ C5-22：快 tick（每分钟）══════════════
+//
+// Joe 的语义：自动模式开 = **所有环节就绪即执行**，不等整点。
+//   整点班一次做完所有事的老结构有个致命性质：**前面的步骤有权把后面的饿死**，而且饿得毫无声响
+//   —— 2026-09-01 13:00 那轮就是这样（分析把子请求预算吃光，补邮箱 160 次、发信 54 次全部
+//   零请求发出却照常记数，18 条有邮箱的待联系一封没发）。摊到多次调用，每次各拿一份预算，
+//   这个病才从结构上消失，而不是靠调顺序或加重试去躲。
+//
+// ⚠️ 每分钟真跑的东西，闸必须先于功能。这里有三道，缺一不可：
+//   ① **总开关**：关着时**一件出站的事都不做**（只花一次 D1 读）——"关的是嘴和手"。
+//   ② **防重入**：一个 tick 没跑完，下一个直接退。锁写在 settings 里带时间戳，
+//      **过期自动失效**（不然一次崩溃会把自动模式永久卡死 —— 那比不加锁更糟）。
+//   ③ **时间预算**：tick 之间只隔 60s，超时的活留给下一个 tick，不硬撑。
+const TICK_LOCK_KEY = "tick_lock_at";
+const TICK_LOCK_STALE_MS = 5 * 60 * 1000;   // 锁最多压 5 分钟；再久一律当成"上一个 tick 死了"
+
+/**
+ * 每 tick 的对外请求预算。
+ * ⚠️ **1000 是假定值，不是实测值** —— 已实测的只有两条：免费档 = 50（第 51 次撞墙，
+ *    2026-09-01 生产实测）、付费档 ≥200（探针自身上限只到 200，没往上逼近）。
+ *    所以这个数**不许被当成量过的数引用**。留 20% 余量，且可被设置覆盖。
+ */
+const TICK_FETCH_BUDGET_ASSUMED = 800;
+
+/** 快 tick 单次最多分析几条。**平台限制，不是业务旋钮** —— 每分钟一次，慢慢来反而更稳。 */
+const TICK_ANALYZE_MAX = 3;
+/** 快 tick 单次最多发几封。一封实测 31-43s、并发 3 ⇒ 3 封约 40s，装得进一分钟。
+ *  ⚠️ 真正管"每天发多少"的是 Joe 在设置里的日限，这个数只管**一次 tick 别撑爆**。 */
+const TICK_SEND_MAX = 3;
+/** 每封开发信之间的最小间隔（秒）。**Joe 的旋钮**，settings 里 `send_interval_seconds` 覆盖；设 0 = 不限速。
+ *  90s ≈ 40 封/小时 —— 对刚养起来的域名是温和的节奏，而"每天发多少"仍然由他的日限说了算。 */
+const SEND_INTERVAL_DEFAULT = 90;
+
+/** 快 tick：自动模式开着时做增量出站。**关着时零出站**。 */
+async function fastTick(env: Env, ctx: ExecutionContext): Promise<void> {
+  // ① 总开关。⚠️ 放在最前面且**先于任何 fetch** —— 关着时这个函数的代价就该只有一次 D1 读。
+  if (!(await automationEnabled(env))) return;
+
+  // ② 防重入。⚠️ 不用内存变量：isolate 会被回收/复用，跨调用根本不共享
+  //    （这仓栽过一次同类：以为内存里的标志能跨请求生效）。真源必须落库。
+  const now = Date.now();
+  const lockRaw = (await getSetting(env, TICK_LOCK_KEY, "")).trim();
+  const lockAt = Number(lockRaw) || 0;
+  if (lockAt && now - lockAt < TICK_LOCK_STALE_MS) return;        // 上一个还在跑
+  await setSetting(env, TICK_LOCK_KEY, String(now));
+
+  const budget = new RoundBudget(now);
+  let analyzed = 0, approved = 0, sent = 0, gapHold = false;
+  try {
+    // ③ 分析 → 批准 → 发送，**一个 tick 内级联**（这就是"就绪即执行"）。
+    //    每一步都先看表：tick 间隔只有 60s，超了就把活留给下一个 tick，不硬撑。
+
+    // 3a) 分析新到的线索
+    if (budget.has(45_000)) {
+      const r = await analyzePending(env, TICK_ANALYZE_MAX, { concurrency: ANALYZE_CONCURRENCY, budget });
+      analyzed = r.ok || 0;
+    }
+
+    // 3b) 够分的立刻批准 —— **不等整点**（C5-19 的"打分完成即批"并入这里）。
+    //     ⚠️ 走的仍是既有那条 approveGate SQL，一个闸都没豁免；这里只是把它的触发时机
+    //        从"每小时一次"改成"每分钟一次"。**行为没变，节奏变了。**
+    if (budget.has(20_000) && await autoApproveEnabled(env)) {
+      approved = await autoApproveRound(env);
+    }
+
+    // 3c) 发就绪的。所有业务闸（日限/爬坡/熔断/压制/幂等）都在 sendApprovedBatch 里，一个不豁免。
+    //
+    // ⭐ 每封间隔（Joe 的旋钮，不是我们的强制）：没有它，提频到每分钟就等于
+    //   "最多 3 封/分钟连发"—— 对一个刚养起来的域名，节奏变化太陡。
+    //   ⚠️ 默认给温和值但**可清零**：设 0 就是不限速。这是给他的旋钮，不是我们替他做的决定。
+    //   ⚠️ 判据用**真实发出时刻**（emails 表里最后一封 sent 的时间），不是我们自己记的流水账 ——
+    //     自己记的那个会在崩溃/回滚后与事实脱节，而真源不会。
+    if (budget.has(50_000) && await autoSendEnabled(env)) {
+      const gapSec = Math.max(0, Number(await getSetting(env, "send_interval_seconds", String(SEND_INTERVAL_DEFAULT))) || 0);
+      if (gapSec > 0) {
+        const last = await env.DB.prepare(
+          "SELECT MAX(sent_at) AS t FROM emails WHERE status='sent'"
+        ).first<{ t: string | null }>();
+        if (last?.t) {
+          const lastMs = Date.parse(String(last.t).replace(" ", "T") + "Z");
+          if (Number.isFinite(lastMs) && now - lastMs < gapSec * 1000) {
+            // 还没到间隔 —— 这一 tick 不发。**不是错误，但必须说出来**：
+            //   静默跳过会让"在等间隔"和"发信坏了"在日志上长得一模一样，
+            //   而这仓已经为"没跑和跑了 0 命中数据上完全一样"付过学费。
+            gapHold = true;
+            console.log(`tick: 距上封 ${Math.round((now - lastMs) / 1000)}s < 间隔 ${gapSec}s，本轮不发（Joe 设的 send_interval_seconds）`);
+          }
+        }
+      }
+    }
+    if (!gapHold && budget.has(50_000) && await autoSendEnabled(env)) {
+      const { effective } = await systemDailySendLimit(env);
+      const { limit: autoLimit } = await autoSendDailyLimit(env, effective);
+      const room = Math.max(0, autoLimit - (await autoSentToday(env)));
+      const take = Math.min(room, TICK_SEND_MAX);
+      if (take > 0) {
+        const r = await sendApprovedBatch(env, take, undefined, true, { concurrency: SEND_CONCURRENCY, budget });
+        sent = r.sent || 0;
+      }
+    }
+  } catch (e) {
+    console.error("fastTick:", e);
+  } finally {
+    // ⚠️ 一定要放锁：不放的话下一个 tick 要等 5 分钟过期才动，自动模式变成"每 5 分钟一次"。
+    await setSetting(env, TICK_LOCK_KEY, "").catch(() => {});
+  }
+  if (analyzed || approved || sent) {
+    console.log(`tick: 分析 ${analyzed} · 批准 ${approved} · 发出 ${sent}（耗时 ${Math.round((Date.now() - now) / 1000)}s）`);
+  }
+}
+
 // Cron 定时任务：自动找客户 + 自动分析新线索（7×24 运行）
 async function scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
   // ⚠️ 全量重扫**不在这里** —— 它走交互式批量通道（/api/rescan/*，后台按钮驱动）。
@@ -3606,47 +3799,9 @@ async function scheduled(event: ScheduledController, env: Env, ctx: ExecutionCon
   //    它保护的是 Workers 的子请求/CPU 预算，跟"每天发几封"是两码事 —— 别把它当成可调的业务参数。
   //    （对照 P0-1 拔掉的那个 `Math.min(autoRoom,5)`：那个是**业务**常数，锁死了 Joe 的每日上限，已删。）
   const CRON_ANALYZE_MAX = 12; // 单轮最多分析条数（~8-12 安全区，别在一次 Cron 抽干 100+）
-  let attempts = 0;
-  let fetchSkipped = 0;
-  // ⭐ 本轮已试过的 id 必须排除掉。抓站失败的线索**故意留在 status='new'**（等下一轮 cron 重试），
-  //    而本 while 每批都按 `status='new' ORDER BY id ASC` 重取 —— 不排除的话同一批抓不到的线索
-  //    会在**同一轮里**被反复取到，几个来回就把 fetch_fail_count 的 3 次上限烧穿，
-  //    "留着下轮重试"直接变成"一轮内判死"，比不修还糟。
-  const tried = new Set<number>();
-  while (attempts < CRON_ANALYZE_MAX) {
-    let batch: any[] = [];
-    try {
-      const take = Math.min(8, CRON_ANALYZE_MAX - attempts);
-      const skip = [...tried];
-      const rows = await env.DB.prepare(
-        skip.length
-          ? `SELECT * FROM leads WHERE status='new' AND id NOT IN (${skip.map(() => "?").join(",")}) ORDER BY id ASC LIMIT ?`
-          : "SELECT * FROM leads WHERE status='new' ORDER BY id ASC LIMIT ?"
-      ).bind(...skip, take).all();
-      batch = rows.results as any[];
-    } catch (e) { console.error("analyze-fetch:", e); break; }
-    if (!batch.length) break;
-    let okThisBatch = 0, hardFail = 0;
-    for (const lead of batch) {
-      attempts++; tried.add(Number(lead.id));
-      try {
-        const out = await analyzeLead(env, lead);
-        if (out.ok) {
-          analyzed++; okThisBatch++;
-        } else if (out.fetchFailed) {
-          // 抓不到是**这个站**的问题（限流/挂了/拦 UA），不是模型挂了 → 跳过继续，别拖累整轮
-          fetchSkipped++;
-          console.log(`analyze skip(fetch): #${lead.id} ${lead.website || ""} ${out.error || ""}`);
-        } else {
-          hardFail++; // 模型/DB 失败 → 多半是持久问题（OpenRouter 挂、额度尽）
-        }
-      } catch (e) { hardFail++; console.error("analyze:", lead.id, e); }
-    }
-    // 只有「真失败」（模型/DB）且本批零成功才停 —— 那多半是 OpenRouter 挂了，继续只是空转烧子请求。
-    // 全是抓站失败 → **继续下一批**：它们已进 tried 不会被重取，后面的正常线索不该被这几条卡死。
-    if (okThisBatch === 0 && hardFail > 0) break;
-  }
-  if (fetchSkipped) console.log(`analyze: ${fetchSkipped} 条因官网抓不到跳过（未打分，等下轮重试）`);
+  // C5-22：抽成 analyzePending()，与每分钟快 tick 共用同一份实现。
+  const _an = await analyzePending(env, CRON_ANALYZE_MAX, { budget });
+  analyzed += _an.ok;
 
   subMark("2.5-自动批准");
   // 2.5) 自动批准：≥auto_approve_min（默认 60）且有邮箱 → approved。
@@ -3656,27 +3811,8 @@ async function scheduled(event: ScheduledController, env: Env, ctx: ExecutionCon
   //  · <60 → **不动**：进翻牌堆等 Joe 复核，绝不替他做销毁性决定。
   try {
     if (await autoApproveEnabled(env)) {
-      const autoMin = await getAutoApproveMin(env);
-      const cands = (await env.DB.prepare(
-        // ⭐ 批⑨①：`AND l.email IS NOT NULL AND l.email != ''` 已删 —— 无邮箱但 ≥60 的
-        //   （生产实测 96 家，其中 65 家有社媒能碰）现在也进 approved=「待联系」，等 Joe 手动碰。
-        //   不放它们进来，批⑨ 整个白做：它的全部意义就是"96 家有社媒的公司要有家"。
-        //   发邮件的闸在 sendApprovedBatch（同批加的 email 过滤），它们进不了邮件发送池。
-        `SELECT l.id, l.email, a.match_score FROM leads l JOIN lead_analysis a ON a.lead_id=l.id
-          WHERE l.status='analyzed' AND a.match_score >= ?
-          ORDER BY a.match_score DESC, l.id ASC LIMIT 50`
-      ).bind(autoMin).all()).results as any[];
-      for (const c of cands) {
-        // 同一条护栏：任何一项不过（未打分/<60）都不批准，理由照打。
-        // 批⑨①：缺邮箱**不再是**不批准的理由 —— 它只决定能不能走邮件那条路，不决定值不值得碰。
-        const why = approveGateReason(c.email, c.match_score ?? null);
-        if (why) { console.log(`auto-approve skip #${c.id}: ${why}`); continue; }
-        const r = await env.DB.prepare(
-          "UPDATE leads SET status='approved', updated_at=datetime('now') WHERE id=? AND status='analyzed'"
-        ).bind(c.id).run();
-        if (r.meta.changes === 1) autoApproved++;
-      }
-      if (autoApproved) console.log(`auto-approve: ${autoApproved} 条 ≥${autoMin}分 → 待联系（含无邮箱的：它们等 Joe 手动碰社媒）`);
+      // C5-22：抽成 autoApproveRound()，与每分钟快 tick 共用。
+      autoApproved += await autoApproveRound(env);
     } else console.log("auto-approve skipped: auto_approve_enabled=0");
   } catch (e) { console.error("auto-approve:", e); }
 
@@ -4050,5 +4186,14 @@ async function scheduled(event: ScheduledController, env: Env, ctx: ExecutionCon
 //    ⚠️ 洗归洗，**脏了的那几把会在点火面板上被点名**（dirtySecretKeys）——不掩盖。
 export default {
   fetch: (req: Request, env: Env, ctx: ExecutionContext) => { const e = normalizeEnv(env); installDevEgressGuard(e); return app.fetch(req, e, ctx); },
-  scheduled: (event: ScheduledController, env: Env, ctx: ExecutionContext) => { const e = normalizeEnv(env); installDevEgressGuard(e); return scheduled(event, e, ctx); },
+  // ⭐ C5-22：两条班次分流。**判据是 event.cron 这个真值**，不是"看现在是不是整点"——
+  //   后者会让每分钟的 tick 在整点那一分钟**同时跑成整点班**，于是每天多烧 24 次搜索预算；
+  //   而且它是那种"平时看不出来、只在整点出错"的病。
+  // ⚠️ 分流必须**穷尽**：cron 字符串对不上时走整点班（保守），不是静默什么都不做 ——
+  //   静默不做会让"班次没配对"长得跟"没活干"一模一样。
+  scheduled: (event: ScheduledController, env: Env, ctx: ExecutionContext) => {
+    const e = normalizeEnv(env); installDevEgressGuard(e);
+    if (event.cron === "* * * * *") return fastTick(e, ctx);
+    return scheduled(event, e, ctx);
+  },
 };
