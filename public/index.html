@@ -131,6 +131,8 @@
     .db-locked .db-dimbar i { background:var(--border-strong); }
     @media (max-width:820px){ .db-dimrow { grid-template-columns:minmax(0,1fr) 72px auto; } .db-dimbar { display:none; } }
     /* C5-11 B：顶栏分析进度条 —— 不阻断、可点回弹窗。字号/颜色取自附录 C 闭集 */
+    .gj-help { color:var(--muted); font-size:12px; cursor:help; margin-right:6px; }
+    .gj-lnk.gj-on { background:var(--tint-blue); color:var(--blue); font-weight:600; border-radius:6px; padding:2px 6px; }
     .an-chip { display:inline-flex; align-items:center; gap:8px; font-size:12px; cursor:pointer;
                background:var(--tint-blue); border:1px solid var(--border); color:var(--blue);
                padding:5px 10px; border-radius:8px; white-space:nowrap; }
@@ -1423,7 +1425,8 @@
       $("#side").innerHTML = navTop + tabHtml(TABS[0]) + `<div class="side-div"></div>` +
         chain.map((t,i) => tabHtml(t) + (i < chain.length - 1 ? `<div class="side-arrow">↓</div>` : "")).join("");
       document.querySelectorAll(".tab").forEach(el =>
-        el.onclick = () => { current = el.dataset.k; dueMode = false; showMainView('list'); loadStats(); loadList(); });   // 点漏斗格=退出待跟进视图
+        el.onclick = () => { current = el.dataset.k; dueMode = false; clearReadyFilter();
+          showMainView('list'); loadStats(); loadList(); });   // 点漏斗格=退出待跟进视图 + 清掉待联系页的分组筛选
       refreshNavHighlight();   // #42 侧栏重渲后校正高亮（跟随 activeView，而非只看 current）
       // 批③D：绿横幅已撤，无需再加载
     }
@@ -1525,6 +1528,16 @@
       // ⚠️ 数字**按当前选中集实时算**，不是写死的 —— 所以 `t` 是函数不是字符串（见 renderGroupTools）。
       //    写死就又是一个会过期的假数字。
       ready: [
+        // C5-12：原来长在分组横带上的整组动作搬到这里，成为 fleet 按钮（不依赖选中）。
+        //   ⚠️ `fn` 只是取 id 的包装，转调的还是横带用的 `grpSendAll` / `grpFindMails` —— **同一条路径**。
+        //   ⚠️ 数字实时取自 `_loadedLeads` 的分组谓词 `readyGroupOf`，与页顶「跳到」的计数**同源**。
+        { t:()=>`✉ 发送（${readyGroupIds('A').length} 封）`, cls:"btn-green", fleet:true,
+          hideIf:()=>readyGroupIds('A').length===0, fn:"toolSendReadyAll()" },
+        // 这两颗**仅当"没有联系方式"组非空时出现**（总调度点名）：组空时它们不通向任何动作。
+        { t:()=>`🔍 免费抓一轮（${readyGroupIds('C').length}）`, cls:"", fleet:true,
+          hideIf:()=>readyGroupIds('C').length===0, fn:"toolFindMailsReadyC(false)" },
+        { t:()=>`💳 Hunter 补邮箱（${readyGroupIds('C').length}）`, cls:"", fleet:true,
+          hideIf:()=>readyGroupIds('C').length===0, fn:"toolFindMailsReadyC(true)" },
         // ⚠️ 名字保留"选中"语义：这是**不可撤销**动作。"批准≠发送"那次事故就是名字不精准造成的。
         // 批⑲ 规则1+2：不再用 hideIf「藏起来」，改成**永远显示 + 混选说清跳过几条 + 不可用时说明原因**。
         { t:(p)=>mixLabel("📧 发邮件", p.withEmail, p.noEmail, "无邮箱", p.n), cls:"btn-green", sel:true,
@@ -1696,33 +1709,25 @@
       if (current !== 'ready' || readyGroupOf(l) !== 'B') return "";
       return `<button class="mini stg-reply" onclick="event.stopPropagation();rowMarkReplied(${l.id})" title="标记这家已回复（手动聊出回音后点）">💬 他回了</button>`;
     }
-    function renderReadyGroups(leads, rowHtml){
-      const A = leads.filter(l => readyGroupOf(l) === 'A');
-      const B = leads.filter(l => readyGroupOf(l) === 'B');
-      const C = leads.filter(l => readyGroupOf(l) === 'C');
-      const head = (title, n, hint, btn, aid) => `<tr class="grp-head" id="${aid||''}"><td colspan="99">
-        <b>${title}</b><span class="grp-n">${n}</span><span class="hint">${hint}</span>${btn||""}</td></tr>`;
-      const gone = t => `<tr><td colspan="99" class="grp-empty">${t}</td></tr>`;
-      const dead = (cls,label) => ` <button class="${cls} mini" disabled title="本组现在没有线索">${label}（0）<span class="btn-why">· 本组为空</span></button>`;
-      const aBtn = A.length
-        ? ` <button class="btn-green mini" onclick="grpSendAll('${A.map(l=>l.id).join(",")}')">📧 发送（${A.length} 封）</button>`
-        : dead("btn-green","📧 发送");
-      // ⚠️ 补邮箱后端**单次上限 30**：组 C 超过 30 时按钮必须说清"这次只跑前 30"，
-      //   否则又是拿一个做不到的数字骗人（规则4）。
-      const cN = C.length, cShow = Math.min(cN, 30), cSuffix = cN > 30 ? `（前 ${cShow} / 共 ${cN}）` : `（${cN}）`;
-      const cIds = C.map(l=>l.id).join(",");
-      const cBtns = cN
-        ? ` <button class="mini" onclick="grpFindMails('${cIds}',false)">🔍 免费抓一轮${cSuffix}</button>`
-          + ` <button class="mini" onclick="grpFindMails('${cIds}',true)">💳 Hunter 补邮箱${cSuffix}</button>`
-        : dead("","🔍 免费抓一轮") + dead("","💳 Hunter 补邮箱");
-      return head("① 有邮箱", A.length, "机器能直接发开发信", aBtn, "gj-ready-A")
-        + (A.length ? A.map(rowHtml).join("") : gone("这一组现在是空的 —— 有邮箱、等着发信的会落在这里"))
-        // ② 全是**手动**动作，且每条渠道不同 → 只给行级按钮，不给整组批量（批量在这儿没有业务含义）
-        + head("② 只有社媒/电话", B.length, "机器发不了 —— 点<b>右侧渠道列</b>直接去聊，聊出回音点这行的「💬 他回了」", "", "gj-ready-B")
-        + (B.length ? B.map(rowHtml).join("") : gone("这一组现在是空的 —— 没邮箱但有社媒/电话的会落在这里"))
-        + head("③ 没有联系方式", C.length, "先设法拿到联系方式：免费抓一轮，或用 Hunter 按域名查（花积分）", cBtns, "gj-ready-C")
-        + (C.length ? C.map(rowHtml).join("") : gone("这一组现在是空的 —— 邮箱和社媒都没有的会落在这里"));
-    }
+    // C5-12：取某一组的 id —— 计数与动作**共用这一个函数**，页顶「跳到」也用它，
+    //   免得"横带说 5 条、按钮发了 6 条"那种两处各算各的（铁律五在数据上的同一条）。
+    window.readyGroupIds = (g) => (_loadedLeads || []).filter(l => readyGroupOf(l) === g).map(l => l.id);
+    // ⚠️ 只做取 id 的包装，转调既有函数 —— 验收要求"同一个调用路径，别新写"。
+    window.toolSendReadyAll   = () => grpSendAll(readyGroupIds('A').join(","));
+    window.toolFindMailsReadyC = (useHunter) => grpFindMails(readyGroupIds('C').join(","), useHunter);
+    // 页顶「跳到」在平铺后失去锚点 → 改成**按组筛选**（总调度已批这条退路）。
+    let _readyFilter = null;   // null=全部；'A'|'B'|'C'
+    window.setReadyFilter = (g) => { _readyFilter = (_readyFilter === g) ? null : g; loadList(); };
+    // ⚠️ 换格时清掉 —— 否则切走再切回来，筛选还挂着而人已经忘了，
+    //   看到的是"线索少了一半"而屏幕上没有任何东西解释为什么。
+    window.clearReadyFilter = () => { _readyFilter = null; };
+
+    // ══ C5-12：待联系页三条分组横带撤除（与 C5-6 待审批同族裁定）══
+    //   列表回平铺（默认按评分降序），三条横带 + 三句解释全删。
+    //   **能力核算 —— 不是删能力**：段级批量搬到页面工具栏成 fleet 按钮，
+    //   走的还是 `grpSendAll` / `grpFindMails` **同一个调用路径**（只加了一层取 id 的包装，没重写）。
+    //   分组本身没消失：`readyGroupOf` 谓词保留，页顶「跳到」改成**按组筛选**（见 _readyFilter）。
+    //   解释文字收进 (?) 悬浮（`data-help`，guard 的 measure 会剔除它，不占字数预算）。
     // ⭐ 批㉓ 组间跳转：滚动可达性。组头 sticky 后仍需一个"直达"入口——前组行数多时，靠滚很累。
     //   ⚠️ 计数用**同一批 group-of 谓词**（unscoredGroupOf/reviewBandOf/readyGroupOf）——与组头计数单源，不会漂。
     //   组头 sticky top:0，scrollIntoView(block:start) 正好把目标组头落到吸顶位。
@@ -1745,11 +1750,19 @@
       //   同一份分层渲染两遍（铁律五）。⚠️ 只删 review 这一档：
       //   unscored / ready 两页 Joe 没提，不顺手一起动。
       else if (cur === 'review') defs = null;
-      else if (cur === 'ready') defs = [
-        ['gj-ready-A','① 有邮箱', leads.filter(l=>readyGroupOf(l)==='A').length],
-        ['gj-ready-B','② 社媒/电话', leads.filter(l=>readyGroupOf(l)==='B').length],
-        ['gj-ready-C','③ 无联系方式', leads.filter(l=>readyGroupOf(l)==='C').length],
-      ];
+      // C5-12：待联系页横带撤了 ⇒ 锚点没了，「跳到」改成**按组筛选**（再点一次取消）。
+      //   分组本身没消失，只是不再以横带形式躺在列表中间。
+      else if (cur === 'ready') {
+        const cnt = g => leads.filter(l=>readyGroupOf(l)===g).length;
+        box.style.display = '';
+        box.innerHTML = `<span class="gj-lb">只看：</span>`
+          + `<span class="gj-help" data-help title="① 有邮箱：机器能直接发开发信。② 只有社媒/电话：机器发不了，点右侧渠道列去聊，聊出回音点该行「💬 他回了」。③ 没有联系方式：先用「免费抓一轮」或 Hunter 补邮箱。">(?)</span>`
+          + [['A','① 有邮箱'],['B','② 社媒/电话'],['C','③ 无联系方式']]
+              .map(([g,label])=>`<a class="gj-lnk${_readyFilter===g?' gj-on':''}" onclick="setReadyFilter('${g}')">${label}(${cnt(g)})</a>`)
+              .join('<span class="gj-sep">·</span>')
+          + (_readyFilter ? `<span class="gj-sep">·</span><a class="gj-lnk" onclick="setReadyFilter('${_readyFilter}')">显示全部</a>` : '');
+        return;
+      }
       if (!defs) { box.style.display='none'; box.innerHTML=''; return; }
       box.style.display='';
       box.innerHTML = `<span class="gj-lb">跳到：</span>`
@@ -1821,6 +1834,9 @@
     // ⭐ 批⑲：一个按钮此刻能不能按 + **不能按的原因**。原因是验收硬要求（总工定的）。
     //   优先级：只能单条 > 要先勾选 > 按钮自己的业务闸（enabled）。
     function toolGate(d, pick){
+      // C5-12：fleet = 全量动作，**不看选中集** —— 别让 `sel` 那条门把它卡成灰的。
+      //   （它们本来就没写 sel:true，这里是显式声明意图，免得以后有人顺手加上。）
+      if (d.fleet) return { ok: true };
       if (d.only1 && pick.n !== 1)
         return { ok:false, why: pick.n === 0 ? "先勾选 1 条" : "只能单条操作" };
       if (d.sel && pick.n === 0)
@@ -1860,8 +1876,16 @@
       //   入口指向一个看不见的东西，比没有入口更糟。
       //   ⇒ 按**结构**修不按个案修：本组只要含 fleet 按钮，工具条就出现；
       //     以后任何组加全量按钮都自动可达，不必再有人想起这条规则。
-      const hasFleet = defs.some(d => d.fleet);
-      if(!defs.length || (n === 0 && !hasFleet)){ bar.style.display="none"; bar.innerHTML=""; return; }
+      // C5-12：`hideIf` 在批⑲ 时被废止（改成"永远显示+灰+说原因"），渲染循环早已不读它。
+      //   这里**只为 fleet 类恢复**它，因为两者的情形不同：
+      //     · 批⑲ 管的是**选中依赖**按钮 —— Joe 原话「没有按钮，我不选的时候不知道能干什么」，
+      //       那是"还没选"，动作是存在的，所以要灰着告诉他存在。
+      //     · fleet 按钮的 hideIf 判的是**这一组一条线索都没有** —— 动作此刻**没有作用对象**。
+      //       摆一个「Hunter 补邮箱（0）· 本组为空」是永久噪音（C5-4v 刚清掉的那一类）。
+      //   ⚠️ 这条张力已报总调度；Joe 若要"永远显示"，把下面这行删掉即可，其余不用动。
+      const shown = defs.filter(d => !(d.fleet && typeof d.hideIf === "function" && d.hideIf()));
+      const hasFleet = shown.some(d => d.fleet);
+      if(!shown.length || (n === 0 && !hasFleet)){ bar.style.display="none"; bar.innerHTML=""; return; }
       // fleet-only 态（没勾选、只靠全量按钮撑出来的工具条）：**不显示「已选 0 条」前缀** ——
       //   那句在这个状态下正是当初要去掉的那种噪音。
       // ⚠️ 但选中依赖的按钮**照常渲染成灰的 + 写明"先勾选线索"**（toolGate 已经这么做），
@@ -1906,7 +1930,7 @@
         //   但批⑫ 那句「光灰着比不摆更让人困惑」**也没说错** —— 两条合起来才完整：
         //   **灰 + 说清为什么灰**。所以 `why` 是硬要求，不是提示语润色：
         //   少了原因，这个按钮就退回成批⑫ 描述的那种"摆在那儿更困惑"。
-        + defs.map(d=>{
+        + shown.map(d=>{
                 const g = toolGate(d, pick);
                 const label = typeof d.t === "function" ? d.t(pick) : esc(d.t);
                 // 函数标题自己已经把数字算进去了（混选口径），只给静态标题补「（n）」
@@ -2269,11 +2293,15 @@
           <td class="muted" style="white-space:nowrap;font-size:12px">${fmtDate(l.created_at)}</td>
         </tr>`; };
       // ⭐ 批⑲ 页面一：「待分析」换成**按下一步动作分组**的视图；其余格保持原来的平铺表格，一个字不动。
+      // C5-12：待联系页的分组筛选。⚠️ **只过滤渲染，不过滤计数** ——
+      //   页顶那三个数必须始终是全量分组数（筛着 A 时也要看得见 C 还有几条），
+      //   否则一点筛选，另外两组的数就变 0，人会以为线索没了。
+      const rowsData = (current === 'ready' && _readyFilter)
+        ? leads.filter(l => readyGroupOf(l) === _readyFilter) : leads;
       $("#rows").innerHTML =
-          current === 'unscored' ? renderUnscoredGroups(leads, rowHtml)
-        : current === 'ready'    ? renderReadyGroups(leads, rowHtml)
-        : leads.map(rowHtml).join("");
-      renderGroupJump(current, leads);   // 批㉓ 组间跳转条（仅三分组视图显示，真值计数）
+          current === 'unscored' ? renderUnscoredGroups(rowsData, rowHtml)
+        : rowsData.map(rowHtml).join("");
+      renderGroupJump(current, leads);   // 计数用**未筛的** leads（见上）
       document.querySelectorAll("tr.row").forEach(tr =>
         tr.onclick = () => openDetail(tr.dataset.id));
       makeColumnsResizable();
