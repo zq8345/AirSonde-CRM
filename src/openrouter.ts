@@ -244,6 +244,12 @@ export async function scoreLead(
     `  · 有自有产品线、但可能需要第二供应源/消化产能 → manufacturer-2nd-source\n` +
     `  · 有自有品牌且在跟我们抢同一批买家（成熟检测仪大牌）→ excluded；政府/协会/媒体/研究机构 → excluded\n` +
     `  · **官网信息不足以判断的 → unclear**，不要硬塞进某一类（塞错比说不知道更贵）\n` +
+    `  🔴 **一致性硬规则**：score ≥ 60 时**禁止**输出 unclear。
+` +
+    `     你有足够证据给它打 60 分以上，就说明你看清了它在做什么 —— 那就必须从 6 个目标类型里选最贴近的一个。
+` +
+    `     **确实归不了类 = 证据不足 = 分数不得 ≥ 60。**（生产反例：两家被打 90 分却标 unclear，标签与分数自相矛盾。）
+` +
     `· customer_desc(中文一句，说清它具体做什么——只用于展示，不参与分类)\n` +
     `【分类与分数的对应】brand / distributor / integrator / monitoring-service → 高优 70-95；\n` +
     `  manufacturer-2nd-source / end-buyer → 中优 60-85；excluded → **≤30**；unclear → **40-55 待人工复核**。\n` +
@@ -265,12 +271,44 @@ export async function scoreLead(
   const user =
     `公司名：<<<UNTRUSTED_NAME>>>${company || "(未知)"}<<<END>>>\n\n官网正文（可能不完整）：\n<<<UNTRUSTED_WEBSITE>>>\n${siteText || "(未能抓取到网站内容)"}\n<<<END>>>`;
 
-  const raw = await chat(env, model, [
+  const msgs: ChatMsg[] = [
     { role: "system", content: sys },
     { role: "user", content: user },
-  ], { json: true, maxTokens: TOK_SCORE });
+  ];
+  let raw = await chat(env, model, msgs, { json: true, maxTokens: TOK_SCORE });
+  let obj = extractJson(raw);
 
-  const obj = extractJson(raw);
+  // ══ 🔴 C5-13 增补：分类与分数的**一致性硬闸**（prompt 是请求，闸才是保证）══
+  //
+  // 生产反例（Joe 抓到的）：Hvacusa 90 分 + unclear、Bakerdist 90 分 + unclear。
+  //   有足够证据打 90 分，却说"资料不足判不出是哪一类" —— **这两句话不能同时为真**。
+  //   矛盾数据一旦入库，后面所有按分类做的统计和写信角度都建在它上面。
+  //
+  // ⚠️ 只写进 prompt 是不够的：prompt 是"请它照办"，模型照不照办**我们无从保证**。
+  //   所以这里做成机械可判的服务端闸：矛盾 → 带指令重试一次 → 仍矛盾 → **59 分封顶落库**。
+  // ⚠️ 为什么封顶而不是硬塞一个类别：它自己说了判不出，我们替它选一个就是**编造分类**
+  //   （"塞错比说不知道更贵"）。降到 59 分的含义诚实得多：**待人工复核**。
+  const conflicted = (o: any) =>
+    String(o?.customer_type ?? "").trim().toLowerCase() === "unclear" && clampScore(o?.match_score) >= 60;
+
+  if (conflicted(obj)) {
+    console.log(`scoreLead 一致性冲突：unclear + ${clampScore(obj.match_score)} 分 → 带指令重试一次`);
+    const retryMsgs: ChatMsg[] = [...msgs, { role: "user", content:
+      `你刚才的输出自相矛盾：customer_type = unclear（判不出类型）但 match_score ≥ 60（证据充分）。` +
+      `请二选一重新输出完整 JSON：**要么**从 6 个目标类型里选最贴近的一个（保持分数），` +
+      `**要么**保持 unclear 并把 match_score 降到 55 以下。不要解释，只输出 JSON。` }];
+    try {
+      raw = await chat(env, model, retryMsgs, { json: true, maxTokens: TOK_SCORE });
+      obj = extractJson(raw);
+    } catch (e) { console.error("scoreLead 重试失败，走封顶：", e); }
+  }
+  // 二次仍矛盾（或重试本身失败）→ 封顶 59，**绝不让矛盾数据入库**。
+  if (conflicted(obj)) {
+    console.log("scoreLead 二次仍矛盾 → 59 分封顶落库（待人工复核）");
+    obj = { ...obj, match_score: 59,
+      reason: String(obj.reason ?? "").trim() + "（分类判不出但分数偏高，已按一致性规则封顶到 59，待人工复核）" };
+  }
+
   const cc = String(obj.country_code ?? "").trim().toLowerCase();
   const buyerType = String(obj.buyer_type ?? "").trim();   // H3 合格买家类型判定
   const reasonRaw = String(obj.reason ?? "").trim();

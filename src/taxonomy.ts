@@ -34,10 +34,10 @@ export const CUSTOMER_TYPES = [
   { slug: "end-buyer",             label: "终端大客户", target: true,
     desc: "学校 / 物业 / 工厂，自用批量采购",
     angle: "buying in volume for their own sites" },
-  { slug: "excluded",              label: "竞品/无关",  target: false,
+  { slug: "excluded",              label: "非目标",     target: false,
     desc: "有自厂的竞争品牌、政府、媒体、协会",
     angle: "" },
-  { slug: "unclear",               label: "看不清",     target: false,
+  { slug: "unclear",               label: "资料不足",   target: false,
     desc: "官网信息不足，判不出属于哪一类",
     angle: "" },
 ] as const;

@@ -3088,7 +3088,8 @@
         return;
       }
       el.innerHTML = events.length
-        ? events.map(e=>`<div class="tl-row"><span class="tl-time">${esc(fmtDate(e.time))}</span><span class="tl-text">${esc(e.label)}</span></div>`).join("")
+        // C5-24：失败事件的**服务器原话**挂在 title 上（排查时要的是它，不是那句人话）。
+        ? events.map(e=>`<div class="tl-row"><span class="tl-time">${esc(fmtDate(e.time))}</span><span class="tl-text"${e.detail?` title="${esc(e.detail)}"`:""}>${esc(e.label)}</span></div>`).join("")
         : '<span class="muted">暂无事件</span>';
     }
     window.setStatus = async (id, status) => {

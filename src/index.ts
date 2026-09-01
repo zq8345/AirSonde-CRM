@@ -19,6 +19,7 @@ import { ingestReplies, matchReplyToLead } from "./replies";
 import { ensureReplyColumns, stripQuoted, previewOf, isNoiseReply, tabOf, type InboxTab } from "./reply-inbox";
 import { installFetchMeter, meteredDB, mark as subMark, reset as subReset, summary as subSummary } from "./subreq";
 import { normalizeCustomerType, customerTypeLabel, classifyKillReason, KILL_REASONS } from "./taxonomy";
+import { errHuman } from "./errhuman";   // C5-24 第 5 条：机器错误串 → 人话（服务端唯一一份）
 
 /**
  * ⭐⭐ C5-14：**一条线索一行数据长什么样，只在这里说一次。**
@@ -1379,20 +1380,27 @@ app.get("/api/leads/:id/timeline", async (c) => {
   const id = Number(c.req.param("id"));
   const lead = await c.env.DB.prepare("SELECT created_at, source, keyword FROM leads WHERE id=?").bind(id).first<any>();
   if (!lead) return c.json({ error: "not found" }, 404);
-  const events: { time: string; type: string; label: string }[] = [];
+  const events: { time: string; type: string; label: string; detail?: string; kind?: string }[] = [];
   events.push({ time: lead.created_at, type: "discovered", label: `线索录入${lead.source ? `（来源 ${lead.source}${lead.keyword ? ` · ${lead.keyword}` : ""}）` : ""}` });
 
   const a = await c.env.DB.prepare("SELECT analyzed_at, match_score FROM lead_analysis WHERE lead_id=?").bind(id).first<any>();
   if (a?.analyzed_at) events.push({ time: a.analyzed_at, type: "analyzed", label: `AI 分析打分 ${a.match_score ?? "—"}` });
 
   const emails = await c.env.DB.prepare(
-    "SELECT kind, status, subject, sent_at, created_at FROM emails WHERE lead_id=? ORDER BY id ASC"
+    "SELECT kind, status, subject, sent_at, created_at, error FROM emails WHERE lead_id=? ORDER BY id ASC"
   ).bind(id).all();
   for (const e of emails.results as any[]) {
     const t = e.sent_at || e.created_at;
     const kindLabel = e.kind === "followup" ? "跟进信" : "开发信";
     const stLabel = e.status === "sent" ? "已发送" : e.status === "bounced" ? "退信" : e.status === "failed" ? "发送失败" : "待发";
-    events.push({ time: t, type: `email_${e.status}`, label: `${kindLabel}${stLabel}${e.subject ? `：${e.subject}` : ""}` });
+    // ⭐ C5-24 第 5 条：失败事件原来只写"开发信发送失败"，**一个字都不说为什么** ——
+    //   Joe 看到它无从判断是钱、钥匙还是保险丝，也就不知道要不要动手。
+    //   现在给一句人话（errHuman），**原话原样带在 detail 里**给排查用（渲染方放进 title）。
+    //   ⛔ 落库那份 error 一个字不动 —— 那是排查真源，翻译只是给人看的第二层。
+    const eh = e.status === "failed" ? errHuman(e.error) : null;
+    events.push({ time: t, type: `email_${e.status}`,
+      label: `${kindLabel}${stLabel}${e.subject ? `：${e.subject}` : ""}${eh ? ` —— ${eh.human}` : ""}`,
+      detail: eh ? eh.raw : undefined, kind: eh ? eh.kind : undefined });
   }
 
   const replies = await c.env.DB.prepare(
