@@ -4984,11 +4984,15 @@ ${esc(d.ours.body||'')}</div></details>`
       //    写成 `cfg.discoveryEnabled` / `cfg.discoveryCursor`，而 `cfg` 是 sending，
       //    那两个字段**根本不存在** ⇒ 会永远显示"○ 未开启 / —"，而且看着完全合理。
       //    （断言产出不断言字段名：写进模板前先确认这个变量真的装着那个端点的返回。）
+      // ⚠️ C5-38：这四路原来是裸 `.then(r=>r.json())` —— **不检查 r.ok**，
+      //   于是 500 / 302(登录过期) 返回的 HTML 会在 json() 处抛错 → catch → null → 屏幕显示"读不到"。
+      //   "读不到"这句话本身是对的（诚实设计保留），但它把**四种不同的原因**糊成了一句：
+      //   超时 / 服务端 500 / 登录过期 / 真的没有这个字段。⇒ 走 fetchCfg（带超时+退避+说出是哪个接口）。
       const [ign, cfg, today, scfg] = await Promise.all([
-        fetch("/api/ignition").then(r=>r.json()).catch(()=>null),
-        fetch("/api/settings/sending").then(r=>r.json()).catch(()=>null),
-        fetch("/api/today").then(r=>r.json()).catch(()=>null),
-        fetch("/api/settings/search").then(r=>r.json()).catch(()=>null),
+        fetchCfg("/api/ignition").then(r=>r.ok?r.data:null),
+        fetchCfg("/api/settings/sending").then(r=>r.ok?r.data:null),
+        fetchCfg("/api/today").then(r=>r.ok?r.data:null),
+        fetchCfg("/api/settings/search").then(r=>r.ok?r.data:null),
       ]);
       if (!ign || !cfg) { $("#v-page").innerHTML = pageHeader('机器房','') + `<div class="load-error">${loadErrorHtml('mr-retry', retried)}</div>`;
         const b=$("#mr-retry"); if(b) b.onclick=()=>openMachineRoom(true); return; }

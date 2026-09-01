@@ -2420,20 +2420,27 @@ app.post("/api/discover/rvwithtito", async (c) => {
 
 // ---- 找客户配置：目标国家 + 每关键词条数（含可选国家清单 + 关键词，供前端一次拿全）----
 app.get("/api/settings/search", async (c) => {
-  const cfg = await getSearchConfig(c.env);
-  const keywords = await getKeywords(c.env);
+  // ⭐ C5-38：与 /api/settings/sending 同一个病 —— 11 个串行 D1 往返（内部还各有多次查询）。
+  //   机器房那两行「后台自动搜索 / 轮转进度」显示"读不到"，正是这里超时/失败的下游症状。
+  //   ⚠️ 用**同一个** loadSettings，不另写一套：两处各写各的取数，迟早一处改了另一处没改。
+  const SKEYS = ["search_countries","country_list","active_keywords","discovery_enabled",
+                 "discovery_cursor","directory_autorefresh_enabled","directory_last_refresh"];
+  const [cfg, keywords, S2, serperU, backlogU] = await Promise.all([
+    getSearchConfig(c.env), getKeywords(c.env), loadSettings(c.env, SKEYS),
+    getSerperUsage(c.env), getBacklog(c.env),
+  ]);
   // 已勾选国家：读原始 setting（区分"从未设过"=默认 vs "设为空"=全不选），保证 UI 忠实回显
-  const scRaw = await getSetting(c.env, "search_countries", "__UNSET__");
+  const scRaw = S2("search_countries", "__UNSET__");
   const countries = scRaw === "__UNSET__"
     ? DEFAULT_COUNTRIES.slice()
     : scRaw.split(",").map((s) => s.trim().toLowerCase()).filter((x) => COUNTRIES[x]);
   // 国家清单（显示为 chips，可增删）：未定制过 → 展示全部目录
-  const clRaw = await getSetting(c.env, "country_list", "");
+  const clRaw = S2("country_list", "");
   let countryList = clRaw.split(",").map((s) => s.trim().toLowerCase()).filter((x) => COUNTRIES[x]);
   if (!countryList.length) countryList = Object.keys(COUNTRIES);
   for (const cc of countries) if (!countryList.includes(cc)) countryList.push(cc);  // 勾选项必在清单
   // 关键词勾选态（#45）：null=未定制→全部启用
-  const akRaw = await getSetting(c.env, "active_keywords", "__UNSET__");
+  const akRaw = S2("active_keywords", "__UNSET__");
   const activeKeywords = akRaw === "__UNSET__" ? null
     : akRaw.split("\n").map((s) => s.trim()).filter(Boolean);
   return c.json({
@@ -2443,15 +2450,15 @@ app.get("/api/settings/search", async (c) => {
     allCountries: COUNTRIES,           // { gl: 中文名 } 全目录（供"添加国家"下拉）
     keywords,                          // 生效关键词（用于透明度预估）
     activeKeywords,                    // #45 已勾选关键词（null=全部）
-    discoveryEnabled: (await getSetting(c.env, "discovery_enabled", "0")) === "1",   // #S1 后台每6h自动搜索开关（默认关）
+    discoveryEnabled: S2("discovery_enabled", "0") === "1",   // #S1 后台每6h自动搜索开关（默认关）
     // 批⑳ 机器状态卡：轮转游标（只读）。前端算分母 = keywords × allCountries（后台轮转恒用全量），
     //   与 discover.ts runDiscovery 的 totalC=combos.length 同口径。裸值即可，别在这里算 total（口径单源在轮转逻辑）。
-    discoveryCursor: Number(await getSetting(c.env, "discovery_cursor", "0")) || 0,
-    serper: await getSerperUsage(c.env),   // P0-c 今日 Serper 用量 + 预算
-    backlog: await getBacklog(c.env),      // 批④：积压刹车条 —— 瓶颈不是线索不够，是管道里堵着
+    discoveryCursor: Number(S2("discovery_cursor", "0")) || 0,
+    serper: serperU,   // P0-c 今日 Serper 用量 + 预算
+    backlog: backlogU,      // 批④：积压刹车条 —— 瓶颈不是线索不够，是管道里堵着
     // 队列⑦ 免费目录源每周自动刷新（零 Serper，默认开）
-    dirAutoRefresh: (await getSetting(c.env, "directory_autorefresh_enabled", "1")) === "1",
-    dirLastRefresh: await getSetting(c.env, "directory_last_refresh", ""),
+    dirAutoRefresh: S2("directory_autorefresh_enabled", "1") === "1",
+    dirLastRefresh: S2("directory_last_refresh", ""),
   });
 });
 app.post("/api/settings/search", async (c) => {
