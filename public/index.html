@@ -371,10 +371,30 @@
     .dp-top { display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:12px; }
     .dp-company { font-size:17px; font-weight:700; overflow:hidden; text-overflow:ellipsis; }
     .dp-scoremeta { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-left:auto; }
+    /* C5-14 头部合并：公司名下的一行身份元信息（国家 · 来源 · 关键词） */
+    .dp-idmeta { font-size:12px; color:var(--muted); margin-top:0; line-height:1.6; }   /* 间距对齐 8px 网格：不留 2px 这种半档 */
+    /* C5-14 判断理由分层：结论一句先看见，证据段退到次级 —— 原来整段同一个字重，
+       等于把"合格不合格"和"因为官网写了什么"摊成一样重要，读的人得自己找结论。 */
+    .dp-verdict { font-size:14px; font-weight:600; line-height:1.6; }
+    .dp-evidence { font-size:13px; font-weight:400; color:var(--muted); line-height:1.6; margin-top:8px; white-space:pre-wrap; }
+    .dp-chips { margin-top:8px; display:flex; gap:6px; flex-wrap:wrap; }
+    .dp-chips .tag { font-size:12px; margin:0; }
     .dp-body { display:grid; grid-template-columns:1fr 340px; gap:14px; align-items:start; }
-    .dp-card { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:12px 14px; margin-bottom:12px; }
+    /* 🔴 C5-14：这里原来是 `background:var(--panel)` —— **和画布同一个灰**（都是 #f4f5f7）。
+       所谓"白卡"根本不是白的，卡与底分不开，整页就摊成一片没有结构的浅灰 ——
+       Joe 说详情页"丑乱/空"，这是其中一半的原因（另一半是按钮五色，见 C.7）。
+       宪法附录 C.5 白纸黑字写着"内容板块 = 白卡：background:var(--bg)"，详情页从来没照做过。
+       ⚠️ 这不是我改了设计，是**把一处早就跑偏的地方拉回宪法**。 */
+    .dp-card { background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:12px 14px; margin-bottom:12px; }
     .dp-left .dp-card:last-child, .dp-right .dp-card:last-child { margin-bottom:0; }
-    .dp-kv { display:flex; justify-content:space-between; gap:10px; padding:3px 0; font-size:13px; }
+    /* C5-14 · 宪法附录 C.5b：无框分组 —— 旁栏那几块只读字段不再各套一张白卡。
+       并排堆三四张白卡时，**边框本身变成了噪音**：要读的是里面的字段，不是数框。
+       判据是"这块要不要被当成一个整体去操作"，不是"它在左栏还是右栏"。 */
+    .dp-group { margin-bottom:28px; }                       /* 组间距靠留白分隔，不靠线 */
+    .dp-group:last-child { margin-bottom:0; }
+    .dp-group-t { font-size:12px; font-weight:600; color:var(--muted); margin-bottom:8px; letter-spacing:.02em; }
+    .dp-kv { display:flex; justify-content:space-between; gap:16px; padding:4px 0; font-size:13px; line-height:1.6; }
+    .dp-kv > span:first-child { flex-shrink:0; }
     .dp-contact { display:flex; align-items:center; gap:8px; padding:5px 0; border-bottom:1px solid var(--border); }
     .dp-contact:last-child { border-bottom:0; }
     .dp-c-ic { width:20px; text-align:center; flex-shrink:0; }
@@ -412,14 +432,16 @@
     .dp-eng-hot { background:var(--tint-red); color:var(--red); border-color:var(--red); }
     .dp-eng-warm { background:var(--tint-amber); color:var(--amber); border-color:var(--amber); }
     .dp-eng-none { background:var(--bg); color:var(--muted); }
-    /* #46b 底部决策条：一条淡边框 surface 簇（去掉全宽间隔，按钮聚成一块） */
-    .dp-bottom { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:14px; padding:10px 12px; background:var(--surface-2); border:1px solid var(--border); border-radius:10px; }
-    .dp-bottom .dp-sep { width:1px; align-self:stretch; background:var(--border); margin:2px 4px; }  /* 次要↔决策 之间的细分隔，不撑大空档 */
+    /* C5-14：决策条**从页底移到头部下方** —— 类名一并从 dp-bottom 改成 dp-actions。
+       只搬位置不改名的话，代码里就留着一句谎（一个叫 bottom 的东西长在顶上）。
+       原 #46b 的设计意图（按钮聚成一块、不做全宽间隔）保留。 */
+    .dp-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:0 0 16px; padding:10px 12px; background:var(--surface-2); border:1px solid var(--border); border-radius:10px; }
+    .dp-actions .dp-sep { width:1px; align-self:stretch; background:var(--border); margin:2px 4px; }  /* 次要↔决策 之间的细分隔，不撑大空档 */
     /* #46 底部决策条：主操作突出、破坏性弱化最右防误点、次要靠左 */
-    .dp-bottom .dp-primary { font-size:14px; padding:9px 18px; font-weight:600; }
-    .dp-bottom .dp-danger-weak { background:transparent; border:1px solid var(--border); color:var(--muted); margin-left:14px; }
-    .dp-bottom .dp-danger-weak:hover { border-color:var(--red); color:var(--red); }
-    .dp-bottom .dp-label { font-size:12px; color:var(--muted); margin-right:2px; align-self:center; }
+    .dp-actions .dp-primary { font-size:14px; padding:9px 18px; font-weight:600; }
+    .dp-actions .dp-danger-weak { background:transparent; border:1px solid var(--border); color:var(--muted); margin-left:14px; }
+    .dp-actions .dp-danger-weak:hover { border-color:var(--red); color:var(--red); }
+    .dp-actions .dp-label { font-size:12px; color:var(--muted); margin-right:2px; align-self:center; }
     @media(max-width:820px){ .dp-body { grid-template-columns:1fr; } }
     /* 整页视图共用头 */
     /* 批⑩A 设置整页：原来这些内容长在 .modal 里，靠它给宽度/内边距/滚动。弹层删了之后
@@ -553,9 +575,21 @@
     textarea { width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text);
                border-radius:6px; padding:8px; min-height:120px; font-family:ui-monospace,Consolas,monospace; }
     .actions { display:flex; gap:8px; margin-top:16px; flex-wrap:wrap; align-items:center; }
-    .btn-green { background:var(--green); border-color:var(--green); color:var(--bg); }
-    .btn-amber { background:var(--amber); border-color:var(--amber); color:var(--bg); }
-    .btn-red { background:var(--red); border-color:var(--red); color:var(--bg); }
+    /* ══ C5-14 · 宪法附录 C.7：按钮收敛为三级 ══
+       起因 Joe 嫌详情页"丑乱"。数过：一屏上同时有绿/深绿/棕/黄/蓝五种实心按钮，每种都在喊"点我"。
+       **一屏有五个主按钮，等于一个都没有。**
+       ⚠️ 这几个类名**保留**（否则要改全站几十处 HTML，改动面远大于收益），
+         但它们的**语义已经降级为"次动作"** —— 下一个人别再以为 `btn-green` 是绿的：它不是了。
+         想要主色实心，用 `.primary`；想要危险动作，用 `.btn-danger-text`。
+       语义色仍保留给**非按钮**（分数徽章/阶段徽章/🔥💬）：那些是信息，不是动作。 */
+    button.btn-green, button.btn-amber, button.btn-won, button.btn-red,
+    .btn-chat { background:var(--bg); border:1px solid var(--border-strong); color:var(--text); }
+    button.btn-green:hover, button.btn-amber:hover, button.btn-won:hover, button.btn-red:hover,
+    .btn-chat:hover { background:var(--panel); border-color:var(--blue); color:var(--blue); }
+    /* 危险动作（忽略/婉拒归档/加黑名单）：红字、无底色无边框；hover 才出浅红底。
+       ⛔ 不做成红色实心 —— 实心红在一屏里比"批准"还抢眼，会把最该点的按钮压下去。 */
+    button.btn-danger-text { background:transparent; border:1px solid transparent; color:var(--red); }
+    button.btn-danger-text:hover { background:var(--tint-red); border-color:var(--tint-red); }
     .hint { color:var(--muted); font-size:12px; margin-top:6px; }
     .empty { color:var(--muted); text-align:center; padding:40px; }
     a { color:var(--blue); }
@@ -1201,6 +1235,38 @@
       //    有分 →「待审批」(REVIEW_WHERE)；无分 →「待分析」(UNSCORED_SHOW_WHERE)
       if (s==='analyzed' || s==='pending') return (l.match_score == null) ? 'unscored' : 'review';
       return 'unscored';   // status='new'
+    }
+    // C5-14：把打分理由拆成「结论句 + 证据段」。
+    // ⚠️ 判据要能吃两种真实格式（都在生产里存在）：
+    //   1) H3-v2：`【合格·经销商】官网 Products 页列了…` —— 结论在方括号里
+    //   2) 老 prompt：没有方括号的自由文本 —— 只能按第一个句号切
+    // 认不出结论时**整段当结论**（不硬切），别为了排版把一句话拦腰截断。
+    // 打分理由里带 `**强调**` 标记（后端拼 reason 时写的 markdown）。屏幕上不渲染 markdown，
+    // 不剥就会**裸着印出星号**（生产真有："。**未打分**：这不是…"）。剥的动作只写一处。
+    function cleanReason(v){ return String(v || "").replace(/\*\*/g, "").trim(); }
+    function splitReason(reason){
+      const t = cleanReason(reason);
+      if (!t) return { verdict:"", evidence:"" };
+      const br = t.match(/^【[^】]*】\s*/);
+      if (br){
+        let v = br[0].trim(), rest = t.slice(br[0].length).trim();
+        // ⚠️ 生产真有这种：方括号里**塞进了整段证据**（"【合格·…（官网明确列出 … 等品牌，且提供…）】"），
+        //   照单全收会让"结论行"变成 123 字的一整段、以 14px/600 铺开 —— 分层等于白做。
+        //   在括号内第一个全角左括号处切开，后半段并入证据段。
+        if (v.length > 40){
+          const k = v.indexOf("（");
+          if (k > 0){
+            const tail = v.slice(k).replace(/^（/, "").replace(/[）】]+$/, "").trim();
+            // 拼接处补标点：直接用空格连会读成一句跑不完的话（真图上就是这样）
+            rest = (tail.replace(/[，,、；;]\s*$/, "") + (rest ? "。" + rest : "。")).trim();
+            v = v.slice(0, k) + "】";
+          }
+        }
+        return { verdict: v, evidence: rest };
+      }
+      const i = t.search(/[。！!]/);
+      if (i > 0 && i < t.length - 1) return { verdict: t.slice(0, i + 1), evidence: t.slice(i + 1).trim() };
+      return { verdict: t, evidence: "" };
     }
     function stageOf(l){
       const key  = gridKeyOf(l);
@@ -2577,7 +2643,12 @@
         <div class="dp">
           <div class="dp-top">
             <button class="btn-ghost" onclick="showMainView('list')">← 返回列表</button>
-            <div class="dp-company" title="${esc(lead.company_name)||''}">${esc(lead.company_name)||"(未命名)"}</div>
+            <div style="min-width:0">
+              <div class="dp-company" title="${esc(lead.company_name)||''}">${esc(lead.company_name)||"(未命名)"}</div>
+              ${/* C5-14 头部合并：国家/来源原来在旁栏单占一张白卡。它回答的是"这家是谁"，
+                    跟公司名是同一件事 —— 同一件事不该在两个地方各占一块。 */''}
+              <div class="dp-idmeta">${lead.country?esc(countryName(lead.country)):"—"} · ${esc(lead.source)||"—"}${lead.keyword?` · ${esc(lead.keyword)}`:''}</div>
+            </div>
             <div class="dp-scoremeta">
               <span class="d-scoreblock ${detailScoreClass(a.match_score)}" style="padding:3px 10px;border-radius:7px">${scored?a.match_score+"/100":"未打分"}</span>
               ${a.customer_category?`<span class="pill ptype" title="${esc(a.customer_type)||''}">${esc(a.customer_category_label||a.customer_category)}</span>`:''}
@@ -2589,21 +2660,61 @@
               ${lead.has_followup ? `<span class="dp-eng dp-eng-none" title="已发过跟进信">↩︎ 已跟进</span>` : ''}
             </div>
           </div>
+          <div class="dp-actions">
+            <!-- 次要区：重新AI分析 / 加黑名单 收在这儿，不跟主操作抢。
+                 待分析时「AI 分析」升为主按钮（见下），这里就不再重复出一个。 -->
+            ${isUnscored ? '' : `<button class="btn-ghost" onclick="analyzeOne(${lead.id})">${scored?"重新 AI 分析":"🔍 AI 分析"}</button>
+            <span class="dp-sep"></span>`}
+            <!-- 主操作：跟这条线索所在的格联动 -->
+            ${isUnscored ? `<button class="primary dp-primary" onclick="analyzeOne(${lead.id})">🔍 AI 分析</button>
+                   <span class="hint">还没打分，先让 AI 看一眼官网（后台每小时也会自动跑）</span>`
+              : inReview ? (!lead.email
+                ? `<button class="primary dp-primary" onclick="findMail(${lead.id},false)">✉️ 补邮箱</button>
+                   <button class="btn-ghost" onclick="findMail(${lead.id},true)" title="Hunter 按域名查，每家 1 积分">Hunter 找(1积分)</button>`
+                : belowLine
+                  // ⭐ 批⑥C：<60 且有邮箱 → 主按钮是「手动发这家」（human_approved 路径），不是一个**灰着点不动的「批准」**。
+                  //   Joe 的用法是"打开一条信息就能当场处理完，不用回列表"——他在详情页看完证据判断机器杀错了，
+                  //   就该在这里直接放行，而不是记住公司名再回翻牌堆找一遍。
+                  //   走的是同一条 human-approve 端点（单条、只豁免分数线、邮箱/合规/幂等/压制/日上限一个不豁免）。
+                  ? `<button class="primary dp-primary" ${lead.human_approved?'disabled title="已经人工放行过了"':''} onclick="detailHumanApprove(${lead.id})">✉️ 手动发这家</button>
+                     <span class="hint">${lead.human_approved?'已人工放行，等下一轮自动发送':`${a.match_score} 分低于 ${SCORE_LINE} 分线 —— 机器不会发它。你判断杀错了就放行`}</span>`
+                  : `<button class="primary dp-primary" ${gateReason?`disabled title="${esc(gateReason)}"`:""} onclick="approveAndReview(${lead.id})">✅ 批准</button>`)
+              : inReady ? `<button class="primary dp-primary" ${gateReason?`disabled title="${esc(gateReason)}"`:""} onclick="confirmSend(${lead.id})">📤 发送</button>`
+              : isViewed ? `<button class="primary dp-primary" onclick="draftWarm(${lead.id})">🔥 趁热跟进</button>`
+              : isSent ? `<button class="primary dp-primary" onclick="focusNextAction()">📅 安排跟进</button>`
+              : isReplied ? `<button class="primary dp-primary" onclick="setStatus(${lead.id},'won')">🤝 标记成交</button>
+                            <button class="btn-danger-text" onclick="setStatus(${lead.id},'ignored')">婉拒归档</button>`
+              : ''}
+            ${gateReason && inReview && lead.email && !belowLine ? `<span class="hint" style="color:var(--amber)">⚠️ ${esc(gateReason)}</span>` : ''}
+            ${/* ⭐ 批⑥C「他回了」：邮件回复能靠 IMAP 自动收，**WhatsApp/LinkedIn/电话的回复机器看不见**。
+                 Joe 在手机上收到回复，得有个地方一键告诉系统 —— 否则这条线索会一直躺在"等回复"里，
+                 跟进逻辑还会继续追一个已经在聊的人。合规终态(退订/黑名单/退信)不出这个按钮。 */''}
+            ${(!isReplied && !['won','unsubscribed','blacklisted','bounced'].includes(lead.status))
+              ? `<button class="btn-ghost" onclick="channelReply(${lead.id})" title="任何渠道回话了都算：WhatsApp / LinkedIn / 电话 / 邮件">💬 他回了</button>` : ''}
+            ${(!isReplied && lead.status!=='won') ? `<button class="btn-ghost" onclick="setStatus(${lead.id},'won')">标记已下单</button>` : ''}
+            ${!isReplied ? `<button class="btn-danger-text" onclick="setStatus(${lead.id},'ignored')">忽略</button>` : ''}
+            <button class="btn-danger-text" onclick="setStatus(${lead.id},'blacklisted')" title="停止联系并拉黑">加黑名单</button>
+          </div>
           <div class="dp-body">
             <div class="dp-left">
               ${/* 批㉖：列表上的三按钮墙收进这里 —— 抓取失败线索的**唯一**处理块（错误全文+改网址+人工批准+忽略）。 */''}
-              ${(['analyzed','pending'].includes(lead.status) && a.match_score == null) ? `<div class="dp-card" style="border:1px solid #ecc4be">
+              ${(['analyzed','pending'].includes(lead.status) && a.match_score == null) ? `<div class="dp-card" style="border:1px solid var(--red)">
                 <div class="k" style="color:var(--red)">⚠️ 抓取失败处理</div>
-                <div class="hint" style="margin:4px 0 8px;white-space:pre-wrap">${esc(a.reason || '官网抓不到（原因未记录）')}</div>
+                <div class="hint" style="margin:4px 0 8px;white-space:pre-wrap">${esc(cleanReason(a.reason) || '官网抓不到（原因未记录）')}</div>
                 <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
                   <input id="ff-url" class="inlinput" style="flex:1;min-width:220px" placeholder="改成正确的官网地址" value="${esc(lead.website)||''}">
-                  <button class="mini" onclick="ffSaveWebsite(${lead.id})">🔗 保存并重抓</button>
-                  <button class="btn-green mini" onclick="ffHumanApprove(${lead.id})">✅ 人工批准去联系</button>
-                  <button class="btn-amber mini" onclick="ffIgnore(${lead.id})">忽略</button>
+                  <button class="btn-ghost mini" onclick="ffSaveWebsite(${lead.id})">🔗 保存并重抓</button>
+                  <button class="btn-ghost mini" onclick="ffHumanApprove(${lead.id})">✅ 人工批准去联系</button>
+                  <button class="btn-danger-text mini" onclick="ffIgnore(${lead.id})">忽略</button>
                 </div>
                 <div class="hint" id="ff-msg" style="margin-top:5px"></div>
               </div>` : ''}
-              ${scored && a.reason ? `<div class="dp-card"><div class="k muted">判断理由</div><div style="margin-top:3px">${esc(a.reason)}</div>${a.needed_products?`<div style="margin-top:7px">${esc(a.needed_products).split(/[、,，;；]/).map(p=>p.trim()).filter(Boolean).map(p=>`<span class="tag">${esc(p)}</span>`).join("")}</div>`:''}</div>` : ''}
+              ${scored && a.reason ? (()=>{ const r = splitReason(a.reason); return `<div class="dp-card">
+                <div class="dp-group-t">判断理由</div>
+                <div class="dp-verdict">${esc(r.verdict)}</div>
+                ${r.evidence?`<div class="dp-evidence">${esc(r.evidence)}</div>`:''}
+                ${a.needed_products?`<div class="dp-chips">${esc(a.needed_products).split(/[、,，;；]/).map(p=>p.trim()).filter(Boolean).map(p=>`<span class="tag">${esc(p)}</span>`).join("")}</div>`:''}
+              </div>`; })() : ''}
               ${scored ? `<div class="dp-card">
                 ${/* 批④：已发过的线索把「推荐开发信」折叠 —— 信都发了，不该再占最大面积 */''}
                 <div class="k muted" ${preSend?'':`style="cursor:pointer" onclick="toggleSentEmail(this)"`}>✎ ${preSend?'推荐开发信':'已发出的开发信 <span class="hint" id="se-caret">（已折叠，点开看）▾</span>'}</div>
@@ -2624,66 +2735,28 @@
                   ${preSend ? `<span class="hint">发出不可撤（发件 sales@airsonde.net）。</span>` : `<span class="hint">已发送，如需再触达请用下方「安排跟进」。</span>`}<span class="hint" id="send-msg"></span>
                 </div>
                 <div id="tr-panel" style="display:none;margin-top:8px"></div>
-              </div>` : `<div class="dp-card"><div class="hint">尚无 AI 分析。点底部「AI 分析」抓官网 + 打分${!lead.email?"（无邮箱可先「找邮箱」）":""}。</div></div>`}
-              ${(lead.status==='sent' && lead.has_click) ? `<div class="dp-card" id="warm-sec"><div class="k muted">🔥 趁热跟进${lead.has_followup?`（已发过跟进）`:``}</div><div class="hint" style="margin:2px 0 6px">点过链接＝有意向，生成短暖跟进你审后发。</div><div id="warm-body"><button class="btn-amber" onclick="draftWarm(${lead.id})">✍ 生成趁热跟进</button> <span class="hint" id="warm-msg"></span></div></div>` : ''}
+              </div>` : `<div class="dp-card"><div class="hint">尚无 AI 分析。点上方「AI 分析」抓官网 + 打分${!lead.email?"（无邮箱可先「找邮箱」）":""}。</div></div>`}
+              ${(lead.status==='sent' && lead.has_click) ? `<div class="dp-card" id="warm-sec"><div class="k muted">🔥 趁热跟进${lead.has_followup?`（已发过跟进）`:``}</div><div class="hint" style="margin:2px 0 6px">点过链接＝有意向，生成短暖跟进你审后发。</div><div id="warm-body"><button class="btn-ghost" onclick="draftWarm(${lead.id})">✍ 生成趁热跟进</button> <span class="hint" id="warm-msg"></span></div></div>` : ''}
             </div>
             <div class="dp-right">
-              <div class="dp-card">
-                <div class="dp-kv"><span class="muted">国家</span><span>${lead.country?esc(countryName(lead.country)):"—"}</span></div>
-                <div class="dp-kv"><span class="muted">来源</span><span>${esc(lead.source)||"—"}${lead.keyword?` · ${esc(lead.keyword)}`:''}</span></div>
-              </div>
-              <div class="dp-card">
-                <div class="k muted" style="margin-bottom:6px">联系方式</div>
+              ${/* C5-14：国家/来源已并入头部（那是"这家公司是谁"，属身份信息，不该在旁栏另起一块）。 */''}
+              <div class="dp-group">
+                <div class="dp-group-t">联系方式</div>
                 ${emailRow}${contacts||'<div class="hint" style="margin-top:4px">暂无其它渠道</div>'}
               </div>
-              <div class="dp-card">
-                <div class="k muted" style="margin-bottom:6px">📌 下一步 / 跟进</div>
+              <div class="dp-group">
+                <div class="dp-group-t">下一步 / 跟进</div>
                 <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
                   <input id="na-text" class="inlinput" placeholder="下一步，如：3天后电话" value="${esc(lead.next_action)||''}" style="flex:1;min-width:130px">
                   <input id="na-date" type="date" class="fld" style="width:140px" value="${esc(lead.next_action_date)||''}">
-                  <button class="primary" onclick="saveNextAction(${lead.id})">保存</button><span class="hint" id="na-msg"></span>
+                  <button class="btn-ghost" onclick="saveNextAction(${lead.id})">保存</button><span class="hint" id="na-msg"></span>
                 </div>
               </div>
-              <div class="dp-card">
-                <div class="k muted" style="margin-bottom:4px">🕑 时间线 <span class="hint" style="font-weight:400">（含录入）</span></div>
+              <div class="dp-group">
+                <div class="dp-group-t">时间线<span style="font-weight:400">（含录入）</span></div>
                 <div id="timeline" class="hint" style="font-size:12px">加载中…</div>
               </div>
             </div>
-          </div>
-          <div class="dp-bottom">
-            <!-- 次要区：重新AI分析 / 加黑名单 收在这儿，不跟主操作抢。
-                 待分析时「AI 分析」升为主按钮（见下），这里就不再重复出一个。 -->
-            ${isUnscored ? '' : `<button class="btn-ghost" onclick="analyzeOne(${lead.id})">${scored?"重新 AI 分析":"🔍 AI 分析"}</button>
-            <span class="dp-sep"></span>`}
-            <!-- 主操作：跟这条线索所在的格联动 -->
-            ${isUnscored ? `<button class="btn-green dp-primary" onclick="analyzeOne(${lead.id})">🔍 AI 分析</button>
-                   <span class="hint">还没打分，先让 AI 看一眼官网（后台每小时也会自动跑）</span>`
-              : inReview ? (!lead.email
-                ? `<button class="btn-green dp-primary" onclick="findMail(${lead.id},false)">✉️ 补邮箱</button>
-                   <button class="btn-amber" onclick="findMail(${lead.id},true)" title="Hunter 按域名查，每家 1 积分">Hunter 找(1积分)</button>`
-                : belowLine
-                  // ⭐ 批⑥C：<60 且有邮箱 → 主按钮是「手动发这家」（human_approved 路径），不是一个**灰着点不动的「批准」**。
-                  //   Joe 的用法是"打开一条信息就能当场处理完，不用回列表"——他在详情页看完证据判断机器杀错了，
-                  //   就该在这里直接放行，而不是记住公司名再回翻牌堆找一遍。
-                  //   走的是同一条 human-approve 端点（单条、只豁免分数线、邮箱/合规/幂等/压制/日上限一个不豁免）。
-                  ? `<button class="btn-green dp-primary" ${lead.human_approved?'disabled title="已经人工放行过了"':''} onclick="detailHumanApprove(${lead.id})">✉️ 手动发这家</button>
-                     <span class="hint">${lead.human_approved?'已人工放行，等下一轮自动发送':`${a.match_score} 分低于 ${SCORE_LINE} 分线 —— 机器不会发它。你判断杀错了就放行`}</span>`
-                  : `<button class="btn-green dp-primary" ${gateReason?`disabled title="${esc(gateReason)}"`:""} onclick="approveAndReview(${lead.id})">✅ 批准</button>`)
-              : inReady ? `<button class="btn-green dp-primary" ${gateReason?`disabled title="${esc(gateReason)}"`:""} onclick="confirmSend(${lead.id})">📤 发送</button>`
-              : isViewed ? `<button class="btn-amber dp-primary" onclick="draftWarm(${lead.id})">🔥 趁热跟进</button>`
-              : isSent ? `<button class="btn-green dp-primary" onclick="focusNextAction()">📅 安排跟进</button>`
-              : isReplied ? `<button class="btn-won dp-primary" onclick="setStatus(${lead.id},'won')">🤝 标记成交</button>
-                            <button class="btn-amber" onclick="setStatus(${lead.id},'ignored')">婉拒归档</button>`
-              : ''}
-            ${gateReason && inReview && lead.email && !belowLine ? `<span class="hint" style="color:var(--amber)">⚠️ ${esc(gateReason)}</span>` : ''}
-            ${/* ⭐ 批⑥C「他回了」：邮件回复能靠 IMAP 自动收，**WhatsApp/LinkedIn/电话的回复机器看不见**。
-                 Joe 在手机上收到回复，得有个地方一键告诉系统 —— 否则这条线索会一直躺在"等回复"里，
-                 跟进逻辑还会继续追一个已经在聊的人。合规终态(退订/黑名单/退信)不出这个按钮。 */''}
-            ${(!isReplied && !['won','unsubscribed','blacklisted','bounced'].includes(lead.status))
-              ? `<button class="btn-won" onclick="channelReply(${lead.id})" title="任何渠道回话了都算：WhatsApp / LinkedIn / 电话 / 邮件">💬 他回了</button>` : ''}
-            ${(!isReplied && lead.status!=='won') ? `<button class="btn-won" onclick="setStatus(${lead.id},'won')">标记已下单</button>` : ''}
-            ${!isReplied ? `<button class="btn-amber" onclick="setStatus(${lead.id},'ignored')">忽略</button>` : ''}
-            <button class="dp-danger-weak" onclick="setStatus(${lead.id},'blacklisted')" title="停止联系并拉黑">加黑名单</button>
           </div>
         </div>`;
       loadTimeline(lead.id);
@@ -2691,7 +2764,7 @@
     // 手动填联系邮箱（用户自己在官网找到的邮箱 → leads.email，缺邮箱标记消失、变可发送）
     function contactEmailFormHtml(id, cur){
       return `<input id="contact-email-input" class="inlinput" placeholder="粘贴你找到的邮箱" value="${esc(cur)||''}" style="max-width:240px">`
-        + ` <button class="primary" onclick="saveContactEmail(${id})">保存</button>`
+        + ` <button class="btn-ghost" onclick="saveContactEmail(${id})">保存</button>`
         + ` <button class="btn-ghost" onclick="openDetail(${id})">取消</button>`
         + ` <span class="hint" id="contact-email-msg"></span>`;
     }

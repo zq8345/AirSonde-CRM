@@ -26,10 +26,17 @@ export const BANNED = ["熔断", "爬坡", "子请求", "轮转", "组合", "阈
  *    再被 `0 <= 900` 判成"合宪"。**这就是一次假绿**：闸没量到东西，却报了通过。
  *    ⇒ 选择器必须逐页写死，并且**由浏览器实测过**（2026-08-31 量过：
  *      today=#v-page 286 · settings=#v-settings 707 · machine=#v-page 1163）。
+ *
+ * 🔴 C5-14（2026-09-01）补一条同型缺陷：`customers` 原本也写着 `#v-page`，**但客户页渲染在
+ *    `#v-list`**。上面那份"实测过"的清单里**恰恰没有 customers 这一行** —— 也就是说
+ *    客户页的字数预算从立闸那天起**一次都没真正量过**，闸每次都在报"没量到"或量了别的页。
+ *    教训跟上一条一模一样：**冻结的常量表也要有人真去撞一次**，写下来不等于量过。
+ *    ⇒ 这次逐页实测并把数记在这里（零数据态）：
+ *      today=#v-page 214 · customers=#v-list 356 · settings=#v-settings 764 · machine=#v-page 690
  */
 export const PAGE_SELECTOR = {
   today: "#v-page",
-  customers: "#v-page",
+  customers: "#v-list",
   settings: "#v-settings",
   machine: "#v-page",
 };
@@ -76,7 +83,10 @@ export function judge(page, m) {
 // node 直跑时只做自检：证明这道闸**能在真实缺陷上报红**（不是只在健康样本上绿）
 // ⚠️ 不用 `import.meta.url === file://${argv[1]}` 比较：Windows 盘符 + 中文路径会被百分号编码，
 //    两边永远不相等 —— 自检会**一声不吭地不执行**（我第一版就这样，跑出来零输出）。
-if (String(process.argv[1] || "").replace(/\\/g, "/").endsWith("guard-design.mjs")) {
+// ⚠️ `typeof process` 这层守卫不是多余的：本文件的说明书写着"完整版由窗口在 Browser 里执行"，
+//    而浏览器里没有 `process` —— 顶层裸读它会让整个 import **直接抛错**，
+//    也就是说这道闸**按它自己写的用法根本跑不起来**。（C5-14 真撞上了才发现。）
+if (typeof process !== "undefined" && String(process.argv?.[1] || "").replace(/\\/g, "/").endsWith("guard-design.mjs")) {
   // text === null 模拟 measure() 找不到元素时的返回形态（chars:-1 + error）
   const fake = (text) => text === null
     ? { chars: -1, banned: [], error: "找不到 #v-settings" }

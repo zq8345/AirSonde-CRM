@@ -21,6 +21,43 @@ import { installFetchMeter, meteredDB, mark as subMark, reset as subReset, summa
 import { normalizeCustomerType, customerTypeLabel, classifyKillReason, KILL_REASONS } from "./taxonomy";
 
 /**
+ * ⭐⭐ C5-14：**一条线索一行数据长什么样，只在这里说一次。**
+ *
+ * 🔴 治的是这个根因（不是"详情页少了几个字段"，是两条路各查各的）：
+ *   详情页 `/api/leads/:id` 走 `SELECT * FROM leads`，而 `match_score` / `has_open` /
+ *   `has_click` / `has_followup` / `latest_reply_cat` **一个都不是 leads 表的列** —— 它们全是
+ *   列表查询里现算的派生量。于是详情页读到 `undefined`，而 `undefined == null` 为真，
+ *   `stageOf()` 就把**每一条已打分的 analyzed 线索**判成 unscored ⇒ 头部恒挂
+ *   「🆕 待分析 · 官网抓不到」，哪怕它 88 分正躺在待审批里。
+ *
+ *   同一个根还打死了另外四处（读的都是 undefined，页面上一点异常都看不出来）：
+ *     · isViewed 恒 false ⇒「🔥 趁热跟进」主按钮永不出现
+ *     · 打开/点击/已跟进三个徽章（批④ 声称"补上了"）全是死代码
+ *     · 「趁热跟进」整块永不渲染
+ *   ⇒ 逐个补字段是修症状。真源只有一份，两条路就必须查同一份。
+ *
+ * ⚠️ 用它的查询必须保持 `leads l LEFT JOIN lead_analysis a ON a.lead_id = l.id` 这两个别名。
+ */
+const LEAD_ROW_COLS =
+  "l.id, l.company_name, l.website, l.email, l.country, l.source, l.keyword, l.status, l.created_at, l.channels, " +
+  "l.next_action, l.next_action_date, l.last_engaged_at, " +
+  // 批⑲：这两列**只读**，给「待分析」分组页用 —— 组B 要显示官网抓不到的**具体原因**
+  // （批⑰ 已把超时/403/TLS/DNS 分开落库），组A 要显示「重试中 n/3」让 Joe 知道机器在干活。
+  // ⚠️ 只加列，**不动任何 WHERE**（口径一个字没变）。
+  "l.fetch_fail_count AS fetch_fail_count, a.reason AS reason, " +
+  "a.match_score AS match_score, a.customer_type AS customer_type, a.customer_category AS customer_category, " +
+  // 跟进中派生标志：已发(sent)线索中，存在已发出的 followup 邮件
+  "EXISTS (SELECT 1 FROM emails e WHERE e.lead_id = l.id AND e.kind='followup' AND e.status='sent') AS has_followup, " +
+  // 参与度（冲刺1a）：是否有邮件被打开/点击
+  "EXISTS (SELECT 1 FROM emails e WHERE e.lead_id = l.id AND e.opened_at IS NOT NULL) AS has_open, " +
+  "EXISTS (SELECT 1 FROM emails e WHERE e.lead_id = l.id AND e.clicked_at IS NOT NULL) AS has_click, " +
+  // 阶段派生：最新一条回复的类别，用于判「洽谈中/已婉拒」
+  "(SELECT r.category FROM replies r WHERE r.lead_id = l.id ORDER BY r.id DESC LIMIT 1) AS latest_reply_cat, " +
+  // 批③追加2：回复箱并入「已回复」页——每行一个线索 + 最新回复摘要/id（页面数据源仍是 /api/leads，不用 /api/replies）
+  "(SELECT r.summary FROM replies r WHERE r.lead_id = l.id ORDER BY r.id DESC LIMIT 1) AS latest_reply_summary, " +
+  "(SELECT r.id FROM replies r WHERE r.lead_id = l.id ORDER BY r.id DESC LIMIT 1) AS latest_reply_id";
+
+/**
  * C5-13：给一行分析数据补上分类的中文标签，**不改机器值**。
  * 一个函数供所有出口用（列表 / 详情 / 筛选 / 看板），免得每个出口各拼各的。
  */
@@ -764,25 +801,7 @@ app.get("/api/leads", async (c) => {
   const hasChannel = (c.req.query("hasChannel") || "").trim().toLowerCase(); // B：按渠道存在筛
   const statuses = STATUS_GROUPS[group] ?? [];
 
-  let sql =
-    "SELECT l.id, l.company_name, l.website, l.email, l.country, l.source, l.keyword, l.status, l.created_at, l.channels, " +
-    "l.next_action, l.next_action_date, l.last_engaged_at, " +
-    // 批⑲：这两列**只读**，给「待分析」分组页用 —— 组B 要显示官网抓不到的**具体原因**
-    // （批⑰ 已把超时/403/TLS/DNS 分开落库），组A 要显示「重试中 n/3」让 Joe 知道机器在干活。
-    // ⚠️ 只加列，**不动任何 WHERE**（口径一个字没变）。
-    "l.fetch_fail_count AS fetch_fail_count, a.reason AS reason, " +
-    "a.match_score AS match_score, a.customer_type AS customer_type, a.customer_category AS customer_category, " +
-    // 跟进中派生标志：已发(sent)线索中，存在已发出的 followup 邮件
-    "EXISTS (SELECT 1 FROM emails e WHERE e.lead_id = l.id AND e.kind='followup' AND e.status='sent') AS has_followup, " +
-    // 参与度（冲刺1a）：是否有邮件被打开/点击
-    "EXISTS (SELECT 1 FROM emails e WHERE e.lead_id = l.id AND e.opened_at IS NOT NULL) AS has_open, " +
-    "EXISTS (SELECT 1 FROM emails e WHERE e.lead_id = l.id AND e.clicked_at IS NOT NULL) AS has_click, " +
-    // 阶段派生：最新一条回复的类别，用于判「洽谈中/已婉拒」
-    "(SELECT r.category FROM replies r WHERE r.lead_id = l.id ORDER BY r.id DESC LIMIT 1) AS latest_reply_cat, " +
-    // 批③追加2：回复箱并入「已回复」页——每行一个线索 + 最新回复摘要/id（页面数据源仍是 /api/leads，不用 /api/replies）
-    "(SELECT r.summary FROM replies r WHERE r.lead_id = l.id ORDER BY r.id DESC LIMIT 1) AS latest_reply_summary, " +
-    "(SELECT r.id FROM replies r WHERE r.lead_id = l.id ORDER BY r.id DESC LIMIT 1) AS latest_reply_id " +
-    "FROM leads l LEFT JOIN lead_analysis a ON a.lead_id = l.id";
+  let sql = `SELECT ${LEAD_ROW_COLS} FROM leads l LEFT JOIN lead_analysis a ON a.lead_id = l.id`;
   const where: string[] = [];
   const binds: any[] = [];
 
@@ -1150,13 +1169,15 @@ app.post("/api/admin/normalize-countries", async (c) => {
 // ---- 线索详情（含 AI 分析）----
 app.get("/api/leads/:id", async (c) => {
   const id = Number(c.req.param("id"));
+  // 🔴 C5-14 根治：这里原来**手抄了一份**列表的派生列（has_open/has_click/has_followup/latest_reply_cat）。
+  //   抄一份就会漂，而它已经漂了：**`match_score` 抄漏了**（它在 lead_analysis 里，这条查询压根没 join）。
+  //   后果不是"少一个字段"：`stageOf()` 里 `l.match_score == null` 遇上 `undefined` 判真
+  //   ⇒ 每一条已打分的 analyzed 线索在详情页头部都被判成 unscored、恒挂「🆕 待分析 · 官网抓不到」，
+  //     哪怕它 88 分正躺在待审批里。**列表对、详情错，两块屏幕上写着互相矛盾的话。**
+  //   ⇒ 不补字段，改成和列表查同一份 LEAD_ROW_COLS：口径只有一处，下次也没得漂。
   const lead = await c.env.DB.prepare(
-    "SELECT l.*, " +
-    "EXISTS (SELECT 1 FROM emails e WHERE e.lead_id = l.id AND e.opened_at IS NOT NULL) AS has_open, " +
-    "EXISTS (SELECT 1 FROM emails e WHERE e.lead_id = l.id AND e.clicked_at IS NOT NULL) AS has_click, " +
-    "EXISTS (SELECT 1 FROM emails e WHERE e.lead_id = l.id AND e.kind='followup' AND e.status='sent') AS has_followup, " +
-    "(SELECT r.category FROM replies r WHERE r.lead_id = l.id ORDER BY r.id DESC LIMIT 1) AS latest_reply_cat " +
-    "FROM leads l WHERE l.id = ?"
+    `SELECT ${LEAD_ROW_COLS}, l.notes, l.updated_at, l.human_approved, l.bench_queued, l.bench_contacted_at, l.bench_channel
+       FROM leads l LEFT JOIN lead_analysis a ON a.lead_id = l.id WHERE l.id = ?`
   ).bind(id).first();
   if (!lead) return c.json({ error: "not found" }, 404);
   const analysis = await c.env.DB.prepare("SELECT * FROM lead_analysis WHERE lead_id = ?").bind(id).first<any>();
