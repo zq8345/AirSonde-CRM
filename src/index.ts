@@ -2521,6 +2521,16 @@ app.post("/api/keywords", async (c) => {
  * ⚠️ 迁移做成**幂等自愈**：老库没有这一列，ALTER 一次即可；已存在就吞掉那个错。
  *   （这仓的规矩是 schema.sql 为单一真源、不跑增量脚本，所以自愈式 ALTER 是这里唯一
  *    既不破规矩又能上线的做法；schema.sql 里已同步加上该列，新库天然就有。）
+ *
+ * 🔴🔴 2026-09-01 线上 500 事故（我造的，根因就在这个函数被**挂错了地方**）：
+ *   原来只有 `DELETE /api/keywords/:id`（"删除关键词"，Joe 极少点）调用它，
+ *   而**读这一列的有四处、每次打开设置页都跑**（getKeywords / GET /api/keywords / …）。
+ *   于是列一直没被创建 ⇒ `no such column: archived` ⇒ /api/settings/search 恒 500，
+ *   设置页方向盘区和机器房两处一起读不到。
+ *   ⚠️ 教训（已入库）：**迁移不能挂在"稀有的写路径"上，读路径先到就先炸。**
+ *   判据不是"我写了自愈 ALTER 吗"，是"**第一个读它的人来的时候，列在不在？**"
+ *   现在改成：整点 cron 里跑一次（每个部署最迟 1 小时内必然自愈），**外加**写路径保留调用
+ *   （新建库/刚 deploy 就有人删关键词的窗口期也兜住）。两处都调，靠幂等，不靠顺序。
  */
 async function ensureKeywordArchivedColumn(env: Env): Promise<void> {
   try { await env.DB.prepare("ALTER TABLE keywords ADD COLUMN archived INTEGER NOT NULL DEFAULT 0").run(); }
@@ -4574,6 +4584,10 @@ export default {
   scheduled: (event: ScheduledController, env: Env, ctx: ExecutionContext) => {
     const e = normalizeEnv(env); installDevEgressGuard(e);
     if (event.cron === "* * * * *") return fastTick(e, ctx);
+    // 🔴 schema 自愈挂在整点班（见 ensureKeywordArchivedColumn 上方那段事故记录）：
+    //   迁移绝不能只挂在"稀有的写路径"上 —— 读路径每次开页面就跑，它先到就先 500。
+    //   放这里 ⇒ 任何一次部署最迟 1 小时内必然自愈，且不给每分钟的 tick 加 D1 往返。
+    ctx.waitUntil(ensureKeywordArchivedColumn(e));
     return scheduled(event, e, ctx);
   },
 };

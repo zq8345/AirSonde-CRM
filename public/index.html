@@ -4755,8 +4755,14 @@ ${esc(d.ours.body||'')}</div></details>`
         //   ⚠️「已查看」这一环也要有动作：没人点链接**就是文案问题**，与"没人回信"同一个处方。
         //     漏了它的话，真实数据里掉得最狠的那一环（本地 520 条假数据实测 30%）会被静默跳过，
         //     指认反而落到一个掉得更轻的环节上 —— 一个"看着在工作"的错答案。
-        const leakAct = (to) => /发送|联系/.test(to) ? act('去补邮箱',"gotoGroup('ready')")
-                              : /回复|回信|查看|点击/.test(to) ? act('去改文案',"openSettings()")
+        // 🔴 C5-38 第 3 条：**「已查看」这一环不许参与漏点指认。**
+        //   它靠像素追踪测开信，而主流邮件客户端默认拦图 ⇒ 系统性大幅低估。
+        //   拿一个已知偏低的仪器去指认"这里漏水最狠"，会稳定地把 Joe 指向错的地方 ——
+        //   **坏仪器不许指挥行动。** 它仍然显示（有参考价值），但只作为观察值、不产出建议。
+        //   ⚠️ 「回复」保留：回信是真人真事件，不依赖任何追踪像素。
+        const leakAct = (to) => /查看|点击/.test(to) ? null
+                              : /发送|联系/.test(to) ? act('去补邮箱',"gotoGroup('ready')")
+                              : /回复|回信/.test(to) ? act('去改文案',"openSettings()")
                               : /批准|审批/.test(to) ? act('去看打分标准',"openSettings()") : null;
         let worst=null, worstP=101;
         levels.forEach((lv,i)=>{
@@ -4765,7 +4771,9 @@ ${esc(d.ours.body||'')}</div></details>`
             worstP=lv.conv; worst={from:levels[i-1].label,to:lv.label};
           }
         });
-        const fn = levels.map((lv)=>`<div class="fn-row"><span class="muted">${esc(lv.label)}</span><div class="fn-track"><div class="fn-fill" style="width:${(lv.n/maxN*100).toFixed(1)}%"></div></div><span>${lv.n}${lv.conv!=null?` <span class="muted">· ${lv.conv}%</span>`:''}</span></div>`).join('');
+        // C5-38 第 3 条：「已查看」标注仪器局限 —— 数字照显示，但**说清它为什么偏低**，
+        //   否则 Joe 会把"开信率 12%"当成真实阅读率去改文案。
+        const fn = levels.map((lv)=>`<div class="fn-row"><span class="muted">${esc(lv.label)}${/查看/.test(lv.label)?'<span class="gj-help" data-help title="靠邮件里的追踪像素统计，而主流邮箱默认拦图 —— 这个数**天然大幅低估**，只能当参考，不能据它判断文案好坏。">(?)</span>':''}</span><div class="fn-track"><div class="fn-fill" style="width:${(lv.n/maxN*100).toFixed(1)}%"></div></div><span>${lv.n}${lv.conv!=null?` <span class="muted">· ${lv.conv}%</span>`:''}</span></div>`).join('');
         let leak = '';
         if (worst){
           leak = `<div class="db-judge">掉得最狠的是 <b>${esc(worst.from)}→${esc(worst.to)}</b>（${worstP}%）${leakAct(worst.to)}</div>`;
