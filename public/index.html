@@ -3505,6 +3505,30 @@
     //   （多半 CF Access 会话在页面停留中过期），后面所有渲染静默死亡，页面停在空壳态。
     //   空壳页 + 侧栏计数还在（开页时载的）= 看着像"系统坏了"，Joe 合理地恐慌。
     //   → 把"一次网络抖动/登录过期"和"系统坏了"在 UI 上分开：给横幅 + 一键重试。
+    // ══ C5-24 热修：配置类请求的统一取数器 —— **带超时、带指数退避重试、失败时说得出是哪个接口** ══
+    // ⚠️ 三件事缺一不可：
+    //   · 超时：不加就会"永远加载中"（这仓今天已经栽过两次这个形状）
+    //   · 自动退避重试：一次瞬时抖动不该让 Joe 手动救场；但**只重试 3 次**，
+    //     无限重试会把"服务端真的挂了"藏起来，那比不重试更坏
+    //   · 记下**哪个接口 + 原话**：不然下一次还是只能猜（"记录证据 ≠ 报告结论"）
+    async function fetchCfg(url, { timeoutMs = 10000, tries = 3 } = {}){
+      let lastWhy = "";
+      for (let i = 0; i < tries; i++) {
+        if (i) await new Promise(r => setTimeout(r, 400 * Math.pow(2, i - 1)));   // 400ms → 800ms
+        const ctl = new AbortController();
+        const to = setTimeout(() => ctl.abort(), timeoutMs);
+        try {
+          const r = await fetch(url, { signal: ctl.signal });
+          if (!r.ok) throw new Error("HTTP " + r.status);       // 401/403（登录过期）也走这条
+          return { ok: true, data: await r.json(), tries: i + 1 };
+        } catch (e) {
+          lastWhy = (e && e.name === "AbortError") ? `超时 ${timeoutMs}ms` : String(e && e.message || e).slice(0, 60);
+          console.warn(`[配置加载] ${url} 第 ${i + 1}/${tries} 次失败：${lastWhy}`);
+        } finally { clearTimeout(to); }
+      }
+      return { ok: false, why: `${url} —— ${lastWhy}`, tries };
+    }
+
     function loadErrorHtml(retryId, retried){
       return `⚠️ 配置加载失败（多半是<b>登录过期</b>或网络抖动，<b>不是数据丢了</b>）—— `
         + (retried
@@ -3519,18 +3543,20 @@
     //       它就只填哪些，不在的自然跳过。这正是"只搬 DOM 不改行为"能成立的原因。
     async function loadSearchCfg(retried){
       const errBox = $("#fc-loaderr");
-      let cfg;
-      try {
-        const r = await fetch("/api/settings/search");
-        if (!r.ok) throw new Error("HTTP " + r.status);   // 401/403（登录过期）也走这条
-        cfg = await r.json();
-      } catch (e) {
+      // C5-24 热修：同样走 fetchCfg，方向盘不再可能停在"(加载中…)"不动。
+      const g = await fetchCfg("/api/settings/search");
+      if (!g.ok) {
         if (errBox) {
-          errBox.style.display = ''; errBox.innerHTML = loadErrorHtml('fc-retry', retried);
+          errBox.style.display = '';
+          errBox.innerHTML = loadErrorHtml('fc-retry', retried)
+            + `<div class="hint" style="margin-top:4px;color:var(--red)">失败的接口：${esc(g.why)}</div>`;
           const b = $("#fc-retry"); if (b) b.onclick = () => loadSearchCfg(true);
         }
+        // ⚠️ 方向盘那行摘要不能留在"(加载中…)" —— 那是"永远转圈"的另一处。
+        { const ws = $("#wheel-summary"); if (ws) ws.textContent = "（读不到配置，点上方重试）"; }
         return null;   // 别继续往下渲染 —— 没数据，渲了也是空壳
       }
+      const cfg = g.data;
       if (errBox) { errBox.style.display = 'none'; errBox.innerHTML = ''; }   // 上次失败过、这次成功 → 收起横幅
       _fcAllCountries = cfg.allCountries||{};
       // 单国定向下拉：从 allCountries 填（默认"全部市场"）
@@ -3874,18 +3900,12 @@
       showMainView('settings');
       const errBox = $("#cfg-loaderr");
       if (errBox) { errBox.style.display = 'none'; errBox.innerHTML = ''; }
-      let c, fu;
-      try {
-        const r1 = await fetch("/api/settings/sending");
-        if (!r1.ok) throw new Error("HTTP " + r1.status);     // 401/403（登录过期）也走这条
-        c = await r1.json();
-        const r2 = await fetch("/api/settings/followup");
-        if (!r2.ok) throw new Error("HTTP " + r2.status);
-        fu = await r2.json();
-      } catch (e) {
-        showCfgLoadFailure(retried);
-        return;
-      }
+      // C5-24 热修：两个配置接口都走 fetchCfg（超时 + 指数退避 3 次 + 失败时指名道姓）。
+      const g1 = await fetchCfg("/api/settings/sending");
+      if (!g1.ok) { showCfgLoadFailure(retried, "失败的接口：" + g1.why); return; }
+      const g2 = await fetchCfg("/api/settings/followup");
+      if (!g2.ok) { showCfgLoadFailure(retried, "失败的接口：" + g2.why); return; }
+      const c = g1.data, fu = g2.data;
       // 🔴 C5-24（生产实证 Joe 截图）：**"加载失败"原本有两个入口，只有一个会渲染带「重试」的横幅。**
       //   · 入口A：fetch 抛错 → catch → 横幅 + 禁用保存 ✅
       //   · 入口B：fetch 成功、但下面这几十行填充里**任何一行抛错** →

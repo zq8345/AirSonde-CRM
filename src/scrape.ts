@@ -74,6 +74,24 @@ export async function scrapeSite(website: string): Promise<ScrapeResult> {
 }
 
 // 提取社媒/IM/电话渠道（快赢①）：从 <a href>/og:url 等属性里匹配已知平台，取每类第一个"带 handle"的链接。
+/**
+ * 电话号码清洗（抽取侧）。
+ * ⚠️ **只清洗格式，绝不臆造国家码。** `0221 985 925 0` 是德国本地号、`203-402-0477` 是美国本地号；
+ *   按位数猜 +1 会把德国号写成美国号 —— **编一个国家码比留着本地格式坏得多，因为它看起来是对的。**
+ *   ⇒ E.164 化只在**已经带 `+`** 时做（去分隔符）；不带 `+` 的保留原分隔符，让人一眼看出它没规范化。
+ */
+export function normalizePhone(raw: string): string {
+  let v = String(raw || "").trim();
+  v = v.replace(/^tel:/i, "");        // 去协议
+  v = v.replace(/^\/+/, "");          // ⭐ 去掉 `tel://` 多出来的斜杠 —— 那 2 条脏数据的来源
+  try { v = decodeURIComponent(v); } catch { /* 解不了就用原文：别因为解码失败丢掉整个号码 */ }
+  v = v.split("?")[0].split("#")[0].trim();
+  const plus = v.startsWith("+");
+  const digits = v.replace(/[^\d]/g, "");
+  if (digits.length < 6 || digits.length > 15) return "";   // 明显不是电话（E.164 上限 15 位）
+  return plus ? "+" + digits : v.replace(/[^\d+\-\s().]/g, "").trim();
+}
+
 export function extractChannels(html: string): Channels {
   const ch: Channels = {};
   const set = (k: keyof Channels, v: string) => { if (!ch[k] && v) ch[k] = v; };
@@ -88,7 +106,10 @@ export function extractChannels(html: string): Channels {
     const href = m[1].trim();
     const low = href.toLowerCase();
     if (/^(mailto:|javascript:|#|data:)/.test(low)) continue;
-    if (low.startsWith("tel:")) { set("phone", href.slice(4).trim()); continue; }
+    // 🔴 C5-24：原来是 `href.slice(4)` —— 对 `tel:+123` 没问题，但野外常见 **`tel://+123`**
+    //   （协议后多写两个斜杠，不规范但到处都是），slice(4) 只切掉 `tel:`，
+    //   号码就变成 `//12083300506` 存进库（生产实测 2 条：id=414 / id=431，已回填修正）。
+    if (low.startsWith("tel:")) { const v = normalizePhone(href); if (v) set("phone", v); continue; }
     // 需带 handle/路径段，过滤指向平台首页或分享/插件的无效链接
     if (/(?:^|\/\/|\.)linkedin\.com\/(?:company|in|pub|school)\/[a-z0-9%._\-]+/.test(low)) set("linkedin", abs(href));
     else if (/(?:^|\/\/|\.)(?:facebook\.com|fb\.com)\/[a-z0-9.\-]{2,}/.test(low) && !/(sharer|share\.php|\/plugins\/|\/dialog\/|\/tr\?)/.test(low)) set("facebook", abs(href));
