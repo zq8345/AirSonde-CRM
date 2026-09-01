@@ -18,7 +18,15 @@ import { findLeadEmail, diagnoseSite, type PageProbe } from "./findemail";
 import { ingestReplies, matchReplyToLead } from "./replies";
 import { ensureReplyColumns, stripQuoted, previewOf, isNoiseReply, tabOf, type InboxTab } from "./reply-inbox";
 import { installFetchMeter, meteredDB, mark as subMark, reset as subReset, summary as subSummary } from "./subreq";
-import { categorizeCustomerType, classifyKillReason, KILL_REASONS } from "./taxonomy";
+import { normalizeCustomerType, customerTypeLabel, classifyKillReason, KILL_REASONS } from "./taxonomy";
+
+/**
+ * C5-13：给一行分析数据补上分类的中文标签，**不改机器值**。
+ * 一个函数供所有出口用（列表 / 详情 / 筛选 / 看板），免得每个出口各拼各的。
+ */
+function withCategoryLabel<T extends { customer_category?: string | null }>(r: T): T & { customer_category_label: string } {
+  return { ...r, customer_category_label: customerTypeLabel(r.customer_category) };
+}
 import { larkConfigured, larkUrlShape, larkSend, digestCard, testCard, inboundCard } from "./notify";
 import { catalogHtml } from "./landing";
 import { isIgnited, ignitionReport, notIgnitedReason, normalizeEnv, dirtySecretKeys } from "./ignition";
@@ -573,7 +581,9 @@ app.get("/api/dashboard", async (c) => {
      GROUP BY ${group} ORDER BY n DESC`
   );
   const byCountry = (await dimSlice("country", "leads l", "UPPER(l.country)").all()).results;
-  const byCategory = (await dimSlice("category", "leads l JOIN lead_analysis a ON a.lead_id = l.id", "a.customer_category").all()).results;
+  // C5-13：看板切片按 slug 分组（机器值），出门时补中文标签 —— 屏幕上别出现 monitoring-service。
+  const byCategory = ((await dimSlice("category", "leads l JOIN lead_analysis a ON a.lead_id = l.id", "a.customer_category").all()).results as any[])
+    .map((r) => ({ ...r, v: customerTypeLabel(r.v) }));
   // 关键词维度**此前完全没有** —— 而"哪个词带来回信"正是方向盘上唯一能直接动的杆。
   const byKeyword = (await dimSlice("keyword", "leads l", "l.keyword").all()).results;
 
@@ -873,7 +883,9 @@ app.get("/api/leads", async (c) => {
   else sql += " ORDER BY (a.match_score IS NULL), a.match_score DESC, l.id DESC LIMIT 300";
 
   const rows = await c.env.DB.prepare(sql).bind(...binds).all();
-  return c.json({ leads: rows.results });
+  // C5-13：分类的**机器值仍是 customer_category（slug）**，筛选/统计都用它；
+  //   额外给一个 `_label` 给屏幕用。标签只在服务端拼（taxonomy 住这儿），前端不抄第二份。
+  return c.json({ leads: (rows.results as any[]).map(withCategoryLabel) });
 });
 
 // ---- 筛选维度可选值（国家 / 规范客户分类），供前端下拉动态生成 ----
@@ -913,9 +925,12 @@ app.get("/api/leads/facets", async (c) => {
   const countries = await c.env.DB.prepare(
     "SELECT UPPER(country) AS v, COUNT(*) AS n FROM leads WHERE country IS NOT NULL AND country != '' GROUP BY UPPER(country) ORDER BY n DESC"
   ).all();
-  const categories = await c.env.DB.prepare(
+  const categoriesRaw = await c.env.DB.prepare(
     "SELECT a.customer_category AS v, COUNT(*) AS n FROM lead_analysis a WHERE a.customer_category IS NOT NULL AND a.customer_category != '' GROUP BY a.customer_category ORDER BY n DESC"
   ).all();
+  // C5-13：下拉项**值仍是 slug**（要原样回传给 ?category= 做筛选），只是显示成中文。
+  // ⚠️ 显示名和筛选值必须分开：混成一个，中文桶名一改，所有存下来的筛选就全失效。
+  const categories = (categoriesRaw.results as any[]).map((r) => ({ ...r, label: customerTypeLabel(r.v) }));
   const noEmail = await c.env.DB.prepare(
     "SELECT COUNT(*) AS n FROM leads WHERE (email IS NULL OR email = '')"
   ).first<{ n: number }>();
@@ -936,7 +951,7 @@ app.get("/api/leads/facets", async (c) => {
   return c.json({
     countries: countries.results,
     allCountries: COUNTRIES,            // 全部目标国家，供筛选下拉始终列全
-    categories: categories.results,
+    categories,
     noEmailCount: noEmail?.n || 0,
     withEmailCount: withEmail?.n || 0,
     total: totalRow?.n || 0,
@@ -1010,11 +1025,78 @@ app.post("/api/admin/recategorize", async (c) => {
   const rows = await c.env.DB.prepare("SELECT lead_id, customer_type FROM lead_analysis").all();
   let updated = 0;
   for (const r of rows.results as any[]) {
-    const cat = categorizeCustomerType(r.customer_type);
+    const cat = normalizeCustomerType(r.customer_type);
     await c.env.DB.prepare("UPDATE lead_analysis SET customer_category=? WHERE lead_id=?").bind(cat, r.lead_id).run();
     updated++;
   }
   return c.json({ updated });
+});
+
+// ══ C5-13：按新分类体系**只刷分数与分类**的重刷 ══
+//
+// ⛔ **不能用现成的 /api/rescan/start**：它 `DELETE lead_analysis` + 把 status 打回 new
+//    + 把 human_approved 清零 —— 那三样正是本单明令不许碰的。重扫是"旧标准全部作废"的场景，
+//    这次不是：分数标准没变，变的只是分类枚举，人已经做过的判断必须原样留着。
+//
+// 本端点的写入面（逐条核对过，不是"应该不会"）：
+//   ✅ 改：lead_analysis 的 customer_type / customer_category / match_score / needed_products / reason / model
+//   ✅ 附带：抓站成功时 fetch_fail_count 清零（>0 才写）、country 为空时回填
+//   ⛔ 不改：leads.status（analyzeLead 那句 UPDATE 带 `AND status='new'` 守卫）、
+//            human_approved、recommended_email（upsert 用 COALESCE 保留已发出的信）、emails 表
+//
+// 进度用**冻结时间戳**推进（照搬 rescan 的做法，不新发明）：只取 analyzed_at < 起点的行，
+// 刷完 analyzed_at=now 自然出集合 ⇒ 幂等、可断点续、并发重复调用也不会重复烧钱。
+const RESCORE_SKIP_STATUSES = ["sent", "replied", "won", "blacklisted"];
+app.post("/api/admin/rescore-taxonomy", async (c) => {
+  // 🔴 安全闸（与 /api/rescan/start 同一条，不是新发明）：分数是 **批准→发信** 那条链的输入。
+  //   生产实测 2026-09-01：auto_approve_enabled=1 且 auto_send_enabled=1，整点 cron 是
+  //   `打分 → ≥60 自动批准 → sendApprovedBatch` 一条直路，日上限 100。
+  //   ⇒ 在这个状态下重刷 = 把一批线索推过 60 分线 = **真的往陌生公司发冷邮件**。
+  //   "只刷分数不发信"这个说法只在自动发送关着时才成立；开着时它就是错的。
+  if (await autoSendEnabled(c.env)) {
+    return c.json({
+      error: "请先关闭「自动发送」再重刷分类 —— 重刷会改分数，而分数是「自动批准 → 自动发送」的入口，" +
+             "开着重刷等于让机器边刷边把线索发出去（发出去的信收不回来）。刷完再开回来。",
+    }, 409);
+  }
+  const b = await jsonBody<{ limit?: number; restart?: boolean }>(c);
+  const limit = Math.min(Math.max(Number(b.limit) || 8, 1), 20);
+  let startedAt = (await getSetting(c.env, "taxonomy_rescore_started_at", "")).trim();
+  if (b.restart || !startedAt) {
+    startedAt = new Date().toISOString().replace("T", " ").slice(0, 19);
+    await setSetting(c.env, "taxonomy_rescore_started_at", startedAt);
+  }
+  // ⛔ 跳过已进入发信环节的线索：它们的 reason/分数是人当时据以决策的记录，事后改写等于**篡改依据**。
+  const marks = RESCORE_SKIP_STATUSES.map(() => "?").join(",");
+  const pickSql =
+    `SELECT l.* FROM leads l JOIN lead_analysis a ON a.lead_id = l.id
+      WHERE a.analyzed_at < ? AND l.status NOT IN (${marks})
+      ORDER BY l.id LIMIT ?`;
+  const rows = await c.env.DB.prepare(pickSql).bind(startedAt, ...RESCORE_SKIP_STATUSES, limit).all();
+  const leads = rows.results as any[];
+
+  let ok = 0; const errors: string[] = [];
+  for (const lead of leads) {
+    try {
+      const r = await analyzeLead(c.env, lead, { scoreOnly: true });
+      if (r.ok) ok++; else errors.push(`#${lead.id} ${r.error || "未成功"}`);
+    } catch (e) { errors.push(`#${lead.id} ${String(e).slice(0, 120)}`); }
+  }
+  const left = await c.env.DB.prepare(
+    `SELECT COUNT(*) AS n FROM leads l JOIN lead_analysis a ON a.lead_id = l.id
+      WHERE a.analyzed_at < ? AND l.status NOT IN (${marks})`
+  ).bind(startedAt, ...RESCORE_SKIP_STATUSES).first<{ n: number }>();
+  return c.json({ startedAt, processed: leads.length, ok, remaining: left?.n || 0, errors: errors.slice(0, 5) });
+});
+
+/** C5-13 验收用：分类分布（重刷前后各拉一次，做对比表）。只读。 */
+app.get("/api/admin/category-distribution", async (c) => {
+  const rows = await c.env.DB.prepare(
+    `SELECT COALESCE(NULLIF(a.customer_category,''),'(空)') AS slug, COUNT(*) AS n
+       FROM lead_analysis a GROUP BY 1 ORDER BY n DESC`
+  ).all();
+  const items = (rows.results as any[]).map((r) => ({ ...r, label: customerTypeLabel(r.slug) }));
+  return c.json({ total: items.reduce((s, r) => s + r.n, 0), items });
 });
 
 // ---- 一次性回填：给缺 country 的遗留线索按官网 ccTLD 推断国家（幂等，只动 NULL/空）----
@@ -1077,8 +1159,9 @@ app.get("/api/leads/:id", async (c) => {
     "FROM leads l WHERE l.id = ?"
   ).bind(id).first();
   if (!lead) return c.json({ error: "not found" }, 404);
-  const analysis = await c.env.DB.prepare("SELECT * FROM lead_analysis WHERE lead_id = ?").bind(id).first();
-  return c.json({ lead, analysis });
+  const analysis = await c.env.DB.prepare("SELECT * FROM lead_analysis WHERE lead_id = ?").bind(id).first<any>();
+  // C5-13：详情页的分类徽章走同一个标签函数（列表也是它）——两个面一个口径。
+  return c.json({ lead, analysis: analysis ? withCategoryLabel(analysis) : analysis });
 });
 
 // ---- 改状态（批准 / 忽略 / 黑名单 等）----

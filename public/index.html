@@ -2143,7 +2143,7 @@
       // 分类
       const tSel = $("#f-type"), tcur = tSel.value;
       tSel.innerHTML = `<option value="">全部分类</option>` +
-        (f.categories||[]).map(t=>`<option value="${esc(t.v)}">${esc(t.v)} (${t.n})</option>`).join("");
+        (f.categories||[]).map(t=>`<option value="${esc(t.v)}">${esc(t.label||t.v)} (${t.n})</option>`).join("");
       tSel.value = tcur;
       // 邮箱：三项都带数量
       const eSel = $("#f-email"), ecur = eSel.value;
@@ -2287,7 +2287,7 @@
           <td>${scoreBadge(l.match_score)}</td>
           <td class="stgcol"><span class="stg ${stg.cls}">${stg.badge}</span>${stg.sub?`<span class="stg-sub">${stg.sub}</span>`:""}${readyReplyBtn(l)}</td>
           <td>${l.email?esc(l.email):"<span class='miss'>缺邮箱</span>"}</td>
-          <td>${l.customer_category?`<span class="pill ptype" title="${esc(l.customer_type)||''}">${esc(l.customer_category)}</span>`:"<span class='muted'>—</span>"}</td>
+          <td>${l.customer_category?`<span class="pill ptype" title="${esc(l.customer_type)||''}">${esc(l.customer_category_label||l.customer_category)}</span>`:"<span class='muted'>—</span>"}</td>
           <td>${l.country?esc(countryName(l.country)):"<span class='muted'>—</span>"}</td>
           ${chanCell(l.channels,'linkedin',l.company_name)}${chanCell(l.channels,'whatsapp',l.company_name)}${chanCell(l.channels,'facebook',l.company_name)}${chanCell(l.channels,'instagram',l.company_name)}${chanCell(l.channels,'phone',l.company_name)}
           <td class="muted" style="white-space:nowrap;font-size:12px">${fmtDate(l.created_at)}</td>
@@ -2593,7 +2593,7 @@
             <div class="dp-company" title="${esc(lead.company_name)||''}">${esc(lead.company_name)||"(未命名)"}</div>
             <div class="dp-scoremeta">
               <span class="d-scoreblock ${detailScoreClass(a.match_score)}" style="padding:3px 10px;border-radius:7px">${scored?a.match_score+"/100":"未打分"}</span>
-              ${a.customer_category?`<span class="pill ptype">${esc(a.customer_category)}</span>`:''}
+              ${a.customer_category?`<span class="pill ptype" title="${esc(a.customer_type)||''}">${esc(a.customer_category_label||a.customer_category)}</span>`:''}
               <span class="stg ${stg.cls}">${stg.badge}</span>${stg.sub?`<span class="stg-sub">${stg.sub}</span>`:""}
               ${/* 批④：补「打开/点击」状态 —— 列表里有 🔥/👀，详情页反而找不到；对已发送的线索这是最该看的信息 */''}
               ${lead.has_click ? `<span class="dp-eng dp-eng-hot" title="点过开发信里的链接＝强意向">🔥 点过链接</span>`

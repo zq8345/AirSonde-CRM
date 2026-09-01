@@ -7,6 +7,7 @@ import { larkConfigured, larkSend } from "./notify";
 // 批㉗：Base「国家」列中文化。COUNTRIES(discover.ts) 本身就是 码→中文 的 133 国全集单真源——
 // 直接 import,不新建复制件（能 import 绝不复刻;前端 COUNTRY_NAMES 也是运行时从它合并的）。
 import { COUNTRIES } from "./discover";
+import { customerTypeLabel } from "./taxonomy";   // C5-13：分类中文标签单源
 
 const LARK_BASE = "https://open.larksuite.com";
 
@@ -302,7 +303,8 @@ export function leadToBitableFields(l: any): Record<string, any> {
     "邮箱": l.email || "",
     "阶段": stageCn(l.status, score),
     "评分": score,
-    "分类": l.customer_category || "",
+    // C5-13：飞书卡里也显示中文（库里存的是 slug）。认不出的原样带过去，不冒充「看不清」。
+    "分类": customerTypeLabel(l.customer_category),
     "客户类型": l.customer_type || "",
     // 批㉗ Joe 需求：与后台一致显示中文。未知码回退原码、空值回空串（绝不 undefined）。
     "国家": (() => { const c = String(l.country || "").toLowerCase(); return c ? (COUNTRIES[c] || String(l.country)) : ""; })(),

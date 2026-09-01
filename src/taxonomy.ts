@@ -1,39 +1,103 @@
 // 规范客户分类：把 AI 自由生成的 customer_type（很碎、中英文混杂）归一到固定几类，
 // 用于列表徽章 + 多维筛选。AI 的细分描述仍保留在 customer_type，用于详情展示。
 
-export const CUSTOMER_CATEGORIES = [
-  "安装/集成",   // installer / integrator / 智能家居 / 影音 / 系统集成
-  "经销/零售",   // reseller / retailer / 批发 / 电商 / 配件商
-  "船舶/海事",   // marine
-  "房车/RV",     // RV dealer / upfitter / 露营 / overland
-  "离网/偏远",   // off-grid / remote / rural ISP / WISP / 户外
-  "企业/IT",     // 企业 IT 部署 / BPO / 数据中心 / 矿业石油 / 模块化建筑 / 项目部署
-  "其他",        // 论坛社区 / 媒体 / 无法判定
+// ══ C5-13：AirSonde 客户分类体系（Joe 委托总调度重设计）══
+//
+// 🔴 换掉的原因不是"分得不够细"，是**整套桶是上游 Wanew 的行业**：
+//    船舶/海事 · 房车/RV · 离网/偏远 —— 那是 Starlink 生意的分法。
+//    AirSonde 的线索是暖通/空气质量公司，**这套桶里没有它们的位置** ⇒ 全掉进「其他」。
+//    生产实测（2026-09-01，重刷前）：其他 103 / 137 = **75%**。
+//    而 AI 生成的 `customer_type` 是一句一句的长句（137 条里几乎条条不同），
+//    关键词归一表**根本接不住** —— 所以病根有两层，两层都要治。
+//
+// ⇒ 新做法：**让 AI 直接从固定枚举里选**（英文 slug 存库），不再自由生成后靠正则去猜。
+//    自由描述仍保留在 `customer_type`（详情页展示用），但**分类以 slug 为准**。
+//
+// 6 个目标类 + 2 个非目标类。每类带一句"写信从什么角度切" —— 写信 prompt 直接用它，
+// 免得同一件事在打分侧和写信侧各写一遍（那是必然会漂开的两处）。
+export const CUSTOMER_TYPES = [
+  { slug: "brand",                 label: "品牌方",     target: true,
+    desc: "想贴牌卖 IAQ 产品的品牌方",
+    angle: "white-label / private-label manufacturing: we build it, they put their brand on it" },
+  { slug: "distributor",           label: "经销/批发",  target: true,
+    desc: "仪器 / 暖通 / 环境设备的经销批发商",
+    angle: "trade price list, dealer margin, and order quantities" },
+  { slug: "integrator",            label: "安装/集成",  target: true,
+    desc: "HVAC 安装、智能楼宇 / BMS、企业 IT 集成",
+    angle: "supplying hardware into their projects, and customising it to the spec a project needs" },
+  { slug: "monitoring-service",    label: "监测服务商", target: true,
+    desc: "空气检测 / 环境咨询 / 监测运营",
+    angle: "hardware to go with the service they already sell, plus data interfaces to their platform" },
+  { slug: "manufacturer-2nd-source", label: "同行代工", target: true,
+    desc: "有自有产品的制造商，找第二供应源或消化溢出产能",
+    angle: "acting as their second source / overflow capacity, not competing with their own line" },
+  { slug: "end-buyer",             label: "终端大客户", target: true,
+    desc: "学校 / 物业 / 工厂，自用批量采购",
+    angle: "buying in volume for their own sites" },
+  { slug: "excluded",              label: "竞品/无关",  target: false,
+    desc: "有自厂的竞争品牌、政府、媒体、协会",
+    angle: "" },
+  { slug: "unclear",               label: "看不清",     target: false,
+    desc: "官网信息不足，判不出属于哪一类",
+    angle: "" },
 ] as const;
 
-export type CustomerCategory = typeof CUSTOMER_CATEGORIES[number];
+export type CustomerTypeSlug = typeof CUSTOMER_TYPES[number]["slug"];
+export const CUSTOMER_TYPE_SLUGS = CUSTOMER_TYPES.map((t) => t.slug) as readonly string[];
+/** slug → 中文标签（前端徽章/筛选用）。认不出的一律归 unclear，绝不显示空白。 */
+export const CUSTOMER_TYPE_LABEL: Record<string, string> =
+  Object.fromEntries(CUSTOMER_TYPES.map((t) => [t.slug, t.label]));
 
-// 把任意自由文本类型归一。顺序敏感：越容易误判/越具体的先判。
-export function categorizeCustomerType(raw?: string | null): CustomerCategory {
-  const s = (raw || "").toLowerCase();
-  if (!s) return "其他";
-  const has = (re: RegExp) => re.test(s);
+/**
+ * slug → 中文标签，**给人看的那一面**。
+ *
+ * ⚠️ 认不出就**原样返回**，不归 unclear：重刷前库里 137 条还是旧中文桶（"经销/零售"等），
+ *    把它们显示成「看不清」等于**在屏幕上谎报分类**——它们的真实状态是"按旧体系分过的"，
+ *    不是"判不出"。归一只在**写库**时做（normalizeCustomerType），显示层不替真源做决定。
+ *
+ * ⚠️ 标签只在**服务端**拼：taxonomy 住在这里，前端再抄一份就是两处口径，
+ *    而这一单本身就是在治"分类口径分两处写"的病，别边治边犯。
+ */
+export function customerTypeLabel(v?: string | null): string {
+  const s = String(v || "").trim();
+  if (!s) return "";
+  return CUSTOMER_TYPE_LABEL[s.toLowerCase()] || s;
+}
 
-  // 1) 论坛/社区/媒体/目录 —— 非直接买家（先拦，避免“房车论坛”被归到房车）
-  if (has(/论坛|社区|媒体|资讯|博客|forum|community|blog|magazine|directory|目录/)) return "其他";
-  // 2) 船舶/海事
-  if (has(/船|海事|游艇|码头|marine|boat|yacht|vessel|maritime|nautical/)) return "船舶/海事";
-  // 3) 房车/RV/露营
-  if (has(/房车|露营|拖挂|rv\b|motorhome|caravan|camper|overland|van life|vanlife/)) return "房车/RV";
-  // 4) 离网/偏远/远程网络
-  if (has(/离网|偏远|户外|野外|乡村|off.?grid|remote|rural|wisp|starlink.*rural|远程网络/)) return "离网/偏远";
-  // 5) 企业/IT/项目部署（含矿业石油、模块化建筑等重项目场景）
-  if (has(/企业|it\s*部署|it部署|数据中心|bpo|模块化建筑|建筑|矿业|石油|油气|应急|项目部署|corporate|enterprise|modular|construction|mining|oil|gas|deployment|managed service/)) return "企业/IT";
-  // 6) 经销/零售/批发/电商
-  if (has(/经销|零售|批发|商城|电商|门店|配件商|reseller|retail|dealer|wholesal|distribut|storefront|e-?commerce|marketplace/)) return "经销/零售";
-  // 7) 安装/集成（含智能家居/影音/网络布线/系统集成）
-  if (has(/安装|集成|智能家居|影音|布线|installer|install|integrat|smart.?home|home theater|a\/?v\b|low.?voltage|networking|cabling/)) return "安装/集成";
-  return "其他";
+// ⚠️ 过渡映射：存量 137 条的 `customer_category` 还是旧中文桶。重刷前它们要能正常显示，
+//    所以给一张**只读的**旧→新表。重刷之后这张表自然失效，但**不删** ——
+//    删了它，任何一条没被重刷到的老数据就会在界面上显示成空白。
+const LEGACY_CATEGORY_MAP: Record<string, CustomerTypeSlug> = {
+  "安装/集成": "integrator",
+  "经销/零售": "distributor",
+  "企业/IT": "integrator",     // 旧桶把楼宇/IT 集成混在一起，都是 integrator
+  "船舶/海事": "unclear",       // 上游行业，AirSonde 无对应含义
+  "房车/RV": "unclear",
+  "离网/偏远": "unclear",
+  "其他": "unclear",
+};
+
+/**
+ * 归一到新 slug。**优先认 AI 直接给的 slug**（新链路），认不出再走旧中文桶（存量），
+ * 都不认就 unclear —— 不猜。
+ */
+export function normalizeCustomerType(raw?: string | null): CustomerTypeSlug {
+  const s = String(raw || "").trim();
+  if (!s) return "unclear";
+  const lower = s.toLowerCase();
+  if ((CUSTOMER_TYPE_SLUGS as string[]).includes(lower)) return lower as CustomerTypeSlug;
+  if (LEGACY_CATEGORY_MAP[s]) return LEGACY_CATEGORY_MAP[s];
+  return "unclear";
+}
+
+/** 打分 prompt 用的枚举清单（slug + 中文说明），单源，别在 prompt 里再抄一遍。 */
+export function customerTypeMenu(): string {
+  return CUSTOMER_TYPES.map((t) => `· ${t.slug} —— ${t.label}：${t.desc}`).join("\n");
+}
+/** 写信 prompt 用：这一类该从什么角度切。 */
+export function angleFor(slug?: string | null): string {
+  const t = CUSTOMER_TYPES.find((x) => x.slug === normalizeCustomerType(slug));
+  return t?.angle || "";
 }
 
 // ============ 翻牌堆：按"被杀原因"分组 ============

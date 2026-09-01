@@ -2,7 +2,7 @@
 import type { Env } from "./index";
 import { scrapeSite, type ScrapeResult } from "./scrape";
 import { scoreLead, writeEmail, scoreModel } from "./openrouter";
-import { categorizeCustomerType } from "./taxonomy";
+import { normalizeCustomerType } from "./taxonomy";
 import { inferCountryFromWebsite, COUNTRIES } from "./discover";
 
 // ⚠️ AirSonde 画像**草稿**（C1 搬迁时改写，待 Joe 审定；后台「客户画像」按钮可随时改，settings 里的值优先于此默认值）
@@ -95,7 +95,7 @@ async function recordFetchFailure(env: Env, lead: any, scraped: ScrapeResult, op
      ON CONFLICT(lead_id) DO UPDATE SET
        customer_type=excluded.customer_type, customer_category=excluded.customer_category,
        match_score=NULL, reason=excluded.reason, model=excluded.model, analyzed_at=excluded.analyzed_at${guard}`
-  ).bind(lead.id, FETCH_FAIL_TYPE, categorizeCustomerType(FETCH_FAIL_TYPE), note,
+  ).bind(lead.id, FETCH_FAIL_TYPE, "unclear"   /* C5-13：抓不到官网 = 判不出属于哪一类，明确落 unclear，不靠关键词猜 */, note,
          opts.rescan ? "fetch-failed(重扫·抓不到，旧分数已作废)" : "fetch-failed(未调用 LLM)").run();
   await env.DB.prepare(
     "UPDATE leads SET status='analyzed', updated_at=datetime('now') WHERE id=? AND status='new'"
@@ -230,7 +230,8 @@ export async function analyzeLead(env: Env, lead: any, opts: { scoreOnly?: boole
     //   顺带：`scoreOnly` 这个参数因此退化了 —— 它当初就是为了"重扫只刷新组时别重写草稿"，
     //   而现在**任何分析都不写草稿**，两组行为本来就一样。保留它只为让重扫调用点的语义读得出来，
     //   以及下面 model 字段能标出这条是重扫刷的还是新分析的。
-    const category = categorizeCustomerType(score.customer_type);
+    // C5-13：AI 现在直接给 slug（见 scoreLead 的枚举）；认不出才回退旧中文桶或 unclear。
+    const category = normalizeCustomerType(score.customer_type);
 
     // ⚠️ recommended_email 用 `COALESCE(excluded.x, lead_analysis.x)` 保留原值 —— 这里传的是 NULL，
     //    直接 excluded 会把**已发出的那封信**抹掉（详情页「已发出的开发信」就是读它）。
@@ -244,8 +245,13 @@ export async function analyzeLead(env: Env, lead: any, opts: { scoreOnly?: boole
          recommended_email=COALESCE(excluded.recommended_email, lead_analysis.recommended_email),
          model=excluded.model,
          analyzed_at=excluded.analyzed_at`
+    // C5-13：两列各归其位，**不加新列**（schema 本来就是这么分的）：
+    //   · customer_category = slug（机器真源：徽章、筛选、分布统计都读它）
+    //   · customer_type     = 中文一句描述（只给人看：详情页/列表 tooltip）
+    // ⚠️ 以前 customer_type 存的是 AI 自由描述、customer_category 靠关键词从它猜 —— 猜不中就是 75% 掉「其他」。
+    //   现在 AI 直接给 slug，描述单独出一个字段 ⇒ **分类不再经过"猜"这一步**，描述也没丢。
     ).bind(
-      lead.id, score.customer_type, category, score.match_score, score.needed_products,
+      lead.id, score.customer_desc || "", category, score.match_score, score.needed_products,
       score.reason,
       opts.scoreOnly
         ? `${scoreModel(env)}（重扫·只刷新分数）`
