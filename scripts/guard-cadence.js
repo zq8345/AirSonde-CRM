@@ -23,13 +23,25 @@ const root = process.cwd();
 const wrangler = fs.readFileSync(path.join(root, "wrangler.jsonc"), "utf8");
 const html = fs.readFileSync(path.join(root, "public", "index.html"), "utf8");
 
-// 从 wrangler.jsonc 里读真实 cron（容忍注释：只取 "crons" 那一行的数组）
-const m = wrangler.match(/"crons"\s*:\s*\[\s*"([^"]+)"/);
-if (!m) { console.error("❌ [班次守卫] wrangler.jsonc 里读不出 crons —— 格式变了？"); process.exit(1); }
-const cron = m[1];
+// 从 wrangler.jsonc 里读真实 cron。
+// ⚠️ C5-22 起是**两条班次**，原来的正则只取第一条 —— 那样一来第二条改了它也不会红，
+//   而这道闸的全部意义就是"节奏一变必须有人重新核"。所以改成读**整个数组**。
+const mArr = wrangler.match(/"crons"\s*:\s*\[([\s\S]*?)\]/);
+if (!mArr) { console.error("❌ [班次守卫] wrangler.jsonc 里读不出 crons —— 格式变了？"); process.exit(1); }
+const crons = [...mArr[1].matchAll(/"([^"]+)"/g)].map((x) => x[1]);
+if (!crons.length) { console.error("❌ [班次守卫] crons 数组是空的"); process.exit(1); }
+const cron = crons.join(" | ");
 
 // 这是**上一次人工核对过**的组合。cron 一变，或界面上「每 6 小时」的处数一变，就得重新核。
-const EXPECT_CRON = "0 * * * *";
+// C5-22（2026-09-01）：改成**两条**班次，已人工核对：
+//   · "* * * * *" 快 tick —— 只做增量出站（分析→批准→发信），**不含**找客户/目录/简报。
+//     核过的点：① 它在 fastTick() 里，与 scheduled() 是两个函数，搜索预算不受影响；
+//               ② 飞书简报在 scheduled() 的 step 4，且节流常量 DIGEST_MIN_GAP_MS=6h
+//                  **与 cron 解耦**（上次提频时已显式化）⇒ 不会变成 1440 条/天。
+//   · "0 * * * *" 整点班 —— 收回信/找客户/目录/跟进/简报，一如既往。
+// ⚠️ 顺序有意义：这里比的是**拼起来的字符串**，改顺序也会红 —— 那是刻意的，
+//    因为"哪条在前"在别处（wrangler dev 的 host 钉死）已经咬过人，节奏这里也不留侥幸。
+const EXPECT_CRON = "* * * * * | 0 * * * *";
 // C2-A（2026-08-31）之后只剩 **1 处**说 6 小时，已人工核对为真：
 //   · 飞书简报（DIGEST_MIN_GAP_MS = 6h，与 cron 无关）—— 已比对 src/index.ts:3487，属实
 // 少掉的那处是「免费目录刷新每 6h 检查一次」：C2-A 把目录源注册表清空（ENABLED_DIRECTORY_SOURCES=[]），
