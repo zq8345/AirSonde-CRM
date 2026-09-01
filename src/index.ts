@@ -1873,6 +1873,19 @@ app.get("/api/settings/sending", async (c) => {
     automation_enabled: await automationEnabled(c.env),
     // "今日还可发几封"：**服务端算**，用的就是发送路径自己那两个函数（systemDailySendLimit + coldSentToday）。
     // ⚠️ 不让前端拿 limit 和 sent 自己减 —— 那就是第二处口径，早晚跟真闸对不上（铁律五）。
+    // 🔴 C5-22 补漏：**生效值 + 被谁卡住**。
+    //   生产实况 2026-09-01：Joe 设了 1000 封/天，而新域保护今天算出来的上限是 30
+    //   ⇒ 机器发满 30 就停。而设置页当时**一个字都没说** —— 他看到的是"我设了 1000"，
+    //   机器发了 30，只能得出"机器坏了"这个结论。
+    //   这就是铁律三那条"不许显示一个看起来正常的默认值"的同一种病：
+    //   **显示一个他设的、但此刻并不生效的数，比不显示更误导。**
+    //   ⚠️ 上一段我给新旋钮做了"生效值+来源"，却漏了真正卡住他的这一个 —— 派单原话是"全部"。
+    send_limit_effective: await (async () => { const { effective } = await systemDailySendLimit(c.env); return effective; })(),
+    send_limit_capped_by: await (async () => {
+      const info = await systemDailySendLimit(c.env);
+      if (info.effective >= info.limit) return null;                 // 没被压低，你填的数就是生效数
+      return info.rampEnabled ? "ramp" : "other";                    // 被新域保护压低
+    })(),
     send_room_today: await (async () => {
       const { effective } = await systemDailySendLimit(c.env);
       return Math.max(0, effective - (await coldSentToday(c.env)));

@@ -3815,7 +3815,15 @@
       $("#cfg-bcc").value = c.bcc_archive || "";
       // ⭐ 上限未被显式配置时**必须说出来**——上次静默用默认值，出信量被砍 90%、三天没人知道。
       const _lbadge = $("#cfg-limit-badge");
-      if (c.daily_send_limit_source === "default") {
+      // 🔴 C5-22 补漏（生产实况逼出来的）：他设 1000、机器只发 30 时，这里原来**一个字都不说**。
+      //   优先级：**"你填的数此刻不生效"比"你没填过"更要紧** —— 后者只是缺省，前者是他的设置被压着。
+      if (c.send_limit_capped_by === "ramp" && c.send_limit_effective != null) {
+        _lbadge.style.display = "";
+        _lbadge.textContent = `今天实际只能发 ${c.send_limit_effective} 封`;
+        _lbadge.title = `新域保护正在压着：今天的上限 = max(起步值, 昨天发出量 × 倍数) = ${c.send_limit_effective}，比你填的 ${c.daily_send_limit} 小。`
+          + `发满就停是对的，不是坏了。想立刻放开：关掉下面的「新域保护」，或把起步值调高。`;
+        _lbadge.style.color = "var(--amber)";
+      } else if (c.daily_send_limit_source === "default") {
         _lbadge.textContent = `未配置 · 正在用默认值 ${c.daily_send_limit_default ?? c.daily_send_limit}`;
         _lbadge.style.display = "";
       } else if (c.daily_send_limit_source === "legacy") {
