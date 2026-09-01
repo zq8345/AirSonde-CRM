@@ -1127,6 +1127,10 @@ app.get("/api/activity", async (c) => {
 
   // ── 受阻判定：只看**出站**是否被卡住。用 errHuman 给出六类里的判定结果，
   //    别让 Joe 自己从原话猜类别（C5-28 增补）。
+  // ⚠️ 这两个量在 blocked 判定里就要用（"今日发满 = 正常待机，不点橙灯"），
+  //   所以必须**先算**。原来它们排在 blocked 之后 —— 于是那条边界形同虚设。
+  const { effective: effectiveEarly } = await systemDailySendLimit(c.env);
+  const sentTodayEarly = await coldSentToday(c.env);
   let blocked: { kind: string; human: string; raw: string; group: string } | null = null;
   if (auto) {
     const why = await autoSendBlockedReason(c.env);
@@ -1136,11 +1140,29 @@ app.get("/api/activity", async (c) => {
       blocked = errHuman(raw);
     }
     if (!blocked) {
-      // 最近一封失败信的原话（只看今天的，陈年失败不该一直亮着灯）
-      const f = await c.env.DB.prepare(
-        "SELECT error FROM emails WHERE status='failed' AND date(created_at)=date('now') ORDER BY id DESC LIMIT 1"
-      ).first<{ error: string }>();
-      if (f?.error) blocked = errHuman(f.error);
+      // 🔴 C5-28 修：原来只取"今天最近一条失败"就点橙灯 —— **那不是"现在受阻"，只是"今天失败过"。**
+      //   生产误报（总调度验收当场抓到）：13:06 平台额度失败（升级前）→ 14:00-14:08 成功发出 8 封
+      //   → 失败早已被后续成功证伪，橙灯却还亮着。
+      //
+      //   ⇒ 受阻必须是**此刻仍然成立的事实**，三个条件同时满足才算：
+      //     ① 有出站失败记录（今天的）
+      //     ② 这条失败**晚于最近一次成功发送** —— **最近一次成功就是天然的痊愈证明**
+      //     ③ 今日额度未满 —— 发满是正常待机（这条边界我本来就写了，但它排在 blocked 之后，
+      //        被 blocked 覆盖掉了：**次序本身就是一个判据错误**）
+      //   ⚠️ 断路器那条不走这个时序判断：它是**显式状态**（要人手动复位），不是从记录推断出来的。
+      const quotaFull = sentTodayEarly >= effectiveEarly;
+      if (!quotaFull) {
+        const f = await c.env.DB.prepare(
+          `SELECT error, created_at FROM emails
+            WHERE status='failed' AND date(created_at)=date('now') ORDER BY id DESC LIMIT 1`
+        ).first<{ error: string; created_at: string }>();
+        const lastOk = await c.env.DB.prepare(
+          "SELECT MAX(sent_at) AS t FROM emails WHERE status='sent'"
+        ).first<{ t: string | null }>();
+        // 字符串比较即可：两者都是 `YYYY-MM-DD HH:MM:SS` 同一口径（同一张表、同一写入路径）。
+        const stillFailing = !!f?.error && (!lastOk?.t || String(f.created_at) > String(lastOk.t));
+        if (stillFailing) blocked = errHuman(f!.error);
+      }
     }
   }
 
@@ -1150,8 +1172,7 @@ app.get("/api/activity", async (c) => {
     : (blocked ? "auto-blocked" : "auto-running");
 
   // ── 动作小字（七种，服务端拼好）──────────────────────────
-  const { effective } = await systemDailySendLimit(c.env);
-  const sentToday = await coldSentToday(c.env);
+  const effective = effectiveEarly, sentToday = sentTodayEarly;
   let action = "", detail = "";
   if (act) {
     const n = (a: any) => (a.total ? `${a.done ?? 0}/${a.total}` : String(a.done ?? ""));
