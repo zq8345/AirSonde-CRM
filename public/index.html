@@ -4663,6 +4663,11 @@ ${esc(d.ours.body||'')}</div></details>`
     const DB_SPREAD_MIN  = 2.0;   // 维度间回信率倍数差，超过才建议挪力气。⚠️ 经验值·待实测校准
     const DB_UNSUB_WARN  = 0.05;  // 退订警戒。来源：既有 rateKpi 就是 0.05，沿用
     const DB_BOUNCE_WARN = 0.03;  // 退信警戒。来源：既有 rateKpi 就是 0.03，沿用
+    // C5-38 第 5 条：**比率的分母地板**。分母 <10 时不显示比率，显示"样本还太少"。
+    //   ⚠️ 与 DB_N_MIN(50) 分工不同，别合并：DB_N_MIN 管的是"敢不敢据此下判读、指方向"，
+    //   这个管的是"敢不敢把这个百分比印出来"。印出来的门槛低于下判读的门槛，
+    //   因为 Joe 看数字和 Joe 照数字行动是两件事。1 发 1 回印成"回信率 100%"是纯误导。
+    const DB_RATE_MIN_N  = 10;
 
     async function openDashboard(retried){
       showMainView('dashboard');
@@ -4675,7 +4680,9 @@ ${esc(d.ours.body||'')}</div></details>`
       const enoughN = denom >= DB_N_MIN;
       const w = wk[wk.length-1] || {sent:0,replied:0}, prev = wk[wk.length-2] || {sent:0,replied:0};
       const totalReplied = c.replied || 0;
-      const rateOf = (o) => (o && o.sent > 0) ? (o.replied||0)/o.sent : null;
+      // ⚠️ 原来是 `o.sent > 0` —— 1 封发出去 1 封回信就报"回信率 100%"。
+      //   null 的含义统一为"这个比率现在不该被相信"，调用方本来就已经在处理 null。
+      const rateOf = (o) => (o && o.sent >= DB_RATE_MIN_N) ? (o.replied||0)/o.sent : null;
       const card = (title, body) => `<div class="page-card db-block"><div class="db-t">${title}</div>${body}</div>`;
       const empty = (line) => `<div class="hint db-empty">${line}</div>`;
       const act = (label, fn) => `<button class="db-act" onclick="${fn}">${label} →</button>`;
@@ -4724,8 +4731,18 @@ ${esc(d.ours.body||'')}</div></details>`
         const r = sent ? rep/sent : 0;
         return `<div class="db-dimrow ${ok?'':'db-locked'}"><span class="db-dimname">${labelFn(it)}</span><span class="db-dimbar"><i style="width:${ok?(r*100).toFixed(0):0}%"></i></span><span class="db-dimv">${ok ? pct(r) : `${rep}/${sent}`}${ok?'':`<span class="hint"> 样本不足</span>`}</span>${actFn ? actFn(it) : ''}</div>`;
       }).join('');
+      // 🔴 C5-38 第 5 条：排序也要有样本地板。原来纯按比率排 ⇒ 一个「1 发 1 回」的关键词
+      //   比率 100%、稳坐第一，把真正有数据的关键词挤出 slice(0,8) 之外 —— 行虽然标了
+      //   db-locked，但**它占的是位置**，真数据根本没机会显示。
+      //   改成两段排：够样本的整体排在前（内部按比率），不够样本的沉底（内部按发信量）。
       const rank = (arr) => (arr||[]).slice().filter(x=>(x.sentLeads||0)>0)
-        .sort((a,b)=>((b.repliedLeads||0)/(b.sentLeads||1))-((a.repliedLeads||0)/(a.sentLeads||1)));
+        .sort((a,b)=>{
+          const an=a.sentLeads||0, bn=b.sentLeads||0;
+          const aOk=an>=DB_RATE_MIN_N, bOk=bn>=DB_RATE_MIN_N;
+          if (aOk!==bOk) return aOk ? -1 : 1;                       // 够样本的先
+          if (!aOk) return bn-an;                                   // 都不够 → 按发信量，别按噪音比率
+          return ((b.repliedLeads||0)/bn)-((a.repliedLeads||0)/an);  // 都够 → 按回信率
+        });
       const kwR = rank(d.byKeyword), ccR = rank(d.byCountry), catR = rank(d.byCategory);
       let b2;
       if (!kwR.length && !ccR.length) b2 = empty(`还没有足够样本 —— 累计发出 ${DB_N_MIN} 封之后，这里会告诉你哪个方向回得多`);
@@ -4774,6 +4791,13 @@ ${esc(d.ours.body||'')}</div></details>`
         // C5-38 第 3 条：「已查看」标注仪器局限 —— 数字照显示，但**说清它为什么偏低**，
         //   否则 Joe 会把"开信率 12%"当成真实阅读率去改文案。
         const fn = levels.map((lv)=>`<div class="fn-row"><span class="muted">${esc(lv.label)}${/查看/.test(lv.label)?'<span class="gj-help" data-help title="靠邮件里的追踪像素统计，而主流邮箱默认拦图 —— 这个数**天然大幅低估**，只能当参考，不能据它判断文案好坏。">(?)</span>':''}</span><div class="fn-track"><div class="fn-fill" style="width:${(lv.n/maxN*100).toFixed(1)}%"></div></div><span>${lv.n}${lv.conv!=null?` <span class="muted">· ${lv.conv}%</span>`:''}</span></div>`).join('');
+        // C5-38 第 2 条：漏斗的单位是**公司（lead）**，服务端 sentC = COUNT(DISTINCT lead_id)，
+        //   本来就是对的（复核过，不是这次改的）。缺的是**说清它是累计口径** ——
+        //   左栏"已联系"是**当前状态格子**，一条线索回信后就离开那个格子；
+        //   漏斗"已发送"是**曾经被首触过**，只增不减。两个数天生不等，
+        //   不标口径就会被读成自相矛盾（Joe 已经这样读过一次）。
+        //   邮件封数（含跟进）不进漏斗，另起一行小字。
+        const mailLine = `<div class="hint">累计发出邮件 ${d.emailsSent||0} 封（含跟进）· 漏斗按公司数、累计口径，只增不减</div>`;
         let leak = '';
         if (worst){
           leak = `<div class="db-judge">掉得最狠的是 <b>${esc(worst.from)}→${esc(worst.to)}</b>（${worstP}%）${leakAct(worst.to)}</div>`;
@@ -4794,7 +4818,7 @@ ${esc(d.ours.body||'')}</div></details>`
             : totalReplied===0
               ? `<div class="hint">本月 AI $${aiM.toFixed(2)} · 搜索 ${sp.usedToday??0} 次 —— 还没有回信，成本还算不出每封多少</div>`
               : `<div class="hint">本月 AI $${aiM.toFixed(2)} · 搜索 ${sp.usedToday??0} 次 ÷ 回信 ${totalReplied} 封 = 每封约 <b>$${(aiM/totalReplied).toFixed(2)}</b></div>`);
-        b3 = fn + leak + health + ledger;
+        b3 = fn + mailLine + leak + health + ledger;   // C5-38②：邮件封数另起一行，不混进漏斗
       }
 
       $("#v-page").innerHTML = pageHeader('数据看板','')
