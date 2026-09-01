@@ -5,7 +5,7 @@ import { installDevEgressGuard, BUILD_MARKER, devGuardOn, assertEgressAllowed } 
 import { connect } from "cloudflare:sockets";
 import { basicAuth } from "hono/basic-auth";
 import { parseCsv, mapRowToLead } from "./csv";
-import { analyzeLead, getProfile, DEFAULT_PROFILE, ensureDraft } from "./service";
+import { analyzeLead, getProfile, DEFAULT_PROFILE, ensureDraft, APPROVE_MIN_SCORE_SVC } from "./service";
 import { writeReplyDraft, writeWarmFollowup, DEFAULT_SELLING_POINTS, translateToChinese, isTrustedDirectorySource, getAiUsage } from "./openrouter";
 import { scrapeSite } from "./scrape";
 import { sendLead, sendApprovedBatch, sendFollowupBatch, sendWarmFollowupNow, unsubscribeByToken, getSetting, setSetting, addSuppressedEmail, isEmailSuppressed, autoSentToday, sentToday, sentTodayBreakdown, failedTodayBreakdown, getBreakerStatus, BREAKER_WINDOW, BREAKER_THRESHOLD, deliverEmail, brandForLead, senderSentToday, SENDER_PRIMARY, SENDER_LEGACY, DEFAULT_COMPANY_ADDRESS, autoSendEnabled, autoApproveEnabled, systemDailySendLimit, coldSentToday, SYSTEM_LIMIT_DEFAULT, RAMP_FLOOR, RAMP_FACTOR, autoSendDailyLimit , automationEnabled, autoSendBlockedReason, numSetting} from "./send";
@@ -336,6 +336,12 @@ async function getBacklog(env: Env): Promise<{ unscored: number; noEmail: number
 // 注意：index.ts 是 Worker 入口模块，顶层 export 的非函数值会被运行时当成 handler 校验并报
 // "Incorrect type for map entry"（dry-run 查不出、只有真启动才报）→ 这里必须是模块内常量，不能 export。
 const APPROVE_MIN_SCORE = 60;
+// ⚠️ service.ts 里有一份同值的 APPROVE_MIN_SCORE_SVC（那边不能 import 这里，会成环）。
+//   两个常量分居两处 = 迟早漂开，而漂开的症状是**低分线索悄悄留在待联系**（C5-33 那三条僵尸的同族）。
+//   ⇒ 这里做一次启动期一致性断言：不等值就当场喊出来，不靠人记得。
+if (APPROVE_MIN_SCORE !== APPROVE_MIN_SCORE_SVC) {
+  console.error(`⚠️ 分数线不一致：index.ts=${APPROVE_MIN_SCORE} 而 service.ts=${APPROVE_MIN_SCORE_SVC} —— 两处必须同值`);
+}
 // ⭐ 两档制（Joe 拍板）：**60 是全系统唯一的决策线**。
 //   ≥60 有邮箱 → 机器自动发；<60 → 进「翻牌堆」由 Joe 复核。60-69 的人工拍板区**已取消**。
 //   道理：机器误发一封信成本低、可见、有熔断器兜底；机器误杀一个真客户损失一单、不可见、无兜底

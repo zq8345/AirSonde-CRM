@@ -46,6 +46,10 @@ export interface AnalyzeOutcome {
 // match_score 保持 **NULL**，靠 approveGateReason 的"未打分不能批准"兜住 →
 // 它落在「待审批」显示未打分，**可见、可人工处理**，而不是埋在低分堆里冒充"不合格"。
 export const FETCH_FAIL_MAX = 3;
+/** 自动通道的分数线。⚠️ 与 index.ts 的 APPROVE_MIN_SCORE **必须同值**；
+ *  这里不 import 它是因为 index.ts 反过来 import 本文件（会成环）。
+ *  ⇒ 改动时两处一起改；下面那条注释就是给下一个人看的路标。 */
+export const APPROVE_MIN_SCORE_SVC = 60;
 export const FETCH_FAIL_TYPE = "官网抓不到·无法判断";
 // 抓到了但正文少到没法判（JS-only 空壳、"请开启 JavaScript"页等）等价于没抓到——
 // 送给 LLM 同样只会得到"看不出在卖什么"→≤30 永久钉死。门槛压得很低，只拦真空壳。
@@ -262,6 +266,29 @@ export async function analyzeLead(env: Env, lead: any, opts: { scoreOnly?: boole
     await env.DB.prepare(
       "UPDATE leads SET status='analyzed', updated_at=datetime('now') WHERE id=? AND status='new'"
     ).bind(lead.id).run();
+
+    // ══ 🔴 C5-33：重打分跌破分数线 → **自己走出待联系** ══
+    //
+    // 生产实证（Joe 抓到 3 条，全库普查恰好 3 条、且 100% 呈现 analyzed_at > updated_at）：
+    //   Airflow(0 分)、Accenv(30)、Derbyshire(45) 三条 status=approved 但 human_approved=0。
+    //   机制：线索先以 ≥60 分被自动批准进「待联系」，**之后又被重新分析**（`/api/leads/:id/analyze`
+    //   不筛状态），新的低分写进了 lead_analysis，而上面那句状态更新带 `AND status='new'` 守卫
+    //   ⇒ 分数变了、格子没变。
+    // 后果不是"显示不对"：`sendApprovedBatch` 的谓词是 `score>=60 OR human_approved=1`，
+    //   这三条**两条都不满足** ⇒ 卡成僵尸，既不发也不退，永远占着「待联系」的名额。
+    //
+    // ⚠️ 修法不是"禁止重新分析"（那是删能力）：重新分析本身是对的，**错的是分数改了而归属没跟着改**。
+    // ⚠️ `human_approved=1` 的**绝不动**：那是 Joe 亲手放行的，分数低正是他已经知道并覆盖过的事实。
+    // ⚠️ 只碰 approved：`queued` 正在发送途中、`sent` 已经发出去了 —— 事后把它们拽回来只会制造新的不一致。
+    if (!opts.scoreOnly) {
+      const back = await env.DB.prepare(
+        `UPDATE leads SET status='analyzed', updated_at=datetime('now')
+          WHERE id=? AND status='approved' AND COALESCE(human_approved,0)=0 AND ? < ?`
+      ).bind(lead.id, score.match_score, APPROVE_MIN_SCORE_SVC).run();
+      if (back.meta.changes) {
+        console.log(`归位: #${lead.id} 重打分 ${score.match_score} < ${APPROVE_MIN_SCORE_SVC} → 退回待审批（原本卡在待联系发不出去）`);
+      }
+    }
 
     // 抓成功 → 失败计数清零：历史上的偶发抖动不该累加，否则迟早把一个健康站点误推到上限。
     // 加 >0 守卫，避免给每条正常线索都写一次无意义的 UPDATE。
