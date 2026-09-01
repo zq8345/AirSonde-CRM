@@ -33,6 +33,8 @@ CREATE TABLE IF NOT EXISTS leads (
   next_action_date   TEXT,              -- 下一步日期 YYYY-MM-DD（qw）
   last_engaged_at    TEXT,              -- 最近打开/点击时间，冗余便于排序（sprint1）
   fetch_fail_count   INTEGER NOT NULL DEFAULT 0,   -- 连续抓站失败计数（fetchfail）
+  analyzing_at       TEXT,                          -- 分析认领戳（10 分钟过期）。fastTick 与手动批量分析
+                                                    -- 并发时用它抢占，避免同一条线索被两边各烧一次 AI。
   human_approved     INTEGER NOT NULL DEFAULT 0,   -- Joe 手动放行 <60（humanapprove，唯一豁免分数线的口子）
   bench_queued       INTEGER NOT NULL DEFAULT 0,   -- 转触达工作台（humanapprove）
   bench_contacted_at TEXT,              -- 工作台「已联系」时间（humanapprove）

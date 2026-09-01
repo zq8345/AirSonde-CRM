@@ -280,14 +280,23 @@ export async function analyzeLead(env: Env, lead: any, opts: { scoreOnly?: boole
     // ⚠️ 修法不是"禁止重新分析"（那是删能力）：重新分析本身是对的，**错的是分数改了而归属没跟着改**。
     // ⚠️ `human_approved=1` 的**绝不动**：那是 Joe 亲手放行的，分数低正是他已经知道并覆盖过的事实。
     // ⚠️ 只碰 approved：`queued` 正在发送途中、`sent` 已经发出去了 —— 事后把它们拽回来只会制造新的不一致。
-    if (!opts.scoreOnly) {
-      const back = await env.DB.prepare(
-        `UPDATE leads SET status='analyzed', updated_at=datetime('now')
-          WHERE id=? AND status='approved' AND COALESCE(human_approved,0)=0 AND ? < ?`
-      ).bind(lead.id, score.match_score, APPROVE_MIN_SCORE_SVC).run();
-      if (back.meta.changes) {
-        console.log(`归位: #${lead.id} 重打分 ${score.match_score} < ${APPROVE_MIN_SCORE_SVC} → 退回待审批（原本卡在待联系发不出去）`);
-      }
+    // 🔴🔴 2026-09-02 独立审计抓出：这段原本裹在 `if (!opts.scoreOnly)` 里 —— **挂错旗子了**。
+    //   `scoreOnly` 的本意见上方 194 行：**"不重写开发信草稿"**，跟状态归属毫无关系。
+    //   而 `/api/admin/rescore-taxonomy`（全库重刷）正是 scoreOnly:true 打 approved 集合，
+    //   ⇒ 重刷一跑就会**批量重造**我刚修完的那种僵尸（分数掉了、格子没动、既不发也不退）。
+    // ⚠️ 真正的规则只有一条，不分路径：**任何一次分数写入之后，归属都必须跟着这个新分数走。**
+    //   谁调用的、要不要重写草稿、是不是重扫 —— 都不改变这一条。所以它不该有任何前置条件。
+    //   （判据：这段在 rescore-taxonomy 的路径上必须真的执行；加条件 = 又给僵尸开一扇门。）
+    //
+    // 下面三条守卫照旧，它们是这条规则的**内容**，不是它的开关：
+    // ⚠️ `human_approved=1` 的绝不动：那是 Joe 亲手放行的，分数低正是他已知并覆盖过的事实。
+    // ⚠️ 只碰 approved：queued 正在发送途中、sent 已经发出去了，事后拽回来只会制造新的不一致。
+    const back = await env.DB.prepare(
+      `UPDATE leads SET status='analyzed', updated_at=datetime('now')
+        WHERE id=? AND status='approved' AND COALESCE(human_approved,0)=0 AND ? < ?`
+    ).bind(lead.id, score.match_score, APPROVE_MIN_SCORE_SVC).run();
+    if (back.meta.changes) {
+      console.log(`归位: #${lead.id} 重打分 ${score.match_score} < ${APPROVE_MIN_SCORE_SVC} → 退回待审批（原本卡在待联系发不出去）`);
     }
 
     // 抓成功 → 失败计数清零：历史上的偶发抖动不该累加，否则迟早把一个健康站点误推到上限。

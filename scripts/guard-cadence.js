@@ -87,5 +87,55 @@ if (mentions !== EXPECT_6H_MENTIONS) {
 `);
   bad = true;
 }
+// ── 🔴 tick 预算 / 防重入锁 的不变式（2026-09-02 独立审计抓出的真缺陷）──
+//   fastTick 原来用 RoundBudget 默认值（13 分钟），而锁只压 5 分钟 ⇒ 慢 tick 跑过自己的锁，
+//   下一个 tick 判定"上一个死了"就进来 ⇒ **两个 tick 并发发信**。
+//   ⚠️ 这个断言必须在**部署前**红，不能写成 src 里的顶层 throw ——
+//      Workers 全局作用域抛错 = 整个 worker 起不来（零请求进得去），那比发不上去糟得多。
+{
+  const src = fs.readFileSync(path.join(root, "src", "index.ts"), "utf8");
+  const num = (name) => {
+    // ⚠️ 用 [\s\S] 之类的转义在这里被吃过一次（JS 单引号串里 '\s' 会退化成 's'），
+    //    改成不依赖转义的切法：找到 'const <名字>' 之后到第一个 ';' 为止。
+    const at = src.indexOf('const ' + name + ' =');
+    const end = at < 0 ? -1 : src.indexOf(';', at);
+    const expr = at < 0 || end < 0 ? null : src.slice(src.indexOf('=', at) + 1, end);
+    const m = expr === null ? null : [null, expr];
+    if (!m) { console.error(`
+❌ [tick 闸] 找不到常量 ${name} —— 改名了？这个守卫就失效了，去修它。
+`); bad = true; return null; }
+    const v = Function(`"use strict";return (${m[1]})`)();
+    if (!Number.isFinite(v)) { console.error(`
+❌ [tick 闸] ${name} 求值不出数字：${m[1]}
+`); bad = true; return null; }
+    return v;
+  };
+  const budget = num('TICK_BUDGET_MS'), lock = num('TICK_LOCK_STALE_MS');
+  if (budget !== null && lock !== null) {
+    if (budget >= lock) {
+      console.error(`
+❌ [tick 闸] TICK_BUDGET_MS(${budget}) 必须 **严格小于** TICK_LOCK_STALE_MS(${lock})
+
+   预算 ≥ 锁 = 一个慢 tick 能跑过自己的锁 = 下一个 tick 以为它死了就进来
+   = **两个 tick 并发发信**（2026-09-02 审计抓出的原缺陷，别让它回来）。
+`);
+      bad = true;
+    }
+    // 另一头：预算也不能小到把各步的 budget.has(N) 全饿死（has 是严格大于）。
+    const needs = [...src.matchAll(/budget\.has\((\d[\d_]*)\)/g)].map((m) => Number(m[1].replace(/_/g, '')));
+    const maxNeed = needs.length ? Math.max(...needs) : 0;
+    if (maxNeed && budget !== null && budget <= maxNeed) {
+      console.error(`
+❌ [tick 闸] TICK_BUDGET_MS(${budget}) ≤ 最大的 budget.has(${maxNeed})
+
+   has() 是**严格大于**（remaining > need）⇒ 这一步**永远为假**，那条链会**静默死掉**：
+   日志只显示"跳过"，不报任何错。发信正是卡在 has(50_000) 这一档上。
+`);
+      bad = true;
+    }
+    if (!bad) console.log(`[tick 闸] 预算 ${budget}ms < 锁 ${lock}ms，且 > 最大步需求 ${maxNeed}ms ✓`);
+  }
+}
+
 if (bad) process.exit(1);
 console.log(`[班次守卫] cron="${cron}" · 界面「每 6 小时」${mentions} 处（均已人工核对为真）✓`);

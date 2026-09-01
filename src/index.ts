@@ -1135,12 +1135,11 @@ app.post("/api/admin/rescore-taxonomy", async (c) => {
   //   `打分 → ≥60 自动批准 → sendApprovedBatch` 一条直路，日上限 100。
   //   ⇒ 在这个状态下重刷 = 把一批线索推过 60 分线 = **真的往陌生公司发冷邮件**。
   //   "只刷分数不发信"这个说法只在自动发送关着时才成立；开着时它就是错的。
-  if (await autoSendEnabled(c.env)) {
-    return c.json({
-      error: "请先关闭「自动发送」再重刷分类 —— 重刷会改分数，而分数是「自动批准 → 自动发送」的入口，" +
-             "开着重刷等于让机器边刷边把线索发出去（发出去的信收不回来）。刷完再开回来。",
-    }, 409);
-  }
+  // ⚠️ 2026-09-02 修：原来这里只查「自动发送」，**漏了「自动批准」** —— 而自动批准同样会把
+  //   重刷升上来的线索接走（升上来的必须停在「待审批」等 Joe 过目，这是 C5-13 定的）。
+  //   改成复用 rescoreLowGate：**两个重打分入口一把锁**，不在这儿养第二套判断。
+  const gateMsg = await rescoreLowGate(c.env);
+  if (gateMsg) return c.json({ error: gateMsg }, 409);
   const b = await jsonBody<{ limit?: number; restart?: boolean }>(c);
   const limit = Math.min(Math.max(Number(b.limit) || 8, 1), 20);
   let startedAt = (await getSetting(c.env, "taxonomy_rescore_started_at", "")).trim();
@@ -2532,9 +2531,24 @@ app.post("/api/keywords", async (c) => {
  *   现在改成：整点 cron 里跑一次（每个部署最迟 1 小时内必然自愈），**外加**写路径保留调用
  *   （新建库/刚 deploy 就有人删关键词的窗口期也兜住）。两处都调，靠幂等，不靠顺序。
  */
+/**
+ * 自愈迁移**清单**。新增列一律加到这里，别再在某个端点里单写一句 ALTER ——
+ * 上面那场 500 就是"一句 ALTER 藏在稀有写路径里"造成的。清单只有一份，跑它的地方也只有一处。
+ * ⚠️ 只允许**纯加性**的 ADD COLUMN（带 DEFAULT）：它对现有数据零影响，重复跑无害，失败也只是"已经有了"。
+ *   任何会改/删数据的迁移**不许进这个清单** —— 那种要人看着跑。
+ */
+const SELF_HEAL_COLUMNS: { table: string; column: string; ddl: string }[] = [
+  { table: "keywords", column: "archived",
+    ddl: "ALTER TABLE keywords ADD COLUMN archived INTEGER NOT NULL DEFAULT 0" },
+  // 分析认领戳：fastTick 与手动批量分析并发时用来抢占，避免同一条线索被两边各烧一次 AI。
+  { table: "leads", column: "analyzing_at",
+    ddl: "ALTER TABLE leads ADD COLUMN analyzing_at TEXT" },
+];
 async function ensureKeywordArchivedColumn(env: Env): Promise<void> {
-  try { await env.DB.prepare("ALTER TABLE keywords ADD COLUMN archived INTEGER NOT NULL DEFAULT 0").run(); }
-  catch { /* 已经有这一列 —— 正常，不是错误 */ }
+  for (const m of SELF_HEAL_COLUMNS) {
+    try { await env.DB.prepare(m.ddl).run(); }
+    catch { /* 已经有这一列 —— 正常，不是错误 */ }
+  }
 }
 app.delete("/api/keywords/:id", async (c) => {
   await ensureKeywordArchivedColumn(c.env);
@@ -3622,12 +3636,17 @@ const RESCORE_LOW_MAX_SCORE = 30;
 const RESCORE_LOW_MAX_PER_CALL = 20;
 
 /** 两个自动开关任一开着 → 返回拒绝理由；都关着 → null（放行）。 */
+/**
+ * 🔴 重打分类操作的**唯一一把锁**（两个入口共用；别再抄第二份判断 —— 抄一份迟早一处改了另一处没改）。
+ * 2026-09-02 独立审计抓出：/api/admin/rescore-taxonomy 当时只查了「自动发送」、**漏了「自动批准」**，
+ *   而这两个开关只要有一个开着，重打分就会把线索推过 60 分线并被机器接走。
+ */
 async function rescoreLowGate(env: Env): Promise<string | null> {
   const on: string[] = [];
   if (await autoSendEnabled(env)) on.push("「自动发送」");
   if (await autoApproveEnabled(env)) on.push("「自动批准」");
   if (!on.length) return null;
-  return `拒绝启动：${on.join(" 和 ")} 还开着。低分重打会让一批线索升到 ≥${APPROVE_MIN_SCORE} 分，` +
+  return `拒绝启动：${on.join(" 和 ")} 还开着。重打分会让一批线索升到 ≥${APPROVE_MIN_SCORE} 分，` +
     `这两个开关开着的话 cron 下一个整点就会把它们自动批准并发出去 —— 而升上来的**必须停在「待审批」等人工过目**。` +
     `请先到设置里把这两个开关关掉，再来跑。`;
 }
@@ -3870,6 +3889,16 @@ async function analyzePending(env: Env, max: number, opts: { budget?: RoundBudge
     let okThisBatch = 0, hardFail = 0;
     for (const lead of batch) {
       attempts++; tried.add(Number(lead.id));
+      // 🔴 2026-09-02 审计：**原子认领**（照 send.ts:853 那条 claim 的模式，不另发明一套）。
+      //   原来这里只是 `SELECT status='new'` 就直接开干，没有抢占 ⇒ fastTick 与手动批量分析
+      //   并发时会取到**同一条线索**，两边各烧一次 AI（钱和额度双份，结果还互相覆盖）。
+      // ⚠️ 认领戳会过期（10 分钟）：不过期的话，一次崩溃就把那条线索永久锁死 ——
+      //   那比不加锁更糟（跟 tick_lock 是同一条道理）。
+      const claimed = await env.DB.prepare(
+        `UPDATE leads SET analyzing_at=datetime('now')
+          WHERE id=? AND (analyzing_at IS NULL OR analyzing_at < datetime('now','-10 minutes'))`
+      ).bind(lead.id).run();
+      if (claimed.meta.changes !== 1) { console.log(`analyze skip(并发已被取走): #${lead.id}`); continue; }
       try {
         const out = await analyzeLead(env, lead);
         if (out.ok) {
@@ -3944,7 +3973,33 @@ const TICK_LOCK_STALE_MS = 5 * 60 * 1000;   // 锁最多压 5 分钟；再久一
  *    2026-09-01 生产实测）、付费档 ≥200（探针自身上限只到 200，没往上逼近）。
  *    所以这个数**不许被当成量过的数引用**。留 20% 余量，且可被设置覆盖。
  */
-const TICK_FETCH_BUDGET_ASSUMED = 800;
+// 🔴 2026-09-02 独立审计：这个常量**零使用点**（全仓只有这一行定义），是个"名字在、闸不在"的假闸。
+//   假闸比没有闸更坏 —— 它让读代码的人（包括我自己）以为这里有保护。删掉，别留装饰。
+//   真正在起作用的对外请求保护是：付费档 ≥200 子请求（已实测）+ 下面的时间预算 + TICK_SEND_MAX/TICK_ANALYZE_MAX。
+
+/**
+ * 🔴 快 tick 的时间预算 = 4 分钟（**必须严格小于 TICK_LOCK_STALE_MS 的 5 分钟**）。
+ *
+ * 2026-09-02 独立审计抓出的真缺陷：原来 fastTick 用的是 `new RoundBudget(now)` 的
+ *   **默认值 13 分钟**，而防重入锁只压 5 分钟 ⇒ 一个慢 tick 能跑过自己的锁，
+ *   下一个 tick 判定"上一个死了"就进来了 —— **两个 tick 并发发信，锁形同虚设**。
+ *   不变式：`TICK_BUDGET_MS < TICK_LOCK_STALE_MS`（下面有断言钉住，改坏了起不来）。
+ *
+ * ⚠️⚠️ 审计建议的具体数是 50s，**那个数会把发信整条链静默杀死** —— 别照抄：
+ *   发送闸写的是 `budget.has(50_000)`，而 `has()` 是**严格大于**（remaining > need）。
+ *   总预算正好 50_000 时 `remaining()` 恒 ≤ 50_000 ⇒ 这个条件**永远为假**，
+ *   一封都发不出去，而且日志里只会显示"跳过"、不会报任何错。
+ *   （同理 3a 的 45_000 只在 tick 最开头那一瞬成立，之后全灭。）
+ *
+ * ⚠️ 为什么不缩到 tick 间隔（60s）以内：级联"分析→批准→发送"本来就装不进 60s
+ *   （一封信实测 31-43s，一次分析同量级）。**约束真正该由锁来管，不是由预算来管** ——
+ *   预算管"这一轮别硬撑"，锁管"别两个一起跑"。让预算 < 锁，两件事各归各位。
+ */
+const TICK_BUDGET_MS = 4 * 60 * 1000;
+// ⚠️ 不变式 `TICK_BUDGET_MS < TICK_LOCK_STALE_MS` 由 **scripts/guard-cadence.js**（部署闸）把守。
+//   ⛔ 我第一版把断言写成了模块顶层的 `throw` —— 那条路上这仓栽过：Workers 全局作用域里
+//      一行抛错就让整个 worker 起不来（零请求进得去），而 tsc 和 dry-run 全绿。
+//      **闸要拦在部署前，不能拦在生产启动时**：前者是"发不上去"，后者是"全站挂掉"。
 
 /** 快 tick 单次最多分析几条。**平台限制，不是业务旋钮** —— 每分钟一次，慢慢来反而更稳。 */
 const TICK_ANALYZE_MAX = 3;
@@ -3954,6 +4009,38 @@ const TICK_SEND_MAX = 3;
 /** 每封开发信之间的最小间隔（秒）。**Joe 的旋钮**，settings 里 `send_interval_seconds` 覆盖；设 0 = 不限速。
  *  90s ≈ 40 封/小时 —— 对刚养起来的域名是温和的节奏，而"每天发多少"仍然由他的日限说了算。 */
 const SEND_INTERVAL_DEFAULT = 90;
+
+/**
+ * 🔴 熔断评估的**唯一实现**（2026-09-02 审计：原来只内联在整点班里 ⇒ 最坏滞后 59 分钟才停发，
+ *   而 fastTick 每分钟都在发 —— 伤口在流血，看伤口的人一小时才来一次）。
+ * 现在下沉：fastTick 每轮发信**之前**先评估一次 ⇒ 最坏滞后 1 分钟。
+ * ⚠️ 幂等：只写 auto_send_tripped_at 这个格子，重复调用不会重复熔断（下面有 already 守卫）。
+ * ⚠️ 熔断后**不自动恢复**，必须 Joe 手动开 —— 自动恢复会退化成"烧一轮停一下再烧一轮"。
+ */
+async function evaluateSendBreaker(env: Env): Promise<boolean> {
+  const br = await getBreakerStatus(env);
+  if (!br.shouldTrip) return false;
+  // 已经熔断过就别再写一次、更别再推一次卡（否则每分钟一条飞书通知）。
+  const already = (await getSetting(env, "auto_send_tripped_at", "")).trim();
+  if (already) return true;
+  if (!(await autoSendEnabled(env))) return false;   // 本来就没在自动发，没什么可熔断的
+  // C5-22：断路器**只写自己那个格子**，不去掀 auto_send_enabled ——
+  //   以前两件事共用一个变量 ⇒ Joe 下次开总开关就把熔断悄悄清了，界面上还看不出熔断过。
+  await setSetting(env, "auto_send_tripped_at", new Date().toISOString());
+  await setSetting(env, "auto_send_trip_reason", `最近 ${br.window} 封自动开发信里 ${br.unsubs} 封退订 = ${(br.rate * 100).toFixed(1)}%`);
+  console.error(`⚠️ 熔断：${br.unsubs}/${br.window} = ${(br.rate * 100).toFixed(1)}% ≥ 15% → 已置 auto_send_tripped_at（自动发信停，分析与手动不受影响）`);
+  try {
+    if (larkConfigured(env)) {
+      await larkSend(env, { msg_type: "text", content: { text:
+        `AIRSONDE ⚠️ 自动发送已熔断
+最近 ${br.window} 封自动开发信里 ${br.unsubs} 封退订 = ${(br.rate * 100).toFixed(1)}%
+` +
+        `已自动停止**自动发送**；自动批准与手动发送不受影响。
+请检查线索来源与开发信内容，确认后到后台手动重开。` } });
+    }
+  } catch { /* 通知失败不影响熔断本身 */ }
+  return true;
+}
 
 /** 快 tick：自动模式开着时做增量出站。**关着时零出站**。 */
 async function fastTick(env: Env, ctx: ExecutionContext): Promise<void> {
@@ -3968,7 +4055,8 @@ async function fastTick(env: Env, ctx: ExecutionContext): Promise<void> {
   if (lockAt && now - lockAt < TICK_LOCK_STALE_MS) return;        // 上一个还在跑
   await setSetting(env, TICK_LOCK_KEY, String(now));
 
-  const budget = new RoundBudget(now);
+  // ⚠️ 必须显式传 TICK_BUDGET_MS —— 用默认值就是 13 分钟 > 5 分钟的锁（见常量处那段事故记录）。
+  const budget = new RoundBudget(now, TICK_BUDGET_MS);
   let analyzed = 0, approved = 0, sent = 0, gapHold = false;
   try {
     // ③ 分析 → 批准 → 发送，**一个 tick 内级联**（这就是"就绪即执行"）。
@@ -3990,6 +4078,11 @@ async function fastTick(env: Env, ctx: ExecutionContext): Promise<void> {
     if (budget.has(20_000) && await autoApproveEnabled(env)) {
       approved = await autoApproveRound(env);
     }
+
+    // 🔴 发信前先看伤口：断路器评估下沉到这里（2026-09-02 审计）。
+    //   原来它只在整点班跑 ⇒ 退订率飙上去后**最坏要 59 分钟才停发**，而这条链每分钟都在发。
+    //   evaluateSendBreaker 幂等（已熔断就直接返回，不会每分钟推一条飞书）。
+    try { await evaluateSendBreaker(env); } catch (e) { console.error("breaker(tick):", e); }
 
     // 3c) 发就绪的。所有业务闸（日限/爬坡/熔断/压制/幂等）都在 sendApprovedBatch 里，一个不豁免。
     //
@@ -4045,7 +4138,9 @@ async function scheduled(event: ScheduledController, env: Env, ctx: ExecutionCon
   // ⚠️ 全量重扫**不在这里** —— 它走交互式批量通道（/api/rescan/*，后台按钮驱动）。
   //    cron 这 12 条/班是**日常新增线索**的节奏；拿它跑一次性批量任务要 9 天，
   //    而 Joe 的标准是"428 条当天跑完"。两件事，两条通道，互不干扰。
-  let inserted = 0, analyzed = 0, replies = 0, autoApproved = 0, autoSent = 0, emailsFound = 0;
+  // ⚠️ autoSent 已随「整点班撤初次发信」删除 —— 初次发信全在 fastTick，整点简报不再自报发信数。
+  //    留一个恒为 0 的变量比删掉更坏：简报会天天说"发出 0 封"，而那是假话（fastTick 一直在发）。
+  let inserted = 0, analyzed = 0, replies = 0, autoApproved = 0, emailsFound = 0;
 
   // ⭐⭐ P0-1：一轮 cron 的时间预算表。**这是平台限制（Cron Trigger 15 分钟墙），不是业务旋钮。**
   //    业务旋钮（每天发几封）在 settings 里，归 Joe。谁都不许拿这里的数去砍他的数。
@@ -4322,63 +4417,20 @@ async function scheduled(event: ScheduledController, env: Env, ctx: ExecutionCon
     if (sl.source !== "configured") await alertSendLimitUnconfigured(env, sl.limit, sl.source);
   } catch (e) { console.error("send-limit guard:", e); }
 
-  subMark("2.6-自动发信");
-  // 2.6) 熔断检查 → 自动发送。**熔断必须在发送之前**：先看伤口再决定要不要继续开枪。
+  subMark("2.6-熔断评估");
+  // 🔴🔴 2026-09-02 独立审计（双源一致）抓出的**违宪结构洞**：这一步原来在**整批发送当日剩余额度**
+  //   （`take = autoRoom`，不经每封间隔的节奏闸），与每分钟的 fastTick 构成**两条并行的发送路径**。
+  //   而宪法 §4.5「机器节奏」和 wrangler.jsonc 的注释都写着：整点班不发开发信。
+  //   后果不是"多发一点"：两条路径各自取批、各自记账，**节奏闸和 tick_lock 都管不到整点班这条**。
+  //
+  // ⇒ 现在整点班**撤销初次发信职能**，发送收敛为 fastTick 一条路径（唯一咽喉点）。
+  //   整点班保留：收信 / 整理 / 跟进 / 简报 / 熔断评估。
+  // ⚠️ 跟进（3.5 步）仍在整点班发 —— 那是**另一个通道**（sendFollowupBatch，自己的日限和口径），
+  //   不是初次触达，不构成第二条初次发信路径。这一点别混。
   try {
-    const br = await getBreakerStatus(env);
-    if (br.shouldTrip && await autoSendEnabled(env)) {
-      // 只熔断自动发送：auto_approve 继续跑、手动发送不受影响。熔断后**不自动恢复**，必须 Joe 手动开——
-      // 自动恢复会退化成"烧一轮停一下再烧一轮"。
-      // C5-22：断路器**只写自己那个格子**，不再去掀 `auto_send_enabled`。
-      //   以前两件事共用一个变量 ⇒ Joe 下次开总开关就把熔断悄悄清了，而且界面上看不出熔断过。
-      //   现在 autoSendEnabled() = 自动模式 ∧ 未熔断 ∧ 该步开关 ⇒ 熔断照样立刻停发，
-      //   但"为什么不发信"这个问题永远答得出是三个原因里的哪一个。
-      await setSetting(env, "auto_send_tripped_at", new Date().toISOString());
-      await setSetting(env, "auto_send_trip_reason", `最近 ${br.window} 封自动开发信里 ${br.unsubs} 封退订 = ${(br.rate * 100).toFixed(1)}%`);
-      console.error(`⚠️ 熔断：${br.unsubs}/${br.window} = ${(br.rate * 100).toFixed(1)}% ≥ 15% → 已置 auto_send_tripped_at（自动发信停，分析/批准不受影响）`);
-      try {
-        if (larkConfigured(env)) {
-          await larkSend(env, { msg_type: "text", content: { text:
-            `AIRSONDE ⚠️ 自动发送已熔断\n最近 ${br.window} 封自动开发信里 ${br.unsubs} 封退订 = ${(br.rate * 100).toFixed(1)}%（阈值 15%）。\n` +
-            `已自动停止**自动发送**；自动批准与手动发送不受影响。\n请检查线索来源与开发信内容，确认后到后台手动重开（不会自动恢复）。` } });
-        }
-      } catch { /* 通知失败不影响熔断本身 */ }
-    }
-    const autoOn = await autoSendEnabled(env);
-    if (!autoOn) {
-      console.log("auto-send skipped: auto_send_enabled=0" + (br.shouldTrip ? "（本轮刚熔断）" : ""));
-    } else {
-      // 自动通道日限：**默认跟随系统闸**（没显式设过就不卡人），显式设过才用自己的值。
-      // 系统闸仍在 sendApprovedBatch 内把守 → 两者取更紧的那个，结构上不可能突破总闸。
-      const { effective: sysEff } = await systemDailySendLimit(env);
-      const { limit: autoLimit } = await autoSendDailyLimit(env, sysEff);
-      const autoRoom = Math.max(0, autoLimit - (await autoSentToday(env)));
-      // ⭐⭐ P0-1：`Math.min(autoRoom, 5)` 已删。**那一行把 Joe 的旋钮锁死了** ——
-      //    他设 auto_send_daily_limit=100，实际上限是 4 班 × 5 = **20 封/天**，他的设置根本没生效。
-      //    Joe 原话："把每天发多少封的权限交给我，我会根据情况自己去调整。"
-      //
-      //    现在 `take = autoRoom`（当天剩余额度），**`auto_send_daily_limit` 是唯一的业务闸**。
-      //    每轮发不完不要紧：cron 已提频到每小时（24 班），剩下的下一班继续。
-      //
-      //    ⚠️ 那个 `5` 的**原意是对的**（别一轮打光、摊到多班），但它不该是常数，更不该是**业务**常数。
-      //       "别一轮打光"的真实约束是 **Cron 15 分钟墙**，那是**平台限制** ——
-      //       所以它现在由 `budget`（看表）来管，不由一个我们自己拍的数字来管。
-      const take = autoRoom;
-      if (take > 0) {
-        // 并发 3：一封信实测 31-43s（瓶颈是 AI 生成草稿，不是 Resend）。串行 25 封 = 15 分钟贴死墙，并发 3 ≈ 5 分钟。
-        const r = await sendApprovedBatch(env, take, undefined, true, { concurrency: SEND_CONCURRENCY, budget });
-        autoSent = r.sent;
-        // ⚠️ 必须报**取了几条**，不只报发了几封 —— "取 6 发 0" 和 "取 0 发 0" 是完全不同的两件事：
-        //   前者=有池子但全被跳过（压制/幂等/无草稿），后者=池子本来就空。只报 sent 会把这两者混成一句话，
-        //   而今天查"20 小时没发信"时，正是因为分不清这两者才多绕了一圈。
-        console.log(`auto-send: 取 ${r.processed} 条 → 发出 ${autoSent} 封（本轮额度 ${take}，Joe 设的自动上限 ${autoLimit}/天，全局 ${r.dailyLimit}，今日已发 ${r.sentToday}）`);
-        if (r.processed && !autoSent && !r.truncatedByTime) {
-          const why = r.results.filter((x) => !x.ok).map((x) => x.skipped || x.error).slice(0, 3).join(" / ");
-          console.log(`auto-send: 有池子但一封没发出，前几条原因：${why}`);
-        }
-      } else console.log(`auto-send: 今日自动额度已用尽（${autoLimit}/天，这是 Joe 设的，正常）`);
-    }
-  } catch (e) { console.error("auto-send:", e); }
+    await evaluateSendBreaker(env);
+    if (!(await autoSendEnabled(env))) console.log("hourly: 自动发送关着（或已熔断）—— 跟进步骤会照此跳过");
+  } catch (e) { console.error("breaker-eval:", e); }
 
   // 3) 收回复已挪到 **step 0**（cron 最前面）—— 见那里的注释。这里只留个路标防止有人再排回来。
   subMark("3.5-跟进");
@@ -4452,6 +4504,12 @@ async function scheduled(event: ScheduledController, env: Env, ctx: ExecutionCon
   //   （这不是 Joe 的旋钮——通知节奏跟"每天发几封"不是一类。真要可配再说。）
   const DIGEST_MIN_GAP_MS = 6 * 60 * 60 * 1000;
   try {
+    // ⚠️ 初次发信已全部移交 fastTick，整点班这个函数里**没有**发信数可报。
+    //   但简报还是该说"这段时间发了多少" —— 所以**去库里数**，而不是留一个恒为 0 的变量。
+    //   （留恒 0 = 简报天天说"发出 0 封"，那是假话；删掉 = Joe 少了一个他要的数。两个都不对。）
+    const autoSent = (await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM emails WHERE status='sent' AND kind='initial' AND datetime(sent_at) >= datetime('now','-6 hours')"
+    ).first<{ n: number }>())?.n || 0;
     const hasNews = !!(inserted || analyzed || replies || autoApproved || autoSent);
     const lastDigest = Number(await getSetting(env, "digest_last_at", "0")) || 0;
     const digestDue = Date.now() - lastDigest >= DIGEST_MIN_GAP_MS;
@@ -4492,7 +4550,11 @@ async function scheduled(event: ScheduledController, env: Env, ctx: ExecutionCon
   //    且告警里**必须带最近的失败原文**，让人一眼看到该查哪。只说"停了"等于没说。
   try {
     const stallRounds = Math.max(2, Number(await getSetting(env, "stall_alert_rounds", "6")) || 6);
-    const produced = !!(inserted || analyzed || replies || autoApproved || autoSent || emailsFound);
+    // 同上：发信数去库里数（这里在另一个 try 块，上面那个局部变量够不着）。
+    const sentRecently = (await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM emails WHERE status='sent' AND datetime(sent_at) >= datetime('now','-1 hours')"
+    ).first<{ n: number }>())?.n || 0;
+    const produced = !!(inserted || analyzed || replies || autoApproved || sentRecently || emailsFound);
     const ign = ignitionReport(env);
     if (!ign.coreReady) {
       // ⭐ C2-C：核心链路（搜→打分→发→收）还没点火时，**零产出是预期，不是停摆**。
