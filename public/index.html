@@ -2680,13 +2680,26 @@
       // M11：href 一律过 safeHref；不合法就走本来就有的"纯文本"那一支（不需要新分支）
       const cRow = (ic, val, rawHref) => { const href = safeHref(rawHref); return val ? `<div class="dp-contact"><span class="dp-c-ic">${ic}</span>${href?`<a href="${esc(href)}" target="_blank" rel="noopener" class="dp-c-val">${esc(val)}</a>`:`<span class="dp-c-val">${esc(val)}</span>`}<button class="dp-copy" data-copy="${esc(val)}" onclick="copyVal(this)">复制</button></div>` : ''; };
       const emailRow = `<div class="dp-contact"><span class="dp-c-ic">✉</span><span id="email-ctl" data-email="${esc(lead.email)||''}" style="display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1;min-width:0">${contactEmailCtl(lead.id, lead.email)}</span>${lead.email?`<button class="dp-copy" data-copy="${esc(lead.email)}" onclick="copyVal(this)">复制</button>`:''}</div>`;
+      // ⭐ C5-31：同一个号码**不许在电话与 WhatsApp 两行各占一行**（Joe 点名）。
+      //   同号 → 合成一行、带两个动作图标；不同号 → 各占一行，照旧。
+      //   ⚠️ 判据 `phone_wa_same` 由**服务端**给（纯数字比，不比格式）——
+      //     `+1 305…` 与 `13059…` 是同一个号，在前端按字符串比会判成两个。
+      //   ⚠️ 显示值也用服务端的 `phone_display` / `wa_display`（E.164 国家码变长切分）：
+      //     前端再写一份格式化就是两份口径。
+      const sameNum = !!lead.phone_wa_same;
+      const waHref = safeHref(waLink(waD, lead.company_name));
       const contacts = [
         cRow('🌐', lead.website ? hostOf(lead.website) : '', lead.website),
         cRow('💼', ch.linkedin ? (channelAccount('ch_linkedin', ch.linkedin)||ch.linkedin) : '', ch.linkedin),
-        waD ? `<div class="dp-contact"><span class="dp-c-ic">💬</span>${safeHref(waLink(waD, lead.company_name))?`<a href="${esc(safeHref(waLink(waD, lead.company_name)))}" target="_blank" rel="noopener" class="dp-c-val">${esc(waD)}</a>`:`<span class="dp-c-val">${esc(waD)}</span>`}<button class="dp-copy" data-copy="${esc(waD)}" onclick="copyVal(this)">复制</button></div>` : '',
+        (waD && sameNum)
+          ? `<div class="dp-contact"><span class="dp-c-ic">📞</span><span class="dp-c-val">${esc(lead.phone_display || waD)}</span>`
+            + (waHref ? `<a class="dp-copy" href="${esc(waHref)}" target="_blank" rel="noopener" title="用 WhatsApp 聊">💬</a>` : '')
+            + `<a class="dp-copy" href="tel:${esc(waD)}" title="拨号">📞</a>`
+            + `<button class="dp-copy" data-copy="${esc(lead.phone_display || waD)}" onclick="copyVal(this)">复制</button></div>`
+          : (waD ? `<div class="dp-contact"><span class="dp-c-ic">💬</span>${waHref?`<a href="${esc(waHref)}" target="_blank" rel="noopener" class="dp-c-val">${esc(lead.wa_display || waD)}</a>`:`<span class="dp-c-val">${esc(lead.wa_display || waD)}</span>`}<button class="dp-copy" data-copy="${esc(lead.wa_display || waD)}" onclick="copyVal(this)">复制</button></div>` : ''),
         cRow('📘', ch.facebook ? (channelAccount('ch_facebook', ch.facebook)||ch.facebook) : '', ch.facebook),
         cRow('📷', ch.instagram ? (channelAccount('ch_instagram', ch.instagram)||ch.instagram) : '', ch.instagram),
-        cRow('📞', ch.phone || '', ch.phone?`tel:${ch.phone}`:''),
+        sameNum ? '' : cRow('📞', lead.phone_display || ch.phone || '', ch.phone?`tel:${ch.phone}`:''),
       ].filter(Boolean).join('');
 
       $("#v-page").innerHTML = `
@@ -2756,27 +2769,36 @@
                 ${r.evidence?`<div class="dp-evidence">${esc(r.evidence)}</div>`:''}
                 ${a.needed_products?`<div class="dp-chips">${esc(a.needed_products).split(/[、,，;；]/).map(p=>p.trim()).filter(Boolean).map(p=>`<span class="tag">${esc(p)}</span>`).join("")}</div>`:''}
               </div>`; })() : ''}
-              ${scored ? `<div class="dp-card">
-                ${/* 批④：已发过的线索把「推荐开发信」折叠 —— 信都发了，不该再占最大面积 */''}
-                <div class="k muted" ${preSend?'':`style="cursor:pointer" onclick="toggleSentEmail(this)"`}>✎ ${preSend?'推荐开发信':'已发出的开发信 <span class="hint" id="se-caret">（已折叠，点开看）▾</span>'}</div>
-                ${/* ⭐ 批⑦A：草稿现在**发送时才生成**（写信 93% 的钱花在了永远发不出去的线索上）。
-                     所以这里必须说清"为什么是空的" —— 直接渲染一个空白 textarea 是个哑谜：
-                     Joe 看不出是"还没生成"还是"生成失败了"还是"系统坏了"。 */''}
-                ${(!a.recommended_email && preSend) ? `<div class="draft-none" id="draft-none">
+              ${/* ⭐⭐ C5-31 第 4 条：开发信卡片改**三态状态机**（Joe 亲自梳理的定案）。
+                    原则（写进宪法）：**卡片管信本身（生成/看/改），顶部决策条管决定（发/跟进）。**
+                    🔴 因此卡片里的「确认发送」**删掉** —— 它和顶部主按钮「发送」是同一个动作，
+                       同一个不可撤的对外动作在一屏上有两个入口，本身就是设计缺陷
+                       （也违反附录 C.7"一屏至多一个主动作"）。**发送动作全页唯一。**
+                    按钮随状态渲染，无对象的按钮不出现（与 C5-12 fleet 空组隐藏同族）。 */''}
+              ${scored ? (() => {
+                const sentAlready = !preSend;                        // 已发送态
+                const hasDraft = !!a.recommended_email;
+                const state = sentAlready ? "sent" : (hasDraft ? "draft" : "none");
+                const title = sentAlready
+                  ? '已发出的开发信 <span class="hint" id="se-caret">（已折叠，点开看）▾</span>'
+                  : (hasDraft ? '开发信草稿' : '推荐开发信');
+                return `<div class="dp-card">
+                <div class="k muted" ${sentAlready?`style="cursor:pointer" onclick="toggleSentEmail(this)"`:''}>✎ ${title}</div>
+                ${state === "none" ? `<div class="draft-none" id="draft-none">
                     <b>这封信会在发送那一刻自动生成</b>
-                    <span class="hint">写信用的是贵模型，只给真要发的线索写 —— 所以不提前写。想先看/先改，点右边现在生成。</span>
-                    <button class="btn-ghost mini" onclick="genDraftNow(${lead.id})">✍️ 现在生成</button>
+                    <span class="hint">写信用的是贵模型，只给真要发的线索写 —— 所以不提前写。想先看看，点右边。</span>
+                    <button class="btn-ghost mini" onclick="genDraftNow(${lead.id})">✍️ 现在生成（先看看）</button>
                   </div>` : ''}
-                <textarea id="email-edit" style="min-height:230px;margin-top:6px${(preSend && a.recommended_email)?'':';display:none'}">${esc(a.recommended_email)||""}</textarea>
+                <textarea id="email-edit" ${sentAlready?'readonly':''} style="min-height:230px;margin-top:6px${state==="none"?';display:none':''}">${esc(a.recommended_email)||""}</textarea>
                 <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:7px">
-                  ${preSend ? `<button class="btn-green" onclick="confirmSend(${lead.id})">✅ 确认发送</button>` : ''}
-                  ${/* 没草稿时「确认发送」照样可点 —— 发送路径自己会先生成再发（ensureDraft），不是坏按钮 */''}
-                  <button class="btn-chat" data-company="${esc(lead.company_name)||''}" onclick="copyScript(this)">📋 复制话术</button>
-                  <button class="dp-copy" id="tr-btn" onclick="translateEmail(${lead.id})">🌐 翻译</button>
-                  ${preSend ? `<span class="hint">发出不可撤（发件 sales@airsonde.net）。</span>` : `<span class="hint">已发送，如需再触达请用下方「安排跟进」。</span>`}<span class="hint" id="send-msg"></span>
+                  ${state === "draft" ? `<button class="btn-ghost" onclick="genDraftNow(${lead.id})">↻ 重新生成</button>` : ''}
+                  ${state !== "none" ? `<button class="btn-chat" data-company="${esc(lead.company_name)||''}" onclick="copyScript(this)">📋 复制话术</button>
+                  <button class="dp-copy" id="tr-btn" onclick="translateEmail(${lead.id})">🌐 翻译</button>` : ''}
+                  ${sentAlready ? `<span class="hint">已发送，如需再触达请用上方「安排跟进」。</span>`
+                    : `<span class="hint">发送在上方决策条，发出不可撤（发件 sales@airsonde.net）。</span>`}<span class="hint" id="send-msg"></span>
                 </div>
                 <div id="tr-panel" style="display:none;margin-top:8px"></div>
-              </div>` : `<div class="dp-card"><div class="hint">尚无 AI 分析。点上方「AI 分析」抓官网 + 打分${!lead.email?"（无邮箱可先「找邮箱」）":""}。</div></div>`}
+              </div>`; })() : `<div class="dp-card"><div class="hint">尚无 AI 分析。点上方「AI 分析」抓官网 + 打分${!lead.email?"（无邮箱可先「找邮箱」）":""}。</div></div>`}
               ${(lead.status==='sent' && lead.has_click) ? `<div class="dp-card" id="warm-sec"><div class="k muted">🔥 趁热跟进${lead.has_followup?`（已发过跟进）`:``}</div><div class="hint" style="margin:2px 0 6px">点过链接＝有意向，生成短暖跟进你审后发。</div><div id="warm-body"><button class="btn-ghost" onclick="draftWarm(${lead.id})">✍ 生成趁热跟进</button> <span class="hint" id="warm-msg"></span></div></div>` : ''}
             </div>
             <div class="dp-right">
@@ -2874,7 +2896,7 @@
     function contactEmailCtl(id, email){
       return email
         // C5-24 第 8 条：值里那个 ✉ 删掉 —— 行首已经有类型图标了，**同一件事说两遍**。
-        ? `<span class="tag">${esc(email)}</span> <button class="btn-ghost" style="padding:2px 8px" onclick="editContactEmail(${id})" title="修改邮箱">改</button>`
+        ? `<span class="tag">${esc(email)}</span> <button class="btn-ghost" style="padding:2px 8px" onclick="editContactEmail(${id})" title="修改邮箱" aria-label="修改邮箱">✏️</button>`
         // C5-24 第 3 条：缺邮箱**默认收起**。原来一进详情页就摊开输入框+保存+取消三件套，
         //   而绝大多数时候 Joe 并不打算手填 —— 那三件套只是噪音。点「填邮箱」才展开。
         : `<span class="dp-c-val muted">—</span> <button class="btn-ghost" style="padding:2px 8px" onclick="editContactEmail(${id})">填邮箱</button>`;

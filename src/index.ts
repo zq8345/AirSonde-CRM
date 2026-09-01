@@ -19,6 +19,7 @@ import { ingestReplies, matchReplyToLead } from "./replies";
 import { ensureReplyColumns, stripQuoted, previewOf, isNoiseReply, tabOf, type InboxTab } from "./reply-inbox";
 import { installFetchMeter, meteredDB, mark as subMark, reset as subReset, summary as subSummary } from "./subreq";
 import { normalizeCustomerType, customerTypeLabel, classifyKillReason, KILL_REASONS } from "./taxonomy";
+import { normalizePhone, formatPhoneDisplay } from "./scrape";   // C5-31：号码清洗与展示切分，单源
 import { errHuman } from "./errhuman";   // C5-24 第 5 条：机器错误串 → 人话（服务端唯一一份）
 import { currentActivity, setActivity, clearActivity } from "./activity";   // C5-28：机器活动真源
 
@@ -65,6 +66,37 @@ const LEAD_ROW_COLS =
  */
 function withCategoryLabel<T extends { customer_category?: string | null }>(r: T): T & { customer_category_label: string } {
   return { ...r, customer_category_label: customerTypeLabel(r.customer_category) };
+}
+
+/**
+ * C5-31：联系号码的**展示形态**在服务端算好，前端只渲染。
+ *
+ * ⚠️ 为什么搬到服务端：清洗（normalizePhone）和切分（formatPhoneDisplay）已经在 scrape.ts 里了；
+ *   前端再写一份格式化就是**两份口径**，而这一族单一直在治这个。
+ *   顺带把抽 WhatsApp 号码那 5 行也从前端搬过来 —— **这是减少一份重复，不是新增一处**。
+ *
+ * 返回三样：phone_display / wa_display / phone_wa_same
+ *   ⚠️ `phone_wa_same` 是 Joe 点名要的：同一个号码**不许在电话和 WhatsApp 两行各占一行**。
+ *     判据用**纯数字**比，不比格式（`+1 305…` 与 `13059…` 是同一个号）。
+ */
+function waDigits(src: string): string {
+  const m = String(src || "").match(/(?:wa\.me\/|phone=)?\+?([0-9][0-9 .()\-]{6,})/);
+  const d = (m ? m[1] : String(src || "")).replace(/\D/g, "");
+  return d.length >= 7 ? d : "";
+}
+function withPhoneDisplay<T extends { channels?: string | null }>(r: T): T & {
+  phone_display: string; wa_display: string; phone_wa_same: boolean;
+} {
+  let ch: any = {};
+  try { ch = r.channels ? JSON.parse(r.channels) : {}; } catch { /* 脏 JSON 不该拖垮整行 */ }
+  const phoneRaw = normalizePhone(String(ch.phone || ""));
+  const wa = waDigits(ch.whatsapp || ch.phone || "");
+  return {
+    ...r,
+    phone_display: formatPhoneDisplay(phoneRaw),
+    wa_display: wa ? formatPhoneDisplay("+" + wa) : "",
+    phone_wa_same: !!wa && !!phoneRaw && phoneRaw.replace(/\D/g, "") === wa,
+  };
 }
 import { larkConfigured, larkUrlShape, larkSend, digestCard, testCard, inboundCard } from "./notify";
 import { catalogHtml } from "./landing";
@@ -906,7 +938,7 @@ app.get("/api/leads", async (c) => {
   const rows = await c.env.DB.prepare(sql).bind(...binds).all();
   // C5-13：分类的**机器值仍是 customer_category（slug）**，筛选/统计都用它；
   //   额外给一个 `_label` 给屏幕用。标签只在服务端拼（taxonomy 住这儿），前端不抄第二份。
-  return c.json({ leads: (rows.results as any[]).map(withCategoryLabel) });
+  return c.json({ leads: (rows.results as any[]).map(withCategoryLabel).map(withPhoneDisplay) });
 });
 
 // ---- 筛选维度可选值（国家 / 规范客户分类），供前端下拉动态生成 ----
@@ -1304,7 +1336,7 @@ app.get("/api/leads/:id", async (c) => {
   if (!lead) return c.json({ error: "not found" }, 404);
   const analysis = await c.env.DB.prepare("SELECT * FROM lead_analysis WHERE lead_id = ?").bind(id).first<any>();
   // C5-13：详情页的分类徽章走同一个标签函数（列表也是它）——两个面一个口径。
-  return c.json({ lead, analysis: analysis ? withCategoryLabel(analysis) : analysis });
+  return c.json({ lead: withPhoneDisplay(lead as any), analysis: analysis ? withCategoryLabel(analysis) : analysis });
 });
 
 // ---- 改状态（批准 / 忽略 / 黑名单 等）----
