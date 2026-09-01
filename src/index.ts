@@ -1987,6 +1987,10 @@ const DEFAULT_CHAT_SCRIPT =
 
 // ---- 发信设置（每日上限 + 公司名 + 合规地址 + 卖点 + 一键开聊话术）----
 app.get("/api/settings/sending", async (c) => {
+  // ⚠️ C5-29 复验：生产实测稳定 4.6s，而同步路径上**看不到**任何外部调用 ——
+  //   看代码看不出来的时候就该量，不该继续推理。这里按段计时，随响应带出 `_ms`。
+  const _t0 = Date.now(); const _ms: Record<string, number> = {}; let _mark = _t0;
+  const _lap = (k: string) => { const now = Date.now(); _ms[k] = now - _mark; _mark = now; };
   // ⭐ C5-29 提速：AI 花费的刷新丢到**后台**，界面读取不等它（配合 getAiUsage 的 cacheOnly）。
   //   ⚠️ waitUntil 里的失败不能冒泡 —— 它只是刷个缓存，砸不到这次响应上。
   try {
@@ -2105,6 +2109,10 @@ app.get("/api/settings/sending", async (c) => {
       trippedAt: await getSetting(c.env, "auto_send_tripped_at", ""),
       tripReason: await getSetting(c.env, "auto_send_trip_reason", ""),
     },
+    // ⚠️ C5-29 复验用：**服务端自己花的时间**，按段拆。
+    //   若 total 很小而客户端仍 4.6s ⇒ 慢在服务端之外（waitUntil / Access / 网络），
+    //   那是完全不同的一类原因，别对着代码继续找。
+    _ms: { ..._ms, total: Date.now() - _t0 },
   });
 });
 app.post("/api/settings/sending", async (c) => {
