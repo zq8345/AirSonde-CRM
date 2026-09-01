@@ -52,11 +52,69 @@ export async function setSetting(env: Env, key: string, value: string): Promise<
 //   **而且没有任何东西会报错**。这仓已为"多处各读各的"付过两次学费
 //   （daily_send_limit 静默砍到 10 封/天；模型 id 的 10 处兜底）。
 //   "默认开还是默认关"是**一个事实**，就该只有一个地方说了算。
+// ══ C5-22：「自动模式」总开关 —— Joe 的意图只有一个格子 ══
+//
+// Joe 原话（经总调度转达）：自动模式开 = 所有环节都动起来、都是立即执行；
+//   关 = **关的是机器的嘴和手（搜索/分析/批准/发送/跟进），不关它的耳朵（收信/分类/通知）**
+//   —— 错过回信只有损失没有风险。后续任何功能挂到开关上，按这句判归属。
+//
+// 🔴 设计要点（不这么分会出一个很难查的病）：**熔断和 Joe 的意图不能共用一个格子。**
+//   现状是断路器直接把 `auto_send_enabled` 写 0。若总开关也写同一个键，就变成
+//   「机器停发」和「Joe 想停发」记在同一个变量里 ⇒ Joe 一开总开关就把熔断悄悄清了，
+//   而且界面上根本看不出刚才熔断过。所以拆成两个正交的事实：
+//     · `automation_enabled`   = **Joe 的意图**（他开/他关，只有他写）
+//     · `auto_send_tripped_at` = **机器的熔断**（只有断路器写，不自动恢复）
+//   有效值 = 两者的合取。这样"为什么现在不发信"永远答得出是哪一个原因。
+//
+// ⚠️ 旧键 `auto_send_enabled` / `auto_approve_enabled` **保留为底层实现位**：
+//   它们仍是每一步各自的开关（Joe 可以只停发信不停分析），总开关是**架在它们之上的与门**。
+//   ⇒ 总开关关 = 全停（不管底层位是什么）；总开关开 = 各步仍走自己那个位。
+//   这样既满足"一个开关全停"，又没有删掉他今天已经有的细控 —— **删能力不是简化。**
+//
+// ⚠️ fail-closed 照旧：默认 "0"。这仓栽过一次"生产 settings 里根本没有这一行 ⇒ 全靠代码默认
+//   ⇒ 自动发信当时是开着的"。**一行可删的数据不是安全边界。**
+export async function automationEnabled(env: Env): Promise<boolean> {
+  const raw = (await getSetting(env, "automation_enabled", "")).trim();
+  if (raw === "") {
+    // 🔴 迁移期（这个键还不存在时）：**不能直接 fail-closed 到 0。**
+    //   生产此刻 auto_send=1 / auto_approve=1 是 Joe 明确要的状态；新键一上线就默认 0，
+    //   等于**一次部署把他开着的东西静默关掉**，而界面上他看不出发生过什么。
+    //   "安全的默认值"针对的是**没有既有意图**的情况；这里意图是有的，只是记在旧的表示法里
+    //   ⇒ 正确做法是把旧表示法**读出来**，不是无视它。
+    //   ⚠️ 只读不写：Joe 一动新开关，新键就成为唯一真源，这段回落再也走不到。
+    return (await getSetting(env, "auto_send_enabled", "0")) === "1"
+        || (await getSetting(env, "auto_approve_enabled", "0")) === "1";
+  }
+  return raw === "1";
+}
+/** 断路器是否处于跳闸态（只有断路器写，Joe 手动复位才清）。 */
+export async function autoSendTripped(env: Env): Promise<boolean> {
+  return (await getSetting(env, "auto_send_tripped_at", "")).trim() !== "";
+}
+
 export async function autoSendEnabled(env: Env): Promise<boolean> {
-  return (await getSetting(env, "auto_send_enabled", "0")) === "1";
+  if (!(await automationEnabled(env))) return false;          // 总开关关 = 嘴和手全停
+  if (await autoSendTripped(env)) return false;               // 熔断中 = 只停发信，不影响分析/批准
+  return (await getSetting(env, "auto_send_enabled", "1")) === "1";
 }
 export async function autoApproveEnabled(env: Env): Promise<boolean> {
-  return (await getSetting(env, "auto_approve_enabled", "0")) === "1";
+  if (!(await automationEnabled(env))) return false;
+  return (await getSetting(env, "auto_approve_enabled", "1")) === "1";
+}
+
+/**
+ * 「现在为什么不自动发信」——**一个理由函数，供所有解释面共用**（顶栏徽章/设置页/机器房/日志）。
+ * ⚠️ 别让每个面各自拼一句：三处各拼各的，改了两处剩下那处就开始骗人（铁律五）。
+ * 返回 null 表示"没有阻碍，正在自动发"。
+ */
+export async function autoSendBlockedReason(env: Env): Promise<string | null> {
+  if (!(await automationEnabled(env))) return "自动模式是关的";
+  if (await autoSendTripped(env)) {
+    const why = (await getSetting(env, "auto_send_trip_reason", "")).trim();
+    return `已熔断，需要你手动复位${why ? `（${why}）` : ""}`;
+  }
+  if ((await getSetting(env, "auto_send_enabled", "1")) !== "1") return "发信这一步被单独关掉了";
+  return null;
 }
 
 /**

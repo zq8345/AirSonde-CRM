@@ -8,7 +8,7 @@ import { parseCsv, mapRowToLead } from "./csv";
 import { analyzeLead, getProfile, DEFAULT_PROFILE, ensureDraft } from "./service";
 import { writeReplyDraft, writeWarmFollowup, DEFAULT_SELLING_POINTS, translateToChinese, isTrustedDirectorySource, getAiUsage } from "./openrouter";
 import { scrapeSite } from "./scrape";
-import { sendLead, sendApprovedBatch, sendFollowupBatch, sendWarmFollowupNow, unsubscribeByToken, getSetting, setSetting, addSuppressedEmail, isEmailSuppressed, autoSentToday, sentToday, sentTodayBreakdown, failedTodayBreakdown, getBreakerStatus, BREAKER_WINDOW, BREAKER_THRESHOLD, deliverEmail, brandForLead, senderSentToday, SENDER_PRIMARY, SENDER_LEGACY, DEFAULT_COMPANY_ADDRESS, autoSendEnabled, autoApproveEnabled, systemDailySendLimit, coldSentToday, SYSTEM_LIMIT_DEFAULT, RAMP_FLOOR, RAMP_FACTOR, autoSendDailyLimit } from "./send";
+import { sendLead, sendApprovedBatch, sendFollowupBatch, sendWarmFollowupNow, unsubscribeByToken, getSetting, setSetting, addSuppressedEmail, isEmailSuppressed, autoSentToday, sentToday, sentTodayBreakdown, failedTodayBreakdown, getBreakerStatus, BREAKER_WINDOW, BREAKER_THRESHOLD, deliverEmail, brandForLead, senderSentToday, SENDER_PRIMARY, SENDER_LEGACY, DEFAULT_COMPANY_ADDRESS, autoSendEnabled, autoApproveEnabled, systemDailySendLimit, coldSentToday, SYSTEM_LIMIT_DEFAULT, RAMP_FLOOR, RAMP_FACTOR, autoSendDailyLimit , automationEnabled, autoSendBlockedReason} from "./send";
 
 // 系统发信上限可设的最大值。Joe 拍板 1000 → 老的 500 clamp 会静默截断，故放宽到 2000 留余量。
 // （不设无穷：手滑多打一个 0 就把域名烧了，这类不可逆代价才值得一个上限。）
@@ -1838,6 +1838,16 @@ app.get("/api/settings/sending", async (c) => {
     // 自动化三开关 + 熔断状态（前端要能看能关；熔断后必须显眼告诉 Joe 为什么停了）
     auto_approve_enabled: await autoApproveEnabled(c.env),
     auto_send_enabled: await autoSendEnabled(c.env),
+    // C5-22：总开关 + "现在为什么不自动发信"的**唯一**理由来源（顶栏徽章/设置页/机器房共用它，别各拼各的）
+    automation_enabled: await automationEnabled(c.env),
+    // "今日还可发几封"：**服务端算**，用的就是发送路径自己那两个函数（systemDailySendLimit + coldSentToday）。
+    // ⚠️ 不让前端拿 limit 和 sent 自己减 —— 那就是第二处口径，早晚跟真闸对不上（铁律五）。
+    send_room_today: await (async () => {
+      const { effective } = await systemDailySendLimit(c.env);
+      return Math.max(0, effective - (await coldSentToday(c.env)));
+    })(),
+    automation_changed_at: await getSetting(c.env, "automation_changed_at", ""),
+    auto_send_blocked_reason: await autoSendBlockedReason(c.env),
     // 自动闸默认跟随系统闸（走 resolver，不在这里自己 getSetting）——老写法的硬默认 15/生产 200
     // 就是把"系统闸 1000"悄悄压成 200 的那个隐形瓶颈。source: system=跟随 · configured=Joe 单独设过。
     auto_send_daily_limit: autoLimit.limit,
@@ -1879,7 +1889,7 @@ app.get("/api/settings/sending", async (c) => {
   });
 });
 app.post("/api/settings/sending", async (c) => {
-  const b = await jsonBody<{ daily_send_limit?: number; company_name?: string; company_address?: string; company_website?: string; selling_points?: string; chat_script?: string; auto_approve_enabled?: boolean; auto_send_enabled?: boolean; auto_send_daily_limit?: number; auto_approve_min?: number; bcc_archive?: string; send_ramp_enabled?: boolean }>(c);
+  const b = await jsonBody<{ daily_send_limit?: number; company_name?: string; company_address?: string; company_website?: string; selling_points?: string; chat_script?: string; auto_approve_enabled?: boolean; auto_send_enabled?: boolean; auto_send_daily_limit?: number; auto_approve_min?: number; bcc_archive?: string; send_ramp_enabled?: boolean; automation_enabled?: boolean }>(c);
   // ⭐ 系统级发信上限（唯一真源）。写成功即把 source 从 legacy/default 变成 configured →
   //   守卫随之闭嘴，"Joe 手点一次"就是他要的那个「一键设置」。
   //   同时**清掉退役的 `wanew_daily_limit` 残行** —— 留着它 legacy 兜底会一直遮住真值，
@@ -1900,6 +1910,31 @@ app.post("/api/settings/sending", async (c) => {
   // 爬坡保护开关（Joe 觉得碍事可一键关掉，直接用天花板）
   if (b.send_ramp_enabled != null) await setSetting(c.env, "send_ramp_enabled", b.send_ramp_enabled ? "1" : "0");
   if (b.auto_approve_enabled != null) await setSetting(c.env, "auto_approve_enabled", b.auto_approve_enabled ? "1" : "0");
+
+  // ══ C5-22：「自动模式」总开关（Joe 的意图，唯一真源）══
+  // ⚠️ 换挡要**推一次飞书**，因为今天出的事正是"被误触打开且无人察觉"。
+  //   幂等靠"与当前值不同才动作"：页面刷新、重复 PUT 同一个值都不会重推。
+  if (b.automation_enabled != null) {
+    const want = !!b.automation_enabled;
+    const was = await automationEnabled(c.env);
+    await setSetting(c.env, "automation_enabled", want ? "1" : "0");
+    if (want !== was) {
+      await setSetting(c.env, "automation_changed_at", new Date().toISOString().replace("T", " ").slice(0, 19));
+      try {
+        if (larkConfigured(c.env)) {
+          // 数字取**真值**，不写死：Joe 要在通知里看到"今天还能发几封"才知道这一开意味着什么。
+          const { effective } = await systemDailySendLimit(c.env);
+          const room = Math.max(0, effective - (await coldSentToday(c.env)));
+          await larkSend(c.env, { msg_type: "text", content: { text: want
+            ? `AIRSONDE 自动模式已【开启】（来源：后台设置）
+机器会连续地找客户、分析、批准、写信发信，不等整点。
+今日还可发 ${room} 封（上限 ${effective}/天）。`
+            : `AIRSONDE 自动模式已【关闭】（来源：后台设置）
+搜索/分析/批准/发送/跟进全部停止；收信、分类与本通知照常在线。` } });
+        }
+      } catch (e) { console.error("automation-notify:", e); }   // 通知失败不影响换挡本身
+    }
+  }
   // 下限钉死在 APPROVE_MIN_SCORE：设更低也不生效（approveGateReason 照样拦），不给"设了却没用"的假象
   if (b.auto_approve_min != null) await setSetting(c.env, "auto_approve_min", String(Math.max(APPROVE_MIN_SCORE, Math.min(100, Number(b.auto_approve_min) || AUTO_APPROVE_MIN_DEFAULT))));
   // 自动闸：0/空 = **跟随系统闸**（删行，回到"不卡人"的默认）；>0 = Joe 想让自动少发，按他的值。
@@ -3768,10 +3803,13 @@ async function scheduled(event: ScheduledController, env: Env, ctx: ExecutionCon
     if (br.shouldTrip && await autoSendEnabled(env)) {
       // 只熔断自动发送：auto_approve 继续跑、手动发送不受影响。熔断后**不自动恢复**，必须 Joe 手动开——
       // 自动恢复会退化成"烧一轮停一下再烧一轮"。
-      await setSetting(env, "auto_send_enabled", "0");
+      // C5-22：断路器**只写自己那个格子**，不再去掀 `auto_send_enabled`。
+      //   以前两件事共用一个变量 ⇒ Joe 下次开总开关就把熔断悄悄清了，而且界面上看不出熔断过。
+      //   现在 autoSendEnabled() = 自动模式 ∧ 未熔断 ∧ 该步开关 ⇒ 熔断照样立刻停发，
+      //   但"为什么不发信"这个问题永远答得出是三个原因里的哪一个。
       await setSetting(env, "auto_send_tripped_at", new Date().toISOString());
       await setSetting(env, "auto_send_trip_reason", `最近 ${br.window} 封自动开发信里 ${br.unsubs} 封退订 = ${(br.rate * 100).toFixed(1)}%`);
-      console.error(`⚠️ 熔断：${br.unsubs}/${br.window} = ${(br.rate * 100).toFixed(1)}% ≥ 15% → auto_send_enabled=0`);
+      console.error(`⚠️ 熔断：${br.unsubs}/${br.window} = ${(br.rate * 100).toFixed(1)}% ≥ 15% → 已置 auto_send_tripped_at（自动发信停，分析/批准不受影响）`);
       try {
         if (larkConfigured(env)) {
           await larkSend(env, { msg_type: "text", content: { text:

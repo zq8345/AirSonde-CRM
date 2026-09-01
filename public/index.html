@@ -137,6 +137,13 @@
                background:var(--tint-blue); border:1px solid var(--border); color:var(--blue);
                padding:5px 10px; border-radius:8px; white-space:nowrap; }
     .an-chip:hover { border-color:var(--blue); }
+    /* C5-22 自动模式徽章。⚠️ 它是个按钮，所以**不做实心**（附录 C.7：一屏至多一个主动作，
+       而主动作永远该是页面正在做的那件事，不是一个状态指示）。两态靠底色+文字区分。 */
+    .auto-badge { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:600;
+                  padding:5px 10px; border-radius:7px; cursor:pointer; white-space:nowrap; }
+    .auto-badge.on  { background:var(--tint-blue); border:1px solid var(--blue); color:var(--blue); }
+    .auto-badge.off { background:var(--bg); border:1px solid var(--border-strong); color:var(--muted); }
+    .auto-badge.warn{ background:var(--tint-red); border:1px solid var(--red); color:var(--red); }
     .an-chip i { display:block; width:56px; height:4px; border-radius:2px; background:var(--border); overflow:hidden; }
     .an-chip i > b { display:block; height:100%; background:var(--blue); }
     .btn-quiet { background:transparent; border-color:transparent; color:var(--muted); }
@@ -750,6 +757,10 @@
       <input type="search" id="q" placeholder="搜索公司 / 邮箱 / 域名…" />
       <!-- C5-11 B：分析进度条 —— **不阻断**。关掉弹窗后它接着显示进度，点它把弹窗调回来。
            默认隐藏；有待分析线索时（含刷新后恢复）才出现。 -->
+      <!-- ⭐ C5-22：自动模式**常驻**徽章，全站每页可见。
+           今天出的事不是"没有开关"，是**状态不可见、变更无感知** —— 一个只住在设置页里的开关，
+           等于没人知道它现在是什么状态。点它直接去设置页那一格。 -->
+      <button id="auto-badge" class="auto-badge" style="display:none" onclick="openSettings()"></button>
       <button id="an-chip" class="an-chip" style="display:none" onclick="openRestock()"></button>
       <!-- 左栏导航的隐藏代理按钮（左栏 side-nav 的 handler 靠它们，勿删） -->
       <button id="btn-today" style="display:none">待办事项</button>
@@ -889,12 +900,17 @@
       <div class="set-card">
         <div class="sec-title">② 机器开关</div>
         <div class="sec-sub">养域期从 10–20 起步，逐周提高。</div>
+        <!-- ⭐ C5-22（Joe 拍板）：原来两个勾选框（自动批准/自动发送）合成**一个总开关**。
+             他的原话是"所有环节都动起来""都是立即执行" —— 那是**一个意图**，不该让他勾两个格子
+             再自己在脑子里做与运算。底层仍是那两个位，总开关是架在它们之上的与门（见 send.ts）。
+             ⚠️ 关掉时**耳朵不关**：收信/分类/飞书通知照常 —— 错过回信只有损失没有风险。
+             ⚠️ `cfg-auto-min` 这个 span 必须留着：分数线说明那段仍在读它（删了那段会显示空白）。 -->
         <div class="auto-box">
-          <label class="auto-row"><input type="checkbox" id="cfg-auto-approve">
-            <span><b>自动批准</b> <span class="hint">≥<span id="cfg-auto-min">…</span> 分的线索直接进「待联系」，不用你点</span></span></label>
-          <label class="auto-row"><input type="checkbox" id="cfg-auto-send">
-            <span><b>自动发送</b> <span class="hint">后台每小时自动发已批准的；退订率过高会自动停发</span></span></label>
+          <label class="auto-row"><input type="checkbox" id="cfg-automation">
+            <span><b>自动模式</b> <span class="hint">找客户 · 分析 · 批准（≥<span id="cfg-auto-min">…</span> 分）· 写信发信 · 跟进，全部自动连续进行</span></span></label>
+          <div class="hint" id="cfg-automation-why" style="margin-left:26px"></div>
         </div>
+        <div class="hint" style="margin:0 0 4px">关掉之后：机器不再对外做任何动作；收回信、分类和飞书通知照常。</div>
         <!-- ⚠️ 这一句是**语义说明不是装饰**：这两个开关是勾选即存（不走下面的保存钮），
              而改版后保存是全页唯一的实心按钮 —— 不说清楚，Joe 会以为勾了还得再按保存。
              （总工 C5-2c ③ 明确允许加这一句短说明；勾选即存的逻辑一个字没动。） -->
@@ -3118,6 +3134,35 @@
     //   ⚠️ 进度以**库**为真源（还剩多少 status='new'），不是内存计数 ——
     //     所以刷新页面、重开弹窗，进度都接得上，不会归零。
     let _anRunning = false;                 // 只防同一页面重复起循环，不作为进度真源
+    // ══ C5-22：自动模式徽章 —— 状态在**每一页**都看得见 ══
+    // ⚠️ 三态而不是两态：开 / 关 / **开着但发信被挡住**（熔断 或 那一步被单独关掉）。
+    //   只做两态的话，"开着却一封没发"会长得跟"正常运行中"一模一样 —— 那正是今天这条 bug 的形状。
+    // ⚠️ 理由文字取后端**唯一**那个 autoSendBlockedReason，不在这里另拼（铁律五）。
+    let _autoState = null;
+    async function paintAutomationBadge(){
+      const el = document.getElementById('auto-badge'); if (!el) return;
+      let c = null;
+      try { c = await fetch('/api/settings/sending').then(r=>r.json()); } catch {}
+      if (!c || typeof c.automation_enabled !== 'boolean'){
+        // 铁律三：读不到就说读不到，**不显示一个看起来正常的默认值**。
+        el.style.display=''; el.className='auto-badge warn'; el.textContent='自动模式：读不到';
+        el.title='后台没返回开关状态 —— 这是"不知道"，不是"关着"'; _autoState=null; return;
+      }
+      _autoState = c.automation_enabled;
+      el.style.display='';
+      if (!c.automation_enabled){
+        el.className='auto-badge off'; el.textContent='手动';
+        el.title='自动模式关：搜索/分析/批准/发送/跟进全停；收信与通知照常在线。点这里去设置。';
+      } else if (c.auto_send_blocked_reason){
+        el.className='auto-badge warn'; el.textContent='自动 · 发信受阻';
+        el.title=`自动模式开着，但发信这一步没在跑：${c.auto_send_blocked_reason}。点这里去设置。`;
+      } else {
+        el.className='auto-badge on'; el.textContent='自动 · 运行中';
+        el.title=`自动模式开：机器连续找客户/分析/批准/发信。今日还可发 ${c.send_room_today ?? '?'} 封。点这里去设置。`;
+      }
+    }
+    window.paintAutomationBadge = paintAutomationBadge;
+
     function paintAnalyzeChip(done, remaining, total){
       const el = $("#an-chip"); if (!el) return;
       if (!remaining) { el.style.display = "none"; return; }
@@ -3778,25 +3823,36 @@
     }
     // 自动化区 + 熔断状态。熔断了而 Joe 不知道，比不熔断还糟 —— 所以停了必须显眼说清为什么。
     function renderAutomation(c){
-      $("#cfg-auto-approve").checked = c.auto_approve_enabled !== false;
-      $("#cfg-auto-send").checked = c.auto_send_enabled !== false;
+      // C5-22：总开关。⚠️ 用 `=== true` 而不是 `!== false` —— 后者会把"字段缺失"渲染成"开着的"，
+      //   而这一格恰恰最不能猜：今天出的事就是它被误触打开且无人察觉。
+      { const m = $("#cfg-automation"); if (m) m.checked = c.automation_enabled === true; }
+      // "现在为什么不自动发信"取后端**唯一**那个理由（autoSendBlockedReason），不在前端另拼一句。
+      { const w = $("#cfg-automation-why"); if (w) {
+          const r = c.auto_send_blocked_reason;
+          w.textContent = (c.automation_enabled && r) ? `⚠️ 发信这一步现在没在跑：${r}` : "";
+          w.style.color = "var(--red)";
+        } }
       // ⭐ 批㉒：两个引擎开关**勾选即存**，不再跟着「保存」按钮走（见 save-sendcfg 那段注释）。
       //   ⚠️ 自动发信**两个方向都要确认**：开 = 开始给真客户发真邮件；关 = 停掉一条产出通道。
       //   （批⑤ 只确认"关"，因为那个开关开着不会造成对外副作用；这个不一样。）
-      { const s = $("#cfg-auto-send"); if (s) s.onchange = async () => {
-          const msg = s.checked
-            ? "这会**立刻恢复自动发开发信**——后台每小时会给真客户发真邮件。\n确定要打开吗？"
-            : "这会停止自动发信（自动批准与手动发送不受影响）。\n确定要关闭吗？";
-          if (!confirm(msg)) { s.checked = !s.checked; return; }
+      // ⚠️ **开的那个方向才要确认**：开 = 机器开始给真客户发真邮件（外向、不可撤）；关是收手，不拦。
+      //   确认文案里的"今天还能发几封"取**真值**，不写死 —— Joe 得看见这一开意味着什么，才叫真确认过。
+      { const m = $("#cfg-automation"); if (m) m.onchange = async () => {
+          if (m.checked) {
+            // 现拉一次真值（不用页面上可能已经放了很久的那份）。⚠️ 读不到就**说读不到**，
+            //   不填一个看起来正常的默认值 —— 那正是铁律三禁的事。
+            let room = "读不到";
+            try { const q = await fetch("/api/settings/sending").then(r=>r.json());
+                  if (Number.isFinite(Number(q.send_room_today))) room = q.send_room_today; } catch {}
+            const ok = confirm("打开自动模式后，机器会连续地找客户、分析、批准，并给真客户发真邮件，不等整点。\n" +
+                               "今日还可发 " + room + " 封。\n确定要打开吗？");
+            if (!ok) { m.checked = false; return; }
+          }
           await fetch("/api/settings/sending",{method:"POST",headers:{"content-type":"application/json"},
-            body:JSON.stringify({ auto_send_enabled: s.checked })});
-          const el=$("#sendcfg-result"); if(el){ el.textContent = s.checked?"⚠️ 自动发信已开启":"✅ 自动发信已关闭"; setTimeout(()=>{ if(el) el.textContent=""; },3000); }
-        }; }
-      { const a = $("#cfg-auto-approve"); if (a) a.onchange = async () => {
-          if (!a.checked && !confirm("这会停止自动批准（≥分数线的线索将不再自动进「待联系」）。\n确定要关闭吗？")) { a.checked = true; return; }
-          await fetch("/api/settings/sending",{method:"POST",headers:{"content-type":"application/json"},
-            body:JSON.stringify({ auto_approve_enabled: a.checked })});
-          const el=$("#sendcfg-result"); if(el){ el.textContent = a.checked?"✅ 自动批准已开启":"✅ 自动批准已关闭"; setTimeout(()=>{ if(el) el.textContent=""; },3000); }
+            body:JSON.stringify({ automation_enabled: m.checked })});
+          const el=$("#sendcfg-result"); if(el){ el.textContent = m.checked?"⚠️ 自动模式已开启（已推飞书）":"✅ 自动模式已关闭（已推飞书）"; setTimeout(()=>{ if(el) el.textContent=""; },3500); }
+          paintAutomationBadge();   // 顶栏徽章立刻跟上，不等下次刷新
+          loadSendCfg();            // 回填"为什么不发信"那一行
         }; }
       // ⭐ C5-2：自动闸从"填 0 = 跟随"改成**两个单选**。
       //   原设计要靠记忆才懂（0 是一个有隐藏含义的魔法值），而且极易反噬：
@@ -4746,6 +4802,8 @@ ${esc(d.ours.body||'')}</div></details>`
     //   ⚠️ 进度真源是库（还剩多少 status='new'），不是内存 —— 所以刷新不归零、也不重复做。
     //   ⚠️ 不 await：它是后台活儿，不该拖住首屏。
     resumeAnalyzeIfPending();
+    // C5-22：进门就画一次自动模式徽章（全站常驻，不依赖进过哪一页）。同样不 await。
+    paintAutomationBadge();
     // 批㉔：飞书卡片「打开详情」深链 ?lead=N → 进门直接开该线索详情页（← 返回列表 可回）。
     // ⚠️ 二选一不并跑：openDetail 和 openToday 写的是同一个 #v-page，并跑会竞写——
     //   today 的 fetch 后到就把详情整页覆盖（实测抓到的，不是猜的）。
