@@ -3643,7 +3643,7 @@
         banner.style.display = "";
         banner.innerHTML = `<b>⚠️ 自动发送已被熔断，现在没有在自动发信</b><br>`
           + `原因：${esc(b.tripReason || "退订率超阈值")}<br>`
-          + `熔断时间：${esc(String(b.trippedAt).slice(0,19).replace("T"," "))}<br>`
+          + `停止时间：${esc(fmtAgo(b.trippedAt))}（${esc(fmtTime(b.trippedAt, true))}）<br>`
           + `自动批准与手动发送不受影响。<b>不会自动恢复</b> —— 请先检查线索来源与开发信内容，确认后勾上「自动发送」再保存。`;
       } else banner.style.display = "none";
     }
@@ -3921,7 +3921,7 @@
             <b>${esc(it.company_name||it.from_email||'(未知)')}</b>
             ${it.category?`<span class="pill" style="background:${catColor[it.category]||'#6b7480'};color:var(--bg)">${esc(catLabel[it.category]||it.category)}</span>`:''}
             ${it.handled_at?`<span class="pill" style="background:var(--tint-green);color:var(--green)">已处理</span>`:''}
-            <span class="hint">${esc((it.received_at||'').slice(0,16))}</span>
+            <span class="hint">${esc(fmtTime(it.received_at))}</span>
           </div>
           <div class="hint" style="margin-top:3px;color:var(--text)">${esc(it.preview||'(空)')}</div>
         </div>`).join('') : `<div class="hint" style="padding:16px">这一格是空的。</div>`;
@@ -3947,7 +3947,7 @@
       // ⭐ "我们上一封发的"必须能看到 —— #10 客户原话是 "number 8 we would be interested in."，
       //    没有原信根本读不懂他说的 8 号是什么。
       const ours = d.ours
-        ? `<details style="margin-top:8px"><summary class="hint" style="cursor:pointer">📤 我们上一封发的（${esc((d.ours.sent_at||'').slice(0,16))} · ${esc(d.ours.kind||'')}）</summary>
+        ? `<details style="margin-top:8px"><summary class="hint" style="cursor:pointer">📤 我们上一封发的（${esc(fmtTime(d.ours.sent_at))} · ${esc(d.ours.kind||'')}）</summary>
              <div style="white-space:pre-wrap;font-size:13px;color:var(--muted);border-left:2px solid var(--border);padding-left:10px;margin-top:6px">${esc(d.ours.subject||'')}
 
 ${esc(d.ours.body||'')}</div></details>`
@@ -3956,8 +3956,8 @@ ${esc(d.ours.body||'')}</div></details>`
         <div style="border:1px solid var(--border);border-radius:8px;padding:14px">
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             <b>${esc(d.company_name||d.from_email||'(认不出主人)')}</b>
-            <span class="hint">${esc(d.from_email||'')} · ${esc((d.received_at||'').slice(0,16))}</span>
-            ${d.handled_at?`<span class="pill" style="background:var(--tint-green);color:var(--green)">已处理 ${esc(String(d.handled_at).slice(0,16))}</span>`:''}
+            <span class="hint">${esc(d.from_email||'')} · ${esc(fmtTime(d.received_at))}</span>
+            ${d.handled_at?`<span class="pill" style="background:var(--tint-green);color:var(--green)">已处理 ${esc(fmtTime(d.handled_at))}</span>`:''}
           </div>
           <div class="sec-title" style="margin-top:10px">客户这次说的</div>
           <div style="white-space:pre-wrap">${esc(d.clean||'(空)')}</div>
@@ -4306,7 +4306,13 @@ ${esc(d.ours.body||'')}</div></details>`
       const l3 = [
         (A.replyFailStreak >= 2) ? row('td-bad', '⚠️',
           `收客户回复失败（已连续 ${A.replyFailStreak} 轮）—— <b>现在客户回信可能收不到</b>`,
-          esc(String(A.replyFailLast || '').slice(0, 110)), '去设置', "openSettings()") : '',
+          // reply_fail_last 存的是「<UTC 时间戳> <服务器原话>」合并串 —— 前 19 字是时间戳。
+          //   时间走相对（免疫时区），原因原样保留（服务器原话是排查的唯一依据，不许润色）。
+          (() => { const raw = String(A.replyFailLast || '');
+                   const ts = raw.slice(0, 19), why = raw.slice(19).trim();
+                   const ago = fmtAgo(ts);
+                   return `${ago ? `<b>${esc(ago)}</b> · ` : ''}${esc(why.slice(0, 110))}`; })(),
+          '去设置', "openSettings()") : '',
         A.breakerTrippedAt ? row('td-bad', '⚠️',
           `自动发送已停 —— <b>现在没有在自动发信</b>`,
           esc(A.breakerReason || '退订率过高') + '；确认后到设置页手动重开（不会自动恢复）', '去设置', "openSettings()") : '',
@@ -4476,6 +4482,49 @@ ${esc(d.ours.body||'')}</div></details>`
     $("#detail-overlay").onclick = (e) => { if (e.target.id==="detail-overlay") closeDetail(); };
 
     function esc(s){ return (s==null?"":String(s)).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+    // ══ C6-C-v2：时间戳展示 ══
+    //   **存储一律 UTC，一个字节都不动**（写入本来就是对的：Workers 的 new Date() 就是 UTC，
+    //   D1 的 datetime('now') 也是 UTC）。这里只管**怎么显示**。
+    //
+    // 🔴 这里有个会静默差一个时区的坑，必须先说清：
+    //   库里两种格式并存 ——
+    //     · `auto_send_tripped_at` 是 `toISOString()` ⇒ 带 Z：`2026-09-01T05:00:38.000Z`
+    //     · `reply_fail_last` 与 D1 的 `datetime('now')` 是**裸串无 Z**：`2026-09-01 05:00:38`
+    //   而 JS 的 `new Date("2026-09-01 05:00:38")` 会把**无 Z 的串当本地时间**解析。
+    //   在 UTC+8 上它会被读成北京时间 05:00（= UTC 21:00 前一天），凭空差 8 小时 ——
+    //   而屏幕上看着完全正常。⇒ 无 Z 的一律补 Z 再解析。
+    function parseUTC(v){
+      const s = String(v || "").trim();
+      if (!s) return null;
+      const iso = /[Zz]$|[+-]\d{2}:?\d{2}$/.test(s) ? s : s.replace(" ", "T") + "Z";
+      const d = new Date(iso);
+      return isNaN(d.getTime()) ? null : d;
+    }
+    const _pad = n => String(n).padStart(2, "0");
+    /** 绝对时间 → **浏览器本地**，统一格式 `MM-DD HH:mm`（列表/详情用） */
+    function fmtTime(v, withYear){
+      const d = parseUTC(v);
+      if (!d) return "";
+      const y = withYear ? `${d.getFullYear()}-` : "";
+      return `${y}${_pad(d.getMonth()+1)}-${_pad(d.getDate())} ${_pad(d.getHours())}:${_pad(d.getMinutes())}`;
+    }
+    /**
+     * 相对时间（告警用）——「故障多久了」正是告警要回答的问题，而且**完全免疫时区**。
+     * ⚠️ 超过 48 小时退化成绝对时间：「3000 分钟前」没人读得懂（总调度补的这条，对）。
+     * ⚠️ 差值用**浏览器本机时钟**算 —— 服务器时钟与本机可能不同步，但用户感知的"多久以前"
+     *    以他自己的表为准；这也让我们不必往响应里塞一个 serverNow。
+     */
+    function fmtAgo(v){
+      const d = parseUTC(v);
+      if (!d) return "";
+      const mins = Math.floor((Date.now() - d.getTime()) / 60000);
+      if (mins < 0) return fmtTime(v, true);        // 未来时间：不编"‑5 分钟前"，直接给绝对值
+      if (mins < 1) return "刚刚";
+      if (mins < 60) return `约 ${mins} 分钟前`;
+      if (mins < 60 * 48) return `约 ${Math.floor(mins/60)} 小时前`;
+      return fmtTime(v, true);
+    }
 
     // 显示当前登录用户（crm.airsonde.com 经 Cloudflare Access 登录时有邮箱）
     // ⚠️ C5-4v：左栏账号菜单删掉后，**这里是退出的唯一入口**。
