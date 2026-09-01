@@ -206,11 +206,9 @@
     .grp-jump .gj-sep { color:var(--muted); }
     .grp-n { display:inline-block; margin:0 9px; padding:1px 8px; border-radius:9px; background:var(--panel); font-size:12px; }
     .grp-empty { color:var(--muted); font-size:12px; padding:11px; font-style:italic; }
-    .row-sub { margin-left:22px; margin-top:4px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
     /* 批㉖：抓取失败=一个小徽章（全文挂 title、点行进详情处理）。铁律：行内元素不随数据量膨胀。 */
     .fail-badge { display:inline-block; padding:1px 7px; border-radius:8px; background:var(--tint-red); color:var(--red); font-size:12px; white-space:nowrap; vertical-align:1px; }
     .fail-badge.fail-retry { background:var(--panel); color:var(--muted); }
-    .reason-sm { color:var(--muted); font-size:12px; max-width:520px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     /* 批⑲b：阶段列里的紧凑「他回了」——同一行、不占新行、不增加行高 */
     .stgcol { white-space:nowrap; }   /* 徽章 + 他回了 同一行不换行（否则 ②组行会高一截）*/
     .stg-reply { margin-left:8px; padding:1px 7px; font-size:12px; vertical-align:middle; }
@@ -1670,28 +1668,19 @@
       if (s <= REVIEW_LO_MAX) return 'lo';
       return 'mid';
     }
-    // 打分理由：列表里只铺一行，全文挂 title（点开详情页看完整版）
-    function reasonShort(reason, max = 70){
-      const s = String(reason || "").replace(/\*\*/g, "").trim();
-      if (!s) return "";
-      return s.length > max ? s.slice(0, max) + "…" : s;
-    }
-    function reviewRowExtra(l){
-      if (current !== 'review' || reviewBandOf(l) !== 'mid') return "";
-      // ② 段是"要 Joe 一条条看"的那段 → 给出判断依据（AI 理由）+ 就地两个动作
-      return `<div class="row-sub">
-        ${l.reason?`<span class="reason-sm" title="${esc(l.reason)}">🤖 ${esc(reasonShort(l.reason))}</span>`:''}
-        <button class="btn-green mini" onclick="event.stopPropagation();rowApprove(${l.id})">✅ 批准</button>
-        <button class="btn-amber mini" onclick="event.stopPropagation();rowIgnore(${l.id})">忽略</button>
-      </div>`;
-    }
+    // ⛔ C5-20（Joe 原话「多余」）：待审批 31-59 那批行下面挂的子行（AI 理由摘要 + 行内批准/忽略）**已整体撤除**，
+    //   列表回单行。能力去处已核对，不是删能力：
+    //     · 读完整理由 → 详情页（列表那行本来也只铺 70 字截断，看不全）
+    //     · 批准/忽略  → 勾选 + 批量条（同一条 toolStatusSel 路径，服务端闸一行未动）
+    //   同时删掉的死件：reasonShort()、rowApprove/rowIgnore（撤除后再无调用点）、.row-sub/.reason-sm 两条 CSS。
+    //   ⚠️ **只撤这一套**：已回复页的「最新回信摘要」子行、待分析页的 unscoredRowExtra（抓取失败原因）
+    //     长得像但不是同一件事，按最小范围原样保留。
     // ══ C5-6（Joe 指令）：待审批的**三段分层撤出列表**，回到平铺表格（默认按评分降序，高分自然在顶）══
     //   能力核算 —— 这不是删能力：
     //     · 段级「全部批准/全部忽略」→ 工具栏「批准选中/忽略选中」+ 表头全选框 完整覆盖
     //     · 「只看某一段」→ 评分筛选覆盖
     //     · 服务端 approveGateReason 护栏**一行未动**（真正的闸从来在后端）
-    //   ⚠️ `reviewRowExtra` 与 `reviewBandOf` **保留**：31-59 那批行内的 AI 理由 + 批准/忽略小按钮
-    //      是逐条判断要用的**证据**，不是段头解说；分层的说明搬去设置页（一个事实一个展示位）。
+    //   ⚠️ `reviewBandOf` 保留（评分筛选与分档说明都用它）；`reviewRowExtra` 已于 C5-20 撤除，见上。
     // ⭐⭐ 批⑲ 页面三：「待联系」按**联系方式**分三组 —— 这一格的问题是"用什么办法碰他"。
     //   优先级**互斥**（总工已批）：A 有邮箱 > B 无邮箱但有社媒/电话 > C 两者皆无。
     //   互斥且穷尽 ⇒ 三组之和 == 该格总数（可撞不变量）。
@@ -1772,7 +1761,6 @@
     //   故意不复制一份逻辑：复制出来的那份迟早和工具栏那份长歪（确认框、跳过原因、刷新都得跟着复制一遍）。
     window.rowAct = (id, run) => { selectedIds.clear(); selectedIds.add(String(id)); syncSelAll(); refreshBulkBar(); run(); };
     // 批㉖：rowEditWebsite/rowHumanApprove 已删 —— 行内按钮墙收进详情页「抓取失败处理」块（ff* 三函数）。
-    window.rowIgnore       = (id) => rowAct(id, () => toolStatusSel('ignored','忽略'));
 
     // 批㉖：详情页「抓取失败处理」的三个出口（复用既有端点：/website 改完退回 new 下轮重抓、
     //   /human-approve 服务端自带压制闸、bulk-status 走 M3b 护栏）。
@@ -1799,7 +1787,6 @@
       if (r.error) { m.textContent = "失败: " + r.error; return; }
       showMainView('list'); loadList();
     };
-    window.rowApprove      = (id) => rowAct(id, () => toolStatusSel('approved','批准'));
     // ⚠️ 段级「全部忽略/全部批准」一律**按本段的 id 走**，绝不复用 `toolIgnoreLowScore()` ——
     //   那个是「<60 分全忽略」，在新的三段划分下会**连 ② 需人工看（31-59）那段一起扫掉**，
     //   而那段恰恰是 Joe 要一条条看的。段头按钮只能作用于它自己那一段。
@@ -2283,7 +2270,7 @@
       // 阶段列取代原公司名旁的状态徽章（更信息量：漏斗阶段+下一步）；保留 🔔待跟进 + 🔥/👀参与标记
       const rowHtml = (l) => { const stg = stageOf(l); return `
         <tr class="row" data-id="${l.id}">
-          <td><div style="display:flex;align-items:center;gap:6px"><input type="checkbox" class="rowchk" ${selectedIds.has(String(l.id))?'checked':''} onclick="event.stopPropagation()" onchange="toggleSel(${l.id},this.checked)"><div class="co-name" title="${esc(l.company_name)||''}">${isDue(l)?`<span class="due-flag" title="该跟进了：${esc(l.next_action)||''} (${esc(l.next_action_date)})">🔔 </span>`:""}${esc(l.company_name)||"<span class='muted'>—</span>"}${l.has_click?`<span title="点击过开发信（强意向）" style="margin-left:4px">🔥</span>`:(l.has_open?`<span title="打开过开发信" style="margin-left:4px">👀</span>`:"")}</div></div>${(()=>{const fb=unscoredRowExtra(l);if(l.website){const w=safeHref(l.website);const inner=w?`<a class="wsite" href="${esc(w)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="margin:0;display:inline-block;max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(hostOf(l.website))}</a>`:`<span class="wsite" title="链接协议不合法，已按纯文本显示" style="margin:0;display:inline-block;max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(hostOf(l.website))}</span>`;return `<span style="display:flex;align-items:center;gap:6px;margin-left:22px;min-width:0">${inner}${fb}</span>`;}return fb?`<span style="display:flex;margin-left:22px">${fb}</span>`:"";})()}${(current==='replied'&&(l.latest_reply_cat||l.latest_reply_summary))?`<div style="margin-left:22px;margin-top:3px;display:flex;align-items:center;gap:6px;min-width:0">${l.latest_reply_cat?`<span class="pill" style="background:${catColor[l.latest_reply_cat]||'#6b7480'};color:var(--bg);flex-shrink:0">${esc(catLabel[l.latest_reply_cat]||l.latest_reply_cat)}</span>`:''}${l.latest_reply_summary?`<span class="co-name muted" style="font-size:12px" title="${esc(l.latest_reply_summary)}">🤖 ${esc(l.latest_reply_summary)}</span>`:''}</div>`:''}${reviewRowExtra(l)}</td>
+          <td><div style="display:flex;align-items:center;gap:6px"><input type="checkbox" class="rowchk" ${selectedIds.has(String(l.id))?'checked':''} onclick="event.stopPropagation()" onchange="toggleSel(${l.id},this.checked)"><div class="co-name" title="${esc(l.company_name)||''}">${isDue(l)?`<span class="due-flag" title="该跟进了：${esc(l.next_action)||''} (${esc(l.next_action_date)})">🔔 </span>`:""}${esc(l.company_name)||"<span class='muted'>—</span>"}${l.has_click?`<span title="点击过开发信（强意向）" style="margin-left:4px">🔥</span>`:(l.has_open?`<span title="打开过开发信" style="margin-left:4px">👀</span>`:"")}</div></div>${(()=>{const fb=unscoredRowExtra(l);if(l.website){const w=safeHref(l.website);const inner=w?`<a class="wsite" href="${esc(w)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="margin:0;display:inline-block;max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(hostOf(l.website))}</a>`:`<span class="wsite" title="链接协议不合法，已按纯文本显示" style="margin:0;display:inline-block;max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(hostOf(l.website))}</span>`;return `<span style="display:flex;align-items:center;gap:6px;margin-left:22px;min-width:0">${inner}${fb}</span>`;}return fb?`<span style="display:flex;margin-left:22px">${fb}</span>`:"";})()}${(current==='replied'&&(l.latest_reply_cat||l.latest_reply_summary))?`<div style="margin-left:22px;margin-top:3px;display:flex;align-items:center;gap:6px;min-width:0">${l.latest_reply_cat?`<span class="pill" style="background:${catColor[l.latest_reply_cat]||'#6b7480'};color:var(--bg);flex-shrink:0">${esc(catLabel[l.latest_reply_cat]||l.latest_reply_cat)}</span>`:''}${l.latest_reply_summary?`<span class="co-name muted" style="font-size:12px" title="${esc(l.latest_reply_summary)}">🤖 ${esc(l.latest_reply_summary)}</span>`:''}</div>`:''}</td>
           <td>${scoreBadge(l.match_score)}</td>
           <td class="stgcol"><span class="stg ${stg.cls}">${stg.badge}</span>${stg.sub?`<span class="stg-sub">${stg.sub}</span>`:""}${readyReplyBtn(l)}</td>
           <td>${l.email?esc(l.email):"<span class='miss'>缺邮箱</span>"}</td>
