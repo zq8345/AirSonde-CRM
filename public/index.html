@@ -1864,7 +1864,11 @@
     window.toolSendReadyAll   = () => grpSendAll(readyGroupIds('A').join(","));
     window.toolFindMailsReadyC = (useHunter) => grpFindMails(readyGroupIds('C').join(","), useHunter);
     // 页顶「跳到」在平铺后失去锚点 → 改成**按组筛选**（总调度已批这条退路）。
-    let _readyFilter = null;   // null=全部；'A'|'B'|'C'
+    // ⚠️ C5-17：待分析页也用**这同一套**筛选机制（一个变量、一个 setter、一处生效点）。
+    //   为第二个页面再造一套 `_unscoredFilter` 的话，"当前筛选是什么"就有了两个真源，
+    //   而"表头全选的作用域"要同时读它们 —— 那正是漏一处就出错的形状。
+    //   ⇒ 变量语义扩成"当前分组筛选"，值域由所在页的 group-of 谓词决定（ready: A/B/C；unscored: A/B）。
+    let _readyFilter = null;   // null=全部
     window.setReadyFilter = (g) => { _readyFilter = (_readyFilter === g) ? null : g; loadList(); };
     // ⚠️ 换格时清掉 —— 否则切走再切回来，筛选还挂着而人已经忘了，
     //   看到的是"线索少了一半"而屏幕上没有任何东西解释为什么。
@@ -1890,10 +1894,22 @@
     function renderGroupJump(cur, leads){
       const box = $("#grp-jump"); if(!box) return;
       let defs = null;
-      if (cur === 'unscored') defs = [
-        ['gj-unscored-A','① 排队打分', leads.filter(l=>unscoredGroupOf(l)==='A').length],
-        ['gj-unscored-B','② 官网抓不到', leads.filter(l=>unscoredGroupOf(l)==='B').length],
-      ];
+      // ⭐ C5-17（Joe 用红叉重申撤横带）：待分析页与待联系页**同一处理** ——
+      //   横带撤掉、锚点没了 ⇒「跳到」改成**按组筛选**（再点一次取消）。分组谓词一个字没动。
+      if (cur === 'unscored') {
+        const cnt = g => leads.filter(l=>unscoredGroupOf(l)===g).length;
+        box.style.display = '';
+        box.innerHTML = `<span class="gj-lb">只看：</span>`
+          + `<span class="gj-help" data-help title="① 排队打分：新找到、还没轮到 AI 的线索，机器每分钟自动啃，你不用做任何事。② 官网抓不到：连续 3 次没抓到官网，机器判不了分——点行进详情改网址 / 人工批准 / 忽略。">(?)</span>`
+          + [['A','排队打分'],['B','官网抓不到']]
+              .map(([g,label])=>`<a class="gj-lnk${_readyFilter===g?' gj-on':''}" onclick="setReadyFilter('${g}')">${label}(${cnt(g)})</a>`)
+              .join('<span class="gj-sep">·</span>')
+          + (_readyFilter ? `<span class="gj-sep">·</span><a class="gj-lnk" onclick="setReadyFilter('${_readyFilter}')">显示全部</a>` : '')
+          // C5-17 增补（Joe 圈的位置）：「排队等 AI 打分 N」不做横带、也不丢信息 ——
+          //   收成工具栏行**右端**的次级小字。⚠️ 它是陈述不是动作，所以不做成可点的 chip。
+          + `<span class="gj-note">排队等 AI 打分 ${cnt('A')} · 机器自动处理</span>`;
+        return;
+      }
       // Joe 2026-08-31：待审批页的「跳到」删掉 —— 三个段头就在下面几行处，
       //   同一份分层渲染两遍（铁律五）。⚠️ 只删 review 这一档：
       //   unscored / ready 两页 Joe 没提，不顺手一起动。
@@ -2442,7 +2458,7 @@
       // C5-12：待联系页的分组筛选。⚠️ **只过滤渲染，不过滤计数** ——
       //   页顶那三个数必须始终是全量分组数（筛着 A 时也要看得见 C 还有几条），
       //   否则一点筛选，另外两组的数就变 0，人会以为线索没了。
-      const rowsData = (current === 'ready' && _readyFilter)
+      const rowsData = ((current === 'ready' || current === 'unscored') && _readyFilter)
         ? leads.filter(l => readyGroupOf(l) === _readyFilter) : leads;
       $("#rows").innerHTML =
           current === 'unscored' ? renderUnscoredGroups(rowsData, rowHtml)

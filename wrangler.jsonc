@@ -88,6 +88,15 @@
     "crons": ["* * * * *", "0 * * * *"]
   },
 
+  // ⭐⭐ 部署闸的**物理化**（2026-09-01：我用 `npx wrangler deploy` 绕过了 npm 脚本里的 typecheck，
+  //   把一个必然 ReferenceError 的版本发上了生产）。
+  //   ⚠️ 教训不是"下次记得用 npm run deploy" —— 靠自觉的闸今天已经证明挡不住（同日两次）。
+  //   `build.command` 由 **wrangler 自己**在 deploy/dev 前执行 ⇒ 换哪个命令都躲不开它。
+  //   它失败会中止部署，这正是我们要的：**判据是"这次部署过没过闸"，不是"我有没有主动禁用它"。**
+  "build": {
+    "command": "node scripts/guard-typecheck.js && npx tsc --noEmit"
+  },
+
   // 团队后台自定义域名（Cloudflare 自动建 DNS + 证书）。airsonde.com 在同一 CF 账号。
   // Access 应用 airsonde-crm（crm.airsonde.com）Joe 已建好，worker 绑域即生效。
   // ⚠️ 顺序有意义：`wrangler dev` 会把**本地所有请求的 Host 钉成 routes 第一条 custom_domain**

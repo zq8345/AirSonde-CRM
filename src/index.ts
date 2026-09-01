@@ -64,6 +64,29 @@ const LEAD_ROW_COLS =
  * C5-13：给一行分析数据补上分类的中文标签，**不改机器值**。
  * 一个函数供所有出口用（列表 / 详情 / 筛选 / 看板），免得每个出口各拼各的。
  */
+/**
+ * ⭐⭐ C5-29 根因（第二层，也是真正那 4.3 秒）：**一次取回一批 settings，而不是取一次问一次。**
+ *
+ * 生产实测：`/api/settings/sending` 服务端自身耗时 4.3s。而它的响应对象里有 **~25 个串行
+ * `await getSetting(...)`** —— 每一个都是一次 D1 远程往返。25 × ~170ms ≈ 4.3s，严丝合缝。
+ * ⚠️ 我上一轮只并行了头部三个重查询，**主体那 25 次一个都没动** ——
+ *   "改了一部分"和"改对了"是两回事，而当时我没量，就以为修完了。
+ *
+ * ⇒ 一条 `WHERE key IN (…)` 取回全部，之后全是内存读。
+ * ⚠️ 返回的是 Map + 一个带默认值的取值函数：**"这个键没配过"和"配成了空串"必须分得开**，
+ *   前者该回落到默认值，后者是 Joe 真的清空了它。
+ */
+async function loadSettings(env: Env, keys: string[]): Promise<(k: string, d?: string) => string> {
+  const map = new Map<string, string>();
+  if (keys.length) {
+    const marks = keys.map(() => "?").join(",");
+    const rows = await env.DB.prepare(`SELECT key, value FROM settings WHERE key IN (${marks})`)
+      .bind(...keys).all();
+    for (const r of rows.results as any[]) map.set(String(r.key), String(r.value ?? ""));
+  }
+  return (k: string, d = "") => (map.has(k) ? map.get(k)! : d);
+}
+
 function withCategoryLabel<T extends { customer_category?: string | null }>(r: T): T & { customer_category_label: string } {
   return { ...r, customer_category_label: customerTypeLabel(r.customer_category) };
 }
@@ -2003,12 +2026,50 @@ app.get("/api/settings/sending", async (c) => {
   // ⭐ C5-29 提速：**去重 + 并行**。原来这个端点有 41 个串行 await，其中
   //   systemDailySendLimit 调了 6 次、coldSentToday 调了 4 次 —— 同一个数算六遍，
   //   每一遍都是一次 D1 往返。这不是"慢一点"，是把延迟乘了个常数。
-  const [br, sysLimit, coldToday] = await Promise.all([
+  // ⭐ C5-29 第二层提速：**一次取回全部 settings**（原来是 ~25 次串行 D1 往返 ≈ 4.3s）。
+  const KEYS = ["auto_send_trip_reason","auto_send_tripped_at","automation_changed_at","bcc_archive",
+    "breaker_threshold","breaker_window","chat_script","company_address","company_name","company_website",
+    "selling_points","send_interval_seconds","send_ramp_factor","send_ramp_floor",
+    "auto_send_enabled","auto_approve_enabled","automation_enabled","send_ramp_enabled","daily_send_limit"];
+  const [br, sysLimit, coldToday, S] = await Promise.all([
     getBreakerStatus(c.env),
     systemDailySendLimit(c.env),
     coldSentToday(c.env),
+    loadSettings(c.env, KEYS),
   ]);
-  const autoLimit = await autoSendDailyLimit(c.env, sysLimit.effective);
+  _lap("head_parallel");
+  // 数值型旋钮：改从内存读（原来每个都是一次往返）。上下界与回落语义不变。
+  const numS = (k: string, fb: number, min: number, max: number) => {
+    const raw = S(k, "").trim();
+    if (raw === "") return fb;
+    const n = Number(raw);
+    return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fb;
+  };
+  // ⭐ C5-29 第三层：**剩下这些也彼此独立，一并并行**。
+  //   ⚠️ 别停在"改好了一部分" —— 上一轮我只并行了头部三个就以为修完了，实测还是 4.3s。
+  //     autoSendEnabled / autoApproveEnabled 这类内部各自还有 2-3 次 getSetting 往返，
+  //     串起来照样是几十次。判据是**响应里的 _ms.total**，不是"我改了几行"。
+  const [autoLimit, primarySent, legacySent, autoApproveOn, autoSendOn, automationOn,
+         blockedReason, autoMin, autoSentN, sentN, sentBreak, aiCost, cntAnalyzed, cntDrafted] =
+    await Promise.all([
+      autoSendDailyLimit(c.env, sysLimit.effective),
+      senderSentToday(c.env, SENDER_PRIMARY),
+      senderSentToday(c.env, SENDER_LEGACY),
+      autoApproveEnabled(c.env),
+      autoSendEnabled(c.env),
+      automationEnabled(c.env),
+      autoSendBlockedReason(c.env),
+      getAutoApproveMin(c.env),
+      autoSentToday(c.env),
+      sentToday(c.env),
+      sentTodayBreakdown(c.env),
+      getAiUsage(c.env, (k, d) => getSetting(c.env, k, d), (k, v) => setSetting(c.env, k, v), { cacheOnly: true }),
+      // ⚠️ 与原查询**逐字一致**（date(...)=date('now')）：并行化只该改"什么时候跑"，
+      //   不该顺手改"跑的是什么" —— 改了查询就是静默换了个数字。
+      c.env.DB.prepare("SELECT COUNT(*) AS n FROM lead_analysis WHERE date(analyzed_at)=date('now')").first<{ n: number }>(),
+      c.env.DB.prepare("SELECT COUNT(*) AS n FROM lead_analysis WHERE date(drafted_at)=date('now')").first<{ n: number }>(),
+    ]);
+  _lap("body_parallel");
   return c.json({
     // ⭐ 系统级发信上限：走唯一咽喉点 systemDailySendLimit（**不要**在这里自己 getSetting，
     //   那正是"多处各读各的"演化成 -90% 静默事故的写法）。source 供 UI 挂"未配置"徽标。
@@ -2023,36 +2084,36 @@ app.get("/api/settings/sending", async (c) => {
     // C5-22 上限面板：**生效值 + 来源**一起给。
     // ⚠️ 只给数字不给来源，Joe 分不清"这是我设的"还是"没配置回落的"——那正是铁律三禁的
     //   "显示一个看起来正常的默认值"。source: configured = 他设过；default = 代码常量兜的。
-    send_ramp_floor: await numSetting(c.env, "send_ramp_floor", RAMP_FLOOR, 1, 5000),
-    send_ramp_floor_source: (await getSetting(c.env, "send_ramp_floor", "")).trim() ? "configured" : "default",
-    send_ramp_factor: await numSetting(c.env, "send_ramp_factor", RAMP_FACTOR, 1, 10),
-    send_ramp_factor_source: (await getSetting(c.env, "send_ramp_factor", "")).trim() ? "configured" : "default",
-    send_interval_seconds: await numSetting(c.env, "send_interval_seconds", SEND_INTERVAL_DEFAULT, 0, 3600),
-    send_interval_source: (await getSetting(c.env, "send_interval_seconds", "")).trim() ? "configured" : "default",
-    breaker_window_eff: Math.floor(await numSetting(c.env, "breaker_window", BREAKER_WINDOW, 5, 1000)),
-    breaker_threshold_eff: await numSetting(c.env, "breaker_threshold", BREAKER_THRESHOLD, 0.01, 0.9),
-    breaker_source: ((await getSetting(c.env, "breaker_window", "")).trim() || (await getSetting(c.env, "breaker_threshold", "")).trim()) ? "configured" : "default",
+    send_ramp_floor: numS("send_ramp_floor", RAMP_FLOOR, 1, 5000),
+    send_ramp_floor_source: (S("send_ramp_floor", "")).trim() ? "configured" : "default",
+    send_ramp_factor: numS("send_ramp_factor", RAMP_FACTOR, 1, 10),
+    send_ramp_factor_source: (S("send_ramp_factor", "")).trim() ? "configured" : "default",
+    send_interval_seconds: numS("send_interval_seconds", SEND_INTERVAL_DEFAULT, 0, 3600),
+    send_interval_source: (S("send_interval_seconds", "")).trim() ? "configured" : "default",
+    breaker_window_eff: Math.floor(numS("breaker_window", BREAKER_WINDOW, 5, 1000)),
+    breaker_threshold_eff: numS("breaker_threshold", BREAKER_THRESHOLD, 0.01, 0.9),
+    breaker_source: ((S("breaker_window", "")).trim() || (S("breaker_threshold", "")).trim()) ? "configured" : "default",
     yesterday_cold: sysLimit.yesterdayCold,
     effective_send_limit: sysLimit.effective,
     // 系统闸只卡冷发(initial+followup)；事务信(确认/回真人)豁免但在用量里显示，见 send.ts coldSentToday
     cold_sent_today: coldToday,
-    company_name: await getSetting(c.env, "company_name", "AirSonde"),
-    company_address: await getSetting(c.env, "company_address", DEFAULT_COMPANY_ADDRESS),
-    company_website: await getSetting(c.env, "company_website", c.env.SITE_URL || "https://airsonde.com"),
-    selling_points: await getSetting(c.env, "selling_points", DEFAULT_SELLING_POINTS),
-    chat_script: await getSetting(c.env, "chat_script", DEFAULT_CHAT_SCRIPT),
+    company_name: S("company_name", "AirSonde"),
+    company_address: S("company_address", DEFAULT_COMPANY_ADDRESS),
+    company_website: S("company_website", c.env.SITE_URL || "https://airsonde.com"),
+    selling_points: S("selling_points", DEFAULT_SELLING_POINTS),
+    chat_script: S("chat_script", DEFAULT_CHAT_SCRIPT),
     // L4(#54)：BCC 存档地址（空=关）。填 outbox 公共邮箱（域待定）后所有外发自动密送。
-    bcc_archive: await getSetting(c.env, "bcc_archive", ""),
+    bcc_archive: S("bcc_archive", ""),
     // `wanew_daily_limit` 已退役（按发件域命名/计数=Joe 否掉的设计），字段不再返回。
     // 各发件域今日发量仍带出——纯**观察**用（看发件域切换是否干净），不再是任何闸。
     // （键名随 fork 改为 primary/legacy_sent_today——上游按新旧发件域命名，index.html 同步改）
-    primary_sent_today: await senderSentToday(c.env, SENDER_PRIMARY),
-    legacy_sent_today: await senderSentToday(c.env, SENDER_LEGACY),
+    primary_sent_today: primarySent,
+    legacy_sent_today: legacySent,
     // 自动化三开关 + 熔断状态（前端要能看能关；熔断后必须显眼告诉 Joe 为什么停了）
-    auto_approve_enabled: await autoApproveEnabled(c.env),
-    auto_send_enabled: await autoSendEnabled(c.env),
+    auto_approve_enabled: autoApproveOn,
+    auto_send_enabled: autoSendOn,
     // C5-22：总开关 + "现在为什么不自动发信"的**唯一**理由来源（顶栏徽章/设置页/机器房共用它，别各拼各的）
-    automation_enabled: await automationEnabled(c.env),
+    automation_enabled: automationOn,
     // "今日还可发几封"：**服务端算**，用的就是发送路径自己那两个函数（systemDailySendLimit + coldSentToday）。
     // ⚠️ 不让前端拿 limit 和 sent 自己减 —— 那就是第二处口径，早晚跟真闸对不上（铁律五）。
     // 🔴 C5-22 补漏：**生效值 + 被谁卡住**。
@@ -2065,17 +2126,17 @@ app.get("/api/settings/sending", async (c) => {
     send_limit_effective: sysLimit.effective,
     send_limit_capped_by: sysLimit.effective >= sysLimit.limit ? null : (sysLimit.rampEnabled ? "ramp" : "other"),
     send_room_today: Math.max(0, sysLimit.effective - coldToday),
-    automation_changed_at: await getSetting(c.env, "automation_changed_at", ""),
-    auto_send_blocked_reason: await autoSendBlockedReason(c.env),
+    automation_changed_at: S("automation_changed_at", ""),
+    auto_send_blocked_reason: blockedReason,
     // 自动闸默认跟随系统闸（走 resolver，不在这里自己 getSetting）——老写法的硬默认 15/生产 200
     // 就是把"系统闸 1000"悄悄压成 200 的那个隐形瓶颈。source: system=跟随 · configured=Joe 单独设过。
     auto_send_daily_limit: autoLimit.limit,
     auto_send_daily_limit_source: autoLimit.source,
-    auto_approve_min: await getAutoApproveMin(c.env),
-    auto_sent_today: await autoSentToday(c.env),
+    auto_approve_min: autoMin,
+    auto_sent_today: autoSentN,
     // 批⑩B：发送确认弹窗要说清"今日上限还剩几封"。复用本端点加一个字段，不新开端点。
-    sent_today: await sentToday(c.env),
-    sent_today_breakdown: await sentTodayBreakdown(c.env),   // 批㉒：首触/跟进/自动 拆分（总数不变）
+    sent_today: sentN,
+    sent_today_breakdown: sentBreak,   // 批㉒：首触/跟进/自动 拆分（总数不变）
     // ⭐ 批⑪C：今日 AI 用量 —— 让 Joe **自己看见**批⑦ 省下的钱，不用来问总工。
     //   他今晚亲眼看着重扫烧了 3 小时 + ~$10，问"是不是 ≥60 才写信就能省"。
     //   批⑦ 比那个更彻底：**发送那一刻才写** → 434 家里真发出去的只有 48 封 → 只写 48 封。
@@ -2090,13 +2151,8 @@ app.get("/api/settings/sending", async (c) => {
     //   原来它在缓存过期时同步去打 OpenRouter 的账单接口、且那个 fetch 没有超时 ——
     //   对方一慢，整个设置页就打不开（Joe 实测 10s 超时，黄条报的就是这个端点）。
     //   刷新交给下面的后台任务（ctx.waitUntil），界面读取一秒都不为它等。
-    ai_cost: await getAiUsage(c.env, (k, d) => getSetting(c.env, k, d), (k, v) => setSetting(c.env, k, v), { cacheOnly: true }),
-    ai_today: {
-      analyzed: (await c.env.DB.prepare(
-        "SELECT COUNT(*) AS n FROM lead_analysis WHERE date(analyzed_at)=date('now')").first<{ n: number }>())?.n || 0,
-      drafted: (await c.env.DB.prepare(
-        "SELECT COUNT(*) AS n FROM lead_analysis WHERE date(drafted_at)=date('now')").first<{ n: number }>())?.n || 0,
-    },
+    ai_cost: aiCost,
+    ai_today: { analyzed: cntAnalyzed?.n || 0, drafted: cntDrafted?.n || 0 },
     // ⭐ P0-1：产能估算 —— 让设置页当场告诉 Joe"你填的数能不能达到"。
     //   这**不是上限**（他填多少是多少），是"做不到就当场说"，绝不悄悄砍。
     capacity: estimateDailyCapacity(),
@@ -2106,8 +2162,8 @@ app.get("/api/settings/sending", async (c) => {
       enoughSample: br.enoughSample,
       windowSize: BREAKER_WINDOW,
       thresholdPct: BREAKER_THRESHOLD * 100,
-      trippedAt: await getSetting(c.env, "auto_send_tripped_at", ""),
-      tripReason: await getSetting(c.env, "auto_send_trip_reason", ""),
+      trippedAt: S("auto_send_tripped_at", ""),
+      tripReason: S("auto_send_trip_reason", ""),
     },
     // ⚠️ C5-29 复验用：**服务端自己花的时间**，按段拆。
     //   若 total 很小而客户端仍 4.6s ⇒ 慢在服务端之外（waitUntil / Access / 网络），
