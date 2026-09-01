@@ -2189,6 +2189,16 @@ app.delete("/api/keywords/:id", async (c) => {
 // ⚠️ 只读 SELECT，不写任何数据。
 app.get("/api/diag/d1-subrequest-probe", async (c) => {
   const n = Math.max(1, Math.min(300, Number(c.req.query("n")) || 60));
+  // ⚠️⚠️ C5-22 补：这道守卫原本**只有 socket 探针有，D1 探针没有** —— 于是它在本地也会
+  //   一本正经地返回「D1 不吃那 50 个额度」。本地 miniflare **根本不执行子请求上限**
+  //   （同 D1 绑定变量 100 上限那次：裸 SQLite 永不复现），跑满多少次都不证明任何事。
+  //   这条结论已经在窗口之间被引用过一次 —— **一盏假绿灯比没有探针更危险**，因为它会
+  //   被当成证据带进下一个架构决策。两个探针必须同一副判据。
+  const localD1 = devGuardOn(c.env);
+  const canFailD1 = !localD1 && n > 50;
+  const noVerdictD1 = localD1
+    ? "❌ 本地环境无效：miniflare 不执行子请求上限，跑满多少次都不证明任何事。**必须在生产上跑。**"
+    : `❌ n=${n} ≤ 50，到不了那条线，跑满不证明任何事。用 n>50（默认 60）。`;
   let done = 0;
   try {
     for (let i = 0; i < n; i++) {
@@ -2197,7 +2207,9 @@ app.get("/api/diag/d1-subrequest-probe", async (c) => {
     }
     return c.json({
       requested: n, completed: done, threw: false,
-      verdict: done >= n ? `跑满 ${n} 次未报错 → **D1 不吃那 50 个外部子请求额度**` : "未知",
+      environment: localD1 ? "local(dev guard on)" : "production",
+      verdict: !canFailD1 ? noVerdictD1
+        : `跑满 ${n} 次未报错 → **D1 不吃那 50 个外部子请求额度**`,
     });
   } catch (e: any) {
     const msg = String(e?.message || e);
@@ -2268,6 +2280,62 @@ app.get("/api/diag/socket-subrequest-probe", async (c) => {
       verdict: /too many subrequests/i.test(msg)
         ? `第 ${done + 1} 次 connect 撞上限 → **socket 也吃那个额度**，收回复那一步必须计入预算`
         : "抛了别的错，见 errMessage（**不是**子请求上限 —— 可能是目标不可达/被拒，换 host 再试）",
+    });
+  }
+});
+
+// 🔬 决定性实验：**一次调用到底允许多少个对外 fetch？**
+//
+// 为什么非量不可：C5-22（每分钟 tick 的持续流水线）整套节奏 —— 每 tick 分析几条、发几封 ——
+//   全部建在这一个数上。而目前手上唯一的依据是 `cron_subreq_last` 里的 `crossed_50_at≈53`，
+//   那是**从计量器推出来的下限，不是那条线本身**：计量器自己写着
+//   「redirect:follow 的一次调用只算 1，平台按每跳算 → 越线前偏小」。
+//   ⇒ 真实额度只会 ≤53，不会 >53。**把架构押在一个推出来的数上，就是把它押在运气上。**
+//
+// 实验设计：顺序发 n 个**不跳转**的对外请求（`redirect:"manual"` 保证一次调用=一跳），
+//   零 D1、零 socket，撞上限即停并报第几次撞的。
+// ⚠️ 目标默认用 Cloudflare 自家的 `cdn-cgi/trace`（就是给诊断用的、几十字节），
+//    不去连累任何第三方站点；顺序发不并发，避免撞上"同时 6 个连接"那条别的限制。
+app.get("/api/diag/fetch-subrequest-probe", async (c) => {
+  const n = Math.max(1, Math.min(200, Number(c.req.query("n")) || 80));
+  const url = (c.req.query("url") || "https://cloudflare.com/cdn-cgi/trace").trim();
+  let host = "";
+  try { host = new URL(url).hostname; } catch { return c.json({ error: "url 不合法" }, 400); }
+  try { assertEgressAllowed(c.env, host, "fetch subrequest probe"); }
+  catch (e: any) { return c.json({ blocked_by_dev_guard: true, note: "本地出站闸门挡下了，这个实验必须在生产上跑", errMessage: String(e?.message || e) }, 400); }
+
+  // 与另两个探针同一副判据：**不可能失败的环境里跑出的"通过"不是证据。**
+  const local = devGuardOn(c.env);
+  const canFail = !local && n > 50;
+  const noVerdict = local
+    ? "❌ 本地环境无效：miniflare 不执行子请求上限，跑满多少次都不证明任何事。**必须在生产上跑。**"
+    : `❌ n=${n} ≤ 50，到不了那条线，跑满不证明任何事。用 n>50（默认 80）。`;
+
+  let done = 0, statuses: number[] = [];
+  const t0 = Date.now();
+  try {
+    for (let i = 0; i < n; i++) {
+      // redirect:"manual" —— 不跟跳转，保证「我数的 1 次」就是「平台算的 1 次」。
+      //   跟跳转的话平台按每跳计费，我数出来的就会比真实消耗少（那正是 crossed_50_at 偏小的原因）。
+      const r = await fetch(url, { redirect: "manual", cf: { cacheTtl: 0 } as any });
+      if (statuses.length < 3) statuses.push(r.status);
+      done++;
+    }
+    return c.json({
+      target: url, requested: n, completed: done, threw: false, ms: Date.now() - t0,
+      environment: local ? "local(dev guard on)" : "production", sampleStatuses: statuses,
+      verdict: !canFail ? noVerdict
+        : `顺序发满 ${n} 次未报错 → **对外 fetch 额度 ≥ ${n}**（不是 50 档；再加大 n 继续逼近）`,
+    });
+  } catch (e: any) {
+    const msg = String(e?.message || e);
+    return c.json({
+      target: url, requested: n, completed: done, threw: true, ms: Date.now() - t0,
+      environment: local ? "local(dev guard on)" : "production", sampleStatuses: statuses,
+      errName: String(e?.name || ""), errMessage: msg.slice(0, 300),   // 原文，不转述
+      verdict: /too many subrequests/i.test(msg)
+        ? `**第 ${done + 1} 次对外 fetch 撞上限 ⇒ 一次调用的对外额度 = ${done} 个。** 这是量出来的，不是推出来的。`
+        : "抛了别的错，见 errMessage（**不是**子请求上限 —— 可能是目标不可达，换 url 再试）",
     });
   }
 });
