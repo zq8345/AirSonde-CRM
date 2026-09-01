@@ -899,54 +899,59 @@
       <!-- ── ② 机器开关 —— 它替你做多少 ── -->
       <div class="set-card">
         <div class="sec-title">② 机器开关</div>
-        <div class="sec-sub">养域期从 10–20 起步，逐周提高。</div>
-        <!-- ⭐ C5-22（Joe 拍板）：原来两个勾选框（自动批准/自动发送）合成**一个总开关**。
-             他的原话是"所有环节都动起来""都是立即执行" —— 那是**一个意图**，不该让他勾两个格子
-             再自己在脑子里做与运算。底层仍是那两个位，总开关是架在它们之上的与门（见 send.ts）。
-             ⚠️ 关掉时**耳朵不关**：收信/分类/飞书通知照常 —— 错过回信只有损失没有风险。
-             ⚠️ `cfg-auto-min` 这个 span 必须留着：分数线说明那段仍在读它（删了那段会显示空白）。 -->
+        <!-- ⭐ C5-22（Joe 拍板）：两个勾选框（自动批准/自动发送）合成**一个总开关**。
+             他的原话是"所有环节都动起来""都是立即执行"——那是**一个意图**，不该让他勾两个格子
+             再自己在脑子里做与运算。底层仍是那两个位，总开关是架在其上的与门（见 send.ts）。
+             ⚠️ 关掉时**耳朵不关**：收信/分类/飞书通知照常——错过回信只有损失没有风险。
+             ⚠️ `cfg-auto-min` 这个 span 必须留着：评分分层那行仍在读它。
+             ⚠️ C5-25 砍字纪律：解释一律进 (?)（data-help，闸的 measure 会剔除它，不占预算），
+                页面正文只留「这是什么 + 现在是多少」（铁律一）。**删掉的是解释，不是能力。** -->
         <div class="auto-box">
           <label class="auto-row"><input type="checkbox" id="cfg-automation">
-            <span><b>自动模式</b> <span class="hint">找客户 · 分析 · 批准（≥<span id="cfg-auto-min">…</span> 分）· 写信发信 · 跟进，全部自动连续进行</span></span></label>
+            <span><b>自动模式</b>
+              <span class="gj-help" data-help title="开：机器连续地找客户、分析、批准（≥分数线）、写信发信、跟进，不等整点。关：这些出站动作全停，但收回信、AI 分类和飞书通知照常在线——错过回信只有损失没有风险。改一下就生效，不用按保存。">(?)</span></span></label>
           <div class="hint" id="cfg-automation-why" style="margin-left:26px"></div>
         </div>
-        <div class="hint" style="margin:0 0 4px">关掉之后：机器不再对外做任何动作；收回信、分类和飞书通知照常。</div>
-        <!-- ⚠️ 这一句是**语义说明不是装饰**：这两个开关是勾选即存（不走下面的保存钮），
-             而改版后保存是全页唯一的实心按钮 —— 不说清楚，Joe 会以为勾了还得再按保存。
-             （总工 C5-2c ③ 明确允许加这一句短说明；勾选即存的逻辑一个字没动。） -->
-        <div class="hint" style="margin:0 0 16px">这两个改一下就生效，不用保存。</div>
-        <!-- C5-6：待审批的三段分层说明**从列表搬到这里**（列表回到平铺）。
-             ⚠️ 只做说明，**不做成可调旋钮** —— 分数线是系统常量，Joe 没要求可调，别扩。
-             ⚠️ 铁律三：分数由真值派生 —— 上限沿用 cfg-auto-min 那条真值链（后端 auto_approve_min），
-                下限与 reviewBandOf 用同一个常量。三个数字没有一个是就地写死的。 -->
-        <div class="set-grid" style="margin-bottom:16px">
+        <div class="set-grid" style="margin-top:12px">
           <div class="k">评分分层</div>
-          <div class="v">
-            <div class="hint" style="margin:0 0 4px">≥<b id="rb-hi">…</b> 分 —— 建议批准；「自动批准」开着时机器直接收走，不用你点</div>
-            <div class="hint" style="margin:0 0 4px"><b id="rb-mid">…</b> 分 —— 需你人工看（多为信息不全，AI 没看清 ≠ 不合格）</div>
-            <div class="hint" style="margin:0">≤<b id="rb-lo">…</b> 分 —— 建议忽略；忽略可恢复（进「已忽略」随时退回）</div>
-          </div>
-        </div>
-        <div class="set-grid">
+          <div class="v"><div class="hint" style="margin:0">≥<b id="rb-hi">…</b> 批准 · <b id="rb-mid">…</b> 你来看 · ≤<b id="rb-lo">…</b> 建议忽略
+            <span class="gj-help" data-help title="≥高分线：建议批准，自动模式开着时机器直接收走。中段：需要你人工看一眼，多为信息不全（AI 没看清 ≠ 不合格）。≤低分线：建议忽略；忽略随时可从「已忽略」退回。三个数都从后端真值来，不是写死的。">(?)</span></div></div>
+
           <div class="k">每天最多发</div>
           <div class="v"><div class="set-numrow">
               <input id="cfg-limit" type="number" min="1" class="set-num"> <span class="hint">封</span>
-              <span id="cfg-limit-badge" class="pill" style="display:none"></span></div>
-            <div class="hint">手动 + 自动 + 跟进 共用。</div></div>
+              <span id="cfg-limit-badge" class="pill" style="display:none"></span>
+              <span class="gj-help" data-help title="手动 + 自动 + 跟进 共用这一个上限，跨全部发件域计数。">(?)</span></div></div>
 
           <div class="k">其中自动发</div>
           <div class="v">
-            <!-- ⭐ 魔法值改明控件：原来是"填 0 = 跟随系统闸"——**一个要靠记忆才懂的约定**。
-                 现在两个选项各自说人话，选中哪个就是哪个，没有隐藏含义。 -->
-            <label style="display:flex;gap:6px;align-items:center;cursor:pointer;margin-bottom:8px"><input type="radio" name="autolim" id="cfg-auto-follow" value="follow"> 跟上面一样（不单独限制）</label>
-            <label class="set-numrow" style="cursor:pointer"><input type="radio" name="autolim" id="cfg-auto-custom" value="custom"> 单独限制为
+            <!-- ⭐ 魔法值改明控件：原来"填 0 = 跟随系统闸"是一个要靠记忆才懂的约定。 -->
+            <label style="display:flex;gap:6px;align-items:center;cursor:pointer;margin-bottom:6px"><input type="radio" name="autolim" id="cfg-auto-follow" value="follow"> 不单独限制</label>
+            <label class="set-numrow" style="cursor:pointer"><input type="radio" name="autolim" id="cfg-auto-custom" value="custom"> 限制为
               <input id="cfg-auto-limit" type="number" min="1" class="set-num"> <span class="hint">封</span></label>
             <div class="hint" id="cfg-auto-used"></div></div>
 
+          <div class="k">每封间隔</div>
+          <div class="v"><div class="set-numrow">
+              <input id="cfg-send-gap" type="number" min="0" class="set-num"> <span class="hint">秒</span>
+              <span class="pill" id="cfg-gap-src" style="display:none"></span>
+              <span class="gj-help" data-help title="两封开发信之间至少隔这么久。0 = 不限速。留空 = 用系统默认。机器每分钟检查一次是否该发，这个数决定它多久才真发一封。">(?)</span></div></div>
+
           <div class="k">新域保护</div>
-          <div class="v"><label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer"><input id="cfg-ramp" type="checkbox" style="margin-top:3px">
-            <span class="hint" style="margin:0">每天最多涨 50%，避免被判垃圾。建议开着。</span></label></div>
+          <div class="v"><label style="display:flex;gap:8px;align-items:center;cursor:pointer;margin-bottom:6px"><input id="cfg-ramp" type="checkbox">
+              <span class="hint" style="margin:0">开启</span>
+              <span class="gj-help" data-help title="新域名一上来就大量发信会被判垃圾。开启后每天的实际上限 = max(起步值, 昨天发出量 × 倍数)，慢慢爬上你设的「每天最多发」。建议开着。">(?)</span></label>
+            <div class="set-numrow">起步 <input id="cfg-ramp-floor" type="number" min="1" class="set-num"> 封 ·
+              每天最多涨 <input id="cfg-ramp-factor" type="number" min="1" step="0.1" class="set-num"> 倍
+              <span class="pill" id="cfg-ramp-src" style="display:none"></span></div></div>
+
+          <div class="k">退订太多就停</div>
+          <div class="v"><div class="set-numrow">最近 <input id="cfg-brk-win" type="number" min="5" class="set-num"> 封里超过
+              <input id="cfg-brk-th" type="number" min="1" max="90" class="set-num"> % 就停
+              <span class="pill" id="cfg-brk-src" style="display:none"></span>
+              <span class="gj-help" data-help title="自动发出的开发信里退订占比超过阈值就自动停发（只停自动发信，分析/批准/手动发送不受影响），停了不会自动恢复，要你在这里手动重开。样本不足时不熔断——5 封里 2 封退订说明不了任何事。">(?)</span></div></div>
         </div>
+      </div>
       </div>
 
       <!-- ── ③ 无回复自动跟进 ── -->
@@ -3163,6 +3168,20 @@
     }
     window.paintAutomationBadge = paintAutomationBadge;
 
+    // C5-26：顶栏 chip 的**搜索态**。与分析态共用同一个 chip（同一个位置只讲一件事），
+    //   文案区分两态，关掉弹窗后照样看得见进度。
+    // ⚠️ 搜索是**一个后端长请求**，关弹窗不会中断它 —— 所以这里可以如实说"关掉也在跑"。
+    //   （分析那一步是前端驱动的循环，措辞不同，别互相抄。）
+    function paintSearchChip(done, total, inserted){
+      const el = $("#an-chip"); if (!el) return;
+      if (!total) { el.style.display = "none"; return; }
+      const pct = Math.min(100, Math.round(done / total * 100));
+      el.style.display = "inline-flex";
+      el.innerHTML = `<i><b style="width:${pct}%"></b></i><span>搜索中 ${done}/${total} · 入库 ${inserted}</span>`;
+      el.title = "搜索在后台继续（关掉窗口也在跑）；点这里回到找客户";
+    }
+    window.paintSearchChip = paintSearchChip;
+
     function paintAnalyzeChip(done, remaining, total){
       const el = $("#an-chip"); if (!el) return;
       if (!remaining) { el.style.display = "none"; return; }
@@ -3503,7 +3522,10 @@
     window.openRestock = async () => {
       const _ov=$("#restock-overlay");
       _ov.classList.add("show");
-      _ov.classList.remove("rs-running");   // 重新打开 → 回到两卡（上一轮的结果态到此为止）
+      // ⚠️ C5-26：**跑着的时候重开要保留进度态**。原来无条件回到两卡 ——
+      //   于是"关掉 → 点 chip 回来"看到的是配置表单，进度不见了，跟"它停了"长得一模一样。
+      //   判据用 pipelineRunning 这个真值（跑没跑它自己知道），不猜。
+      if (!pipelineRunning) _ov.classList.remove("rs-running");   // 没在跑才回到两卡
       const cfg = await loadSearchCfg();
       // ⚠️ 「今日还剩 X 次」的分母/分子都来自同一份 cfg.serper —— 与机器房读同一个字段。
       //    这是**决策时点的瞬态展示**（总工已批），机器房仍是它唯一的常驻展示位。
@@ -3589,11 +3611,36 @@
         await saveSearchCfg();
         const per = Number($("#dp-perkw").value)||8;
         // ① 搜索
-        setLog("① 搜索中…（连 Google 搜索，约需 10-40 秒）"); setBar(6);
-        const d = await fetch("/api/discover",{method:"POST",headers:{"content-type":"application/json"},
-          body:JSON.stringify({countries, keywords:(_fcKwRows.length ? kws : undefined), perKeyword:per})}).then(r=>r.json()).catch(e=>({error:String(e)}));
+        // ⭐ C5-26：原来这里写「约需 10-40 秒」—— **那是句谎话**。实测一轮 26 个关键词是分钟级
+        //   （美国轮入库 101 家）。Joe 三次以为"卡住了"，其实机器一直在跑，是文案在骗他。
+        //   ⇒ 不再承诺时间，改报**真进度**：第 N/M 个关键词 · 已入库几家。
+        // ⚠️ 进度轮询**只用于显示**。完成与否只认下面那个 fetch 自己返回 ——
+        //   "有增量就当跑完了"今天刚被证伪（增量只证明在跑）。
+        setLog("① 搜索中…（大批量约需几分钟，可以关掉这个窗口）"); setBar(6);
+        let _pollFails = 0;
+        const poll = setInterval(async () => {
+          try {
+            const pg = await fetch("/api/discover/progress").then(r=>r.json());
+            _pollFails = 0;
+            if (pg && pg.running && pg.total) {
+              setLog(`① 搜索中…第 ${pg.done}/${pg.total} 个关键词 · 已入库 ${pg.inserted} 家（可以关掉这个窗口）`);
+              setBar(6 + Math.min(1, pg.done / pg.total) * 12);
+              paintSearchChip(pg.done, pg.total, pg.inserted);
+            }
+          } catch {
+            // ⚠️ 驱动请求失败要**说出来**：永远转圈会让"卡住了"和"在跑"长得一模一样，
+            //   而那正是这一单要治的病。连挂 3 次才报，避免一次网络抖动就吓人。
+            if (++_pollFails >= 3) setLog("① 搜索中…（进度读不到了，搜索本身可能仍在跑；稍等或刷新页面看结果）");
+          }
+        }, 3000);
+        let d;
+        try {
+          d = await fetch("/api/discover",{method:"POST",headers:{"content-type":"application/json"},
+            body:JSON.stringify({countries, keywords:(_fcKwRows.length ? kws : undefined), perKeyword:per})}).then(r=>r.json()).catch(e=>({error:String(e)}));
+        } finally { clearInterval(poll); paintSearchChip(0, 0, 0); }
         if (d.error){ setLog("① 搜索失败：" + d.error); return; }
         setLog(`① 搜索完成：执行 ${d.searched} 次搜索，新增 ${d.inserted} 家，去重/跳过 ${d.skipped}。`
+          + (d.msTotal ? `（用时 ${Math.round(d.msTotal/1000)} 秒：搜索 ${Math.round((d.msSearch||0)/1000)} 秒 + 入库 ${Math.round((d.msDb||0)/1000)} 秒）` : "")
           + (d.budgetStopped ? `\n⚠️ 已达今日 Serper 预算上限（${d.serperUsedToday}/${d.serperBudget}），本轮提前停止。可在上方调高预算或明天再跑。` : ""));
         if (d.serperUsedToday != null) { const u=$("#fc-serper-used"); if(u) u.textContent = d.serperUsedToday; }   // P0-c 刷新今日用量
         setBar(20); loadStats(); loadList(); loadFacets();
@@ -3778,6 +3825,20 @@
       // C5-2：用量明细 / 爬坡算式 / 发件域今日计数**已搬去机器房**（宪法 §2：那是"机器怎么想的"）。
       //   这里只留 Joe 真的会动的那个开关。
       $("#cfg-ramp").checked = !!c.send_ramp_enabled;
+      // C5-22 上限面板回填。⚠️ 来源徽章不是装饰：只给数字，Joe 分不清"这是我设的"还是
+      //   "没配置回落的"——铁律三禁的正是那种"看起来正常的默认值"。
+      const srcPill = (id, src) => { const e = $(id); if (!e) return;
+        if (src === "configured") { e.style.display = "none"; }
+        else { e.style.display = ""; e.textContent = "默认值"; e.title = "你还没设过，用的是系统默认。填一个数就变成你的。"; } };
+      { const g = $("#cfg-send-gap");  if (g) g.value = c.send_interval_seconds ?? ""; }
+      { const f = $("#cfg-ramp-floor"); if (f) f.value = c.send_ramp_floor ?? ""; }
+      { const x = $("#cfg-ramp-factor");if (x) x.value = c.send_ramp_factor ?? ""; }
+      { const w = $("#cfg-brk-win");   if (w) w.value = c.breaker_window_eff ?? ""; }
+      // 阈值存的是 0-1 的小数，界面上给的是百分比 —— **换算只在这一处**，别让两边各理解各的。
+      { const t = $("#cfg-brk-th");    if (t) t.value = c.breaker_threshold_eff != null ? Math.round(c.breaker_threshold_eff * 100) : ""; }
+      srcPill("#cfg-gap-src",  c.send_interval_source);
+      srcPill("#cfg-ramp-src", c.send_ramp_floor_source === "configured" || c.send_ramp_factor_source === "configured" ? "configured" : "default");
+      srcPill("#cfg-brk-src",  c.breaker_source);
       _chatScript = c.chat_script || DEFAULT_CHAT;
       $("#fu-enabled").checked = !!fu.enabled;
       $("#fu-delay").value = fu.delay_days;
@@ -3921,6 +3982,13 @@
         //   之后 3 天自动发了 17 封，直到今天才被发现。
         //   → 开关改成**勾选即存 + 二次确认**（见下方 renderAutomation），不再搭这趟车。
         body:JSON.stringify({ daily_send_limit:Number($("#cfg-limit").value), company_name:$("#cfg-company").value, company_address:$("#cfg-address").value, company_website:$("#cfg-website").value, selling_points:$("#cfg-selling").value, chat_script:$("#cfg-chatscript").value, bcc_archive:$("#cfg-bcc").value, send_ramp_enabled:$("#cfg-ramp").checked,
+          // ⚠️ 传的是**原始字符串**不是 Number()：空框 Number("") = 0，会把"我不想管这个"
+          //   写成"设成 0 秒/0 封"——那就是又造了一个魔法值。空串交给后端删行回落。
+          send_interval_seconds: $("#cfg-send-gap").value.trim(),
+          send_ramp_floor:       $("#cfg-ramp-floor").value.trim(),
+          send_ramp_factor:      $("#cfg-ramp-factor").value.trim(),
+          breaker_window:        $("#cfg-brk-win").value.trim(),
+          breaker_threshold:     (()=>{ const v=$("#cfg-brk-th").value.trim(); return v===""?"":String(Number(v)/100); })(),
           // C5-2：单选 → 后端语义。后端「0/空 = 跟随系统闸」的约定没变，
           //   变的是**这个约定不再暴露给 Joe** —— 他看到的是两个说人话的选项。
           auto_send_daily_limit: $("#cfg-auto-follow").checked ? 0 : (Number($("#cfg-auto-limit").value) || 0) }) }));

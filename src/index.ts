@@ -8,7 +8,7 @@ import { parseCsv, mapRowToLead } from "./csv";
 import { analyzeLead, getProfile, DEFAULT_PROFILE, ensureDraft } from "./service";
 import { writeReplyDraft, writeWarmFollowup, DEFAULT_SELLING_POINTS, translateToChinese, isTrustedDirectorySource, getAiUsage } from "./openrouter";
 import { scrapeSite } from "./scrape";
-import { sendLead, sendApprovedBatch, sendFollowupBatch, sendWarmFollowupNow, unsubscribeByToken, getSetting, setSetting, addSuppressedEmail, isEmailSuppressed, autoSentToday, sentToday, sentTodayBreakdown, failedTodayBreakdown, getBreakerStatus, BREAKER_WINDOW, BREAKER_THRESHOLD, deliverEmail, brandForLead, senderSentToday, SENDER_PRIMARY, SENDER_LEGACY, DEFAULT_COMPANY_ADDRESS, autoSendEnabled, autoApproveEnabled, systemDailySendLimit, coldSentToday, SYSTEM_LIMIT_DEFAULT, RAMP_FLOOR, RAMP_FACTOR, autoSendDailyLimit , automationEnabled, autoSendBlockedReason} from "./send";
+import { sendLead, sendApprovedBatch, sendFollowupBatch, sendWarmFollowupNow, unsubscribeByToken, getSetting, setSetting, addSuppressedEmail, isEmailSuppressed, autoSentToday, sentToday, sentTodayBreakdown, failedTodayBreakdown, getBreakerStatus, BREAKER_WINDOW, BREAKER_THRESHOLD, deliverEmail, brandForLead, senderSentToday, SENDER_PRIMARY, SENDER_LEGACY, DEFAULT_COMPANY_ADDRESS, autoSendEnabled, autoApproveEnabled, systemDailySendLimit, coldSentToday, SYSTEM_LIMIT_DEFAULT, RAMP_FLOOR, RAMP_FACTOR, autoSendDailyLimit , automationEnabled, autoSendBlockedReason, numSetting} from "./send";
 
 // 系统发信上限可设的最大值。Joe 拍板 1000 → 老的 500 clamp 会静默截断，故放宽到 2000 留余量。
 // （不设无穷：手滑多打一个 0 就把域名烧了，这类不可逆代价才值得一个上限。）
@@ -1108,6 +1108,27 @@ app.post("/api/admin/rescore-taxonomy", async (c) => {
   return c.json({ startedAt, processed: leads.length, ok, remaining: left?.n || 0, errors: errors.slice(0, 5) });
 });
 
+/**
+ * C5-26：找客户「搜索中」的**真实进度**（第 N/M 个关键词 · 已入库几家）。只读。
+ *
+ * ⚠️ 它**只用于显示，绝不用于判完成**。今天刚栽过这个：用"total 有增量"推断"搜索完成了"，
+ *   三次里两次是错的 —— **增量只证明在跑，不证明跑完了**。完成的唯一信号是
+ *   `POST /api/discover` 这个请求自己返回。
+ * ⚠️ 没有进行中的轮次时返回 running:false，**不是返回一个看起来像 0% 的进度**
+ *   —— 那两者在界面上必须长得不一样。
+ */
+app.get("/api/discover/progress", async (c) => {
+  const raw = (await getSetting(c.env, "discover_progress", "")).trim();
+  if (!raw) return c.json({ running: false });
+  try {
+    const p = JSON.parse(raw);
+    return c.json({ running: true, ...p });
+  } catch {
+    // 解析不了要**说出来**，不要当成"没在跑"——那正是把故障伪装成正常状态。
+    return c.json({ running: false, parseError: true, raw: raw.slice(0, 120) });
+  }
+});
+
 /** C5-13 验收用：分类分布（重刷前后各拉一次，做对比表）。只读。 */
 app.get("/api/admin/category-distribution", async (c) => {
   const rows = await c.env.DB.prepare(
@@ -1817,8 +1838,18 @@ app.get("/api/settings/sending", async (c) => {
     //   否则又变成"界面显示 1000、后端按 45 发"，就是我们刚修完的那种说谎。
     send_ramp_enabled: sysLimit.rampEnabled,
     send_ramp_cap: sysLimit.rampCap,
-    send_ramp_floor: RAMP_FLOOR,
-    send_ramp_factor: RAMP_FACTOR,
+    // C5-22 上限面板：**生效值 + 来源**一起给。
+    // ⚠️ 只给数字不给来源，Joe 分不清"这是我设的"还是"没配置回落的"——那正是铁律三禁的
+    //   "显示一个看起来正常的默认值"。source: configured = 他设过；default = 代码常量兜的。
+    send_ramp_floor: await numSetting(c.env, "send_ramp_floor", RAMP_FLOOR, 1, 5000),
+    send_ramp_floor_source: (await getSetting(c.env, "send_ramp_floor", "")).trim() ? "configured" : "default",
+    send_ramp_factor: await numSetting(c.env, "send_ramp_factor", RAMP_FACTOR, 1, 10),
+    send_ramp_factor_source: (await getSetting(c.env, "send_ramp_factor", "")).trim() ? "configured" : "default",
+    send_interval_seconds: await numSetting(c.env, "send_interval_seconds", SEND_INTERVAL_DEFAULT, 0, 3600),
+    send_interval_source: (await getSetting(c.env, "send_interval_seconds", "")).trim() ? "configured" : "default",
+    breaker_window_eff: Math.floor(await numSetting(c.env, "breaker_window", BREAKER_WINDOW, 5, 1000)),
+    breaker_threshold_eff: await numSetting(c.env, "breaker_threshold", BREAKER_THRESHOLD, 0.01, 0.9),
+    breaker_source: ((await getSetting(c.env, "breaker_window", "")).trim() || (await getSetting(c.env, "breaker_threshold", "")).trim()) ? "configured" : "default",
     yesterday_cold: sysLimit.yesterdayCold,
     effective_send_limit: sysLimit.effective,
     // 系统闸只卡冷发(initial+followup)；事务信(确认/回真人)豁免但在用量里显示，见 send.ts coldSentToday
@@ -1914,6 +1945,22 @@ app.post("/api/settings/sending", async (c) => {
   // ══ C5-22：「自动模式」总开关（Joe 的意图，唯一真源）══
   // ⚠️ 换挡要**推一次飞书**，因为今天出的事正是"被误触打开且无人察觉"。
   //   幂等靠"与当前值不同才动作"：页面刷新、重复 PUT 同一个值都不会重推。
+  // ══ C5-22 上限面板：Joe 的旋钮。清空 = **回落到代码默认**（删行），不是"设成 0" ══
+  // ⚠️ 这个区别不是细节：把"我不想管这个"和"我要它等于 0"混成一个输入，
+  //   就等于再造一次那个被拔掉的魔法值（旧的"填 0 = 跟随"）。空字符串删行、有值才写。
+  const numKnob = async (key: string, v: any) => {
+    if (v == null) return;
+    const raw = String(v).trim();
+    if (raw === "") { await c.env.DB.prepare("DELETE FROM settings WHERE key=?").bind(key).run(); return; }
+    const n = Number(raw);
+    if (Number.isFinite(n)) await setSetting(c.env, key, String(n));
+  };
+  await numKnob("send_interval_seconds", (b as any).send_interval_seconds);
+  await numKnob("send_ramp_floor",      (b as any).send_ramp_floor);
+  await numKnob("send_ramp_factor",     (b as any).send_ramp_factor);
+  await numKnob("breaker_window",       (b as any).breaker_window);
+  await numKnob("breaker_threshold",    (b as any).breaker_threshold);
+
   if (b.automation_enabled != null) {
     const want = !!b.automation_enabled;
     const was = await automationEnabled(c.env);

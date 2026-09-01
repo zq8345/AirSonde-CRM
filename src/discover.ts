@@ -329,6 +329,23 @@ export async function findSiblingByRoot(env: Env, url: string): Promise<{ id: nu
  * 用 notes 而不是新加一列：不需要迁移，而且**这是给人看的提示不是机器的判据** ——
  * 机器不该据此自动合并/跳过，它只是在 Joe 打开这条时告诉他"隔壁还有一个长得像的"。
  */
+/**
+ * C5-26：把"写标记"这一步单独拿出来 —— 谁是 sibling 由调用方决定（找客户那条管道用预载索引，
+ * 别的调用方仍走 findSiblingByRoot 现查）。**判断和写入分开，两个调用方共用写入这一半。**
+ */
+export async function markSiblingPair(env: Env, leadId: number, sibId: number): Promise<void> {
+  if (!leadId || !sibId) return;
+  try {
+    const sib = await env.DB.prepare("SELECT id, website FROM leads WHERE id=?").bind(sibId).first<any>();
+    if (!sib) return;
+    await env.DB.prepare(
+      `UPDATE leads SET notes = substr(COALESCE(notes,'') || char(10) || '[' || datetime('now') || '] 疑似与 #' || ?
+              || '（' || ? || '）是同一家：域名主体相同、站点不同。**没有自动合并** —— 可能真是同一家的多个区域站，也可能只是撞名，你来判断。', -4000)
+        WHERE id = ?`
+    ).bind(sib.id, sib.website, leadId).run();
+  } catch (e) { console.error("markSiblingPair:", e); }
+}
+
 export async function markSibling(env: Env, leadId: number, website: string): Promise<void> {
   if (!leadId) return;
   try {
@@ -365,6 +382,10 @@ export interface DiscoverResult {
   serperUsedToday?: number;   // P0-c：今日累计 Serper 搜索次数
   serperBudget?: number;      // P0-c：今日 Serper 预算上限
   searchFailed?: number;      // 本轮有几次搜索直接失败（额度用尽/4xx）；原话记在 settings.serper_fail_last
+  // C5-26 耗时分解（只量不改行为）：msSearch = Serper 往返；msDb = 判重/入库/标记/记账
+  msTotal?: number;
+  msSearch?: number;
+  msDb?: number;
 }
 
 // 主流程：对每个关键词 × 每个目标国家搜索 → 提取公司域名 → 去重 → 入库(status=new)
@@ -411,11 +432,55 @@ export async function runDiscovery(env: Env, opts: { keywords?: string[]; perKey
   const errors: string[] = [];
   const seenThisRun = new Set<string>();
 
+  // ⭐⭐ C5-26：**每轮预载一次判重索引**，取代"每条结果一次全表扫"。
+  //
+  // 为什么慢是可以从代码判定的，不用猜：
+  //   · `findLeadByHost` 的 WHERE 是 `lower(replace(replace(replace(rtrim(website,'/'),…))) = ?`
+  //     —— SQLite 没有正则、这种现算表达式**走不了任何索引** ⇒ 每次都是全表扫。
+  //     它**每条搜索结果调一次**：26 关键词 × 8 条 ≈ 208 次。
+  //   · `markSibling → findSiblingByRoot` 更贵：`SELECT … LIMIT 2000` 的全表扫，**每插入一条调一次**。
+  //   两者加起来就是"Serper 只要 ~30 秒、整轮却要几分钟"里的那一大块。
+  //
+  // ⚠️ 判重**规则一个字没改**：仍然用 normalizeHost / companyFromDomain 这两个同样的函数算键，
+  //   只是把"算一次比一行"换成"算一次比全部"。规则若要改，改的是那两个函数，不是这里。
+  // ⚠️ 本轮新插入的也要进索引 —— 否则同一轮里的重复会漏（旧写法靠"插完下次查得到"覆盖了这一点）。
+  const hostIndex = new Map<string, number>();     // 规范化域名 → lead id
+  const rootIndex = new Map<string, { id: number; company_name: string; website: string }>();  // 域名主体 → 一条既有线索
+  {
+    const rows = (await env.DB.prepare(
+      "SELECT id, company_name, website FROM leads WHERE website IS NOT NULL AND website != ''"
+    ).all()).results as any[];
+    for (const r of rows) {
+      const h = normalizeHost(r.website);
+      if (!h) continue;
+      if (!hostIndex.has(h)) hostIndex.set(h, Number(r.id));
+      const label = companyFromDomain(h).toLowerCase().replace(/\s+/g, "");
+      if (label.length >= 4 && !rootIndex.has(label)) rootIndex.set(label, r);
+    }
+  }
+
+  // C5-26：耗时分解。⚠️ 只量不改行为；**报出来是为了让"慢在哪"有答案，不是为了好看**。
+  const t0 = Date.now(); let msSearch = 0, msDb = 0; const tick = () => Date.now();
+  let comboDone = 0;
+  const publishProgress = async () => {
+    // ⚠️ 进度**只用于显示**。完成与否**不看它**（那是"用增量推断完成"，今天刚栽过）——
+    //   完成的唯一信号是这个函数返回、也就是 /api/discover 这个请求 resolve。
+    try {
+      await setS(env, "discover_progress", JSON.stringify({
+        at: new Date().toISOString().slice(0, 19).replace("T", " "),
+        done: comboDone, total: combos.length, inserted, skipped, searched,
+      }));
+    } catch { /* 发布进度失败不能拖垮找客户本身 */ }
+  };
+  await publishProgress();
+
   for (const { kw, gl } of combos) {
     if (usedToday >= budget) { budgetStopped = true; break; }   // 触及今日预算 → 停
     let results: SearchResult[];
     try {
+      const _ts = tick();
       results = await searchCompanies(env, kw, perKeyword, gl);
+      msSearch += tick() - _ts;
       searched++; usedToday++;
       await setS(env, usedKey, String(usedToday));   // 每搜一次即记账，进程中断也不丢
     } catch (e: any) {
@@ -445,20 +510,37 @@ export async function runDiscovery(env: Env, opts: { keywords?: string[]; perKey
       // 批⑮：统一走 findDuplicateLead（网址归一化 + 邮箱两把钥匙，全库唯一一条判重规则）。
       // 这条管道插入时没有邮箱（邮箱是 analyzeLead 抓站时才回填的）→ 实际只有网址那把生效；
       // 用共用函数是为了**以后谁给这条路加上邮箱时，判重自动跟上**，不用再想起来补一次。
-      const dup = await findDuplicateLead(env, { website });
-      if (dup) { skipped++; continue; }
+      // 判重走预载索引（规则同 findDuplicateLead 的网址那把钥匙；这条管道插入时没有邮箱，
+      // 邮箱那把本来就不生效 —— 见下方原注释）。
+      if (hostIndex.has(domain)) { skipped++; continue; }
       const company = companyFromDomain(domain) || cleanTitle(r.title);   // M1 域名推名优先，回落标题
       const country = inferCountryFromWebsite(website) || gl.toUpperCase(); // M2 ccTLD 推真实所在国优先，gl 仅兜底；统一大写
       const ins = await env.DB.prepare(
         "INSERT INTO leads (company_name, website, country, source, keyword, status) VALUES (?, ?, ?, 'search', ?, 'new')"
       ).bind(company, website, country, kw).run();
-      await markSibling(env, Number(ins.meta.last_row_id), website);   // 跨域名疑似同一家 → 打标记，不合并
+      const newId = Number(ins.meta.last_row_id);
+      hostIndex.set(domain, newId);                                    // 本轮内的重复也要挡住
+      // 跨域名疑似同一家 → 打标记，不合并（**标记可逆、合并不可逆，由人决定**）。走预载索引。
+      {
+        const label = companyFromDomain(domain).toLowerCase().replace(/\s+/g, "");
+        if (label.length >= 4) {
+          const sib = rootIndex.get(label);
+          if (sib && normalizeHost(sib.website) !== domain) await markSiblingPair(env, newId, sib.id);
+          else if (!sib) rootIndex.set(label, { id: newId, company_name: company, website });
+        }
+      }
       inserted++;
     }
+    comboDone++;
+    await publishProgress();   // 每个关键词跑完发布一次：Joe 要看见"第 N/26"，不是一个空转的圈
   }
+  msDb = Date.now() - t0 - msSearch;   // 非搜索时间 = 判重/入库/标记/记账
   // 全军覆没（跑了但一次都没成功）多半是额度用尽/密钥失效 —— 这种最该在日志里一眼看见。
   if (searchFailed && !searched) console.error(`discovery: ${searchFailed} 次搜索全部失败（额度用尽/密钥失效？）最近一条见 settings.serper_fail_last`);
-  return { keywords: keywords.length, searched, inserted, skipped, contentSkipped, errors: errors.slice(0, 10), budgetStopped, serperUsedToday: usedToday, serperBudget: budget, searchFailed };
+  console.log(`discovery 耗时分解：总 ${Math.round((Date.now() - t0) / 1000)}s = 搜索 ${Math.round(msSearch / 1000)}s + 其余(判重/入库/标记) ${Math.round(msDb / 1000)}s · ${searched} 次搜索 / ${inserted} 入库`);
+  try { await setS(env, "discover_progress", ""); } catch { /* 清进度失败无所谓 */ }
+  return { keywords: keywords.length, searched, inserted, skipped, contentSkipped, errors: errors.slice(0, 10), budgetStopped, serperUsedToday: usedToday, serperBudget: budget, searchFailed,
+           msTotal: Date.now() - t0, msSearch, msDb };
 }
 
 // P0-c：读今日 Serper 用量 + 预算（供后台展示）
