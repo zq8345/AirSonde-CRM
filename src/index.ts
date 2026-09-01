@@ -20,6 +20,7 @@ import { ensureReplyColumns, stripQuoted, previewOf, isNoiseReply, tabOf, type I
 import { installFetchMeter, meteredDB, mark as subMark, reset as subReset, summary as subSummary } from "./subreq";
 import { normalizeCustomerType, customerTypeLabel, classifyKillReason, KILL_REASONS } from "./taxonomy";
 import { errHuman } from "./errhuman";   // C5-24 第 5 条：机器错误串 → 人话（服务端唯一一份）
+import { currentActivity, setActivity, clearActivity } from "./activity";   // C5-28：机器活动真源
 
 /**
  * ⭐⭐ C5-14：**一条线索一行数据长什么样，只在这里说一次。**
@@ -1110,6 +1111,84 @@ app.post("/api/admin/rescore-taxonomy", async (c) => {
 });
 
 /**
+ * ⭐⭐ C5-28：右上角状态栏的**唯一真源**。四态徽章 + 动作小字**全部在服务端判定**，前端只渲染。
+ *
+ * 为什么判定放服务端：状态栏要说 4 种班次态 × 7 种动作。让前端拼，就是七处口径 ——
+ * 而这一单本身就是来收编双真源的（顶栏小牌 + an-chip）。边收编边新造六处是自相矛盾的。
+ *
+ * ⚠️ 三条边界（总调度点名要防的，写在这里免得以后有人接错）：
+ *   · **「今日发满」是正常待机，不是受阻** —— 它不点橙灯。额度用完是机器守规矩，不是出故障。
+ *   · **收信失败不点橙灯** —— 它走「机器出事了」那一层。橙灯只表示"**出站**被卡住"。
+ *   · 「手动·工作中」= 总开关关着、但**有人交办的活在跑**。模式 ≠ 动作，人插手不换班。
+ */
+app.get("/api/activity", async (c) => {
+  const auto = await automationEnabled(c.env);
+  const act = await currentActivity(c.env);
+
+  // ── 受阻判定：只看**出站**是否被卡住。用 errHuman 给出六类里的判定结果，
+  //    别让 Joe 自己从原话猜类别（C5-28 增补）。
+  let blocked: { kind: string; human: string; raw: string; group: string } | null = null;
+  if (auto) {
+    const why = await autoSendBlockedReason(c.env);
+    // ⚠️ "发信这一步被单独关掉了"是 Joe 自己关的，**不是受阻** —— 那是他的选择，不该亮橙灯。
+    if (why && !why.includes("被单独关掉")) {
+      const raw = (await getSetting(c.env, "auto_send_trip_reason", "")).trim() || why;
+      blocked = errHuman(raw);
+    }
+    if (!blocked) {
+      // 最近一封失败信的原话（只看今天的，陈年失败不该一直亮着灯）
+      const f = await c.env.DB.prepare(
+        "SELECT error FROM emails WHERE status='failed' AND date(created_at)=date('now') ORDER BY id DESC LIMIT 1"
+      ).first<{ error: string }>();
+      if (f?.error) blocked = errHuman(f.error);
+    }
+  }
+
+  // ── 徽章四态 ──────────────────────────────────────────────
+  const badge = !auto
+    ? (act ? "manual-busy" : "stopped")      // 关：有人交办的活在跑 → 手动·工作中；否则 已停·只收耳朵
+    : (blocked ? "auto-blocked" : "auto-running");
+
+  // ── 动作小字（七种，服务端拼好）──────────────────────────
+  const { effective } = await systemDailySendLimit(c.env);
+  const sentToday = await coldSentToday(c.env);
+  let action = "", detail = "";
+  if (act) {
+    const n = (a: any) => (a.total ? `${a.done ?? 0}/${a.total}` : String(a.done ?? ""));
+    action = act.kind === "search"   ? `搜索中 ${n(act)}${act.note ? " · " + act.note : ""}`
+           : act.kind === "analyze"  ? `分析中 ${n(act)}`
+           : act.kind === "findmail" ? `补邮箱中 ${n(act)}`
+           : act.kind === "send"     ? `发信中 ${n(act)}（今日 ${sentToday}/${effective}）`
+           : "收信中";
+    // ⭐ 插队语义（Joe 亲自问定的）：自动模式下人工交办的活，**徽章不变**，小字加前缀。
+    //    模式 ≠ 动作，人插手不换班。发起方落在服务端（activity.by），不靠前端记自己点没点过。
+    if (auto && act.by === "user") action = "你交办的：" + action;
+  } else if (auto && sentToday >= effective) {
+    // ⚠️ 额度型待机**要说明原因**，否则"发满了"和"坏了"在屏幕上长得一样。
+    //    明天的上限用爬坡真值算，不写死。
+    const tomorrow = Math.max(await numSetting(c.env, "send_ramp_floor", RAMP_FLOOR, 1, 5000),
+                              Math.floor(sentToday * await numSetting(c.env, "send_ramp_factor", RAMP_FACTOR, 1, 10)));
+    action = `今日发满 ${sentToday} 封 · 明天上限 ${tomorrow}`;
+  } else {
+    // ⚠️ 总开关关且无活动时**小字留空**：徽章已经写着「已停·只收耳朵」了，
+    //   小字再说一遍就是"徽章和小字在说同一句话"（渲染测试里真的看到 "已停·只收耳朵 · 已停 · 只收耳朵"）。
+    //   语义是「徽章说班次，小字说实况」—— 没有实况就别硬凑一句。
+    action = auto ? "待机 · 盯着收信" : "";
+  }
+  if (blocked) { detail = blocked.raw; action = blocked.human; }
+
+  return c.json({
+    badge,                       // auto-running | auto-blocked | manual-busy | stopped
+    busy: !!act,                 // 前端据它决定"呼吸"动画 —— **idle 必须静止，别做成永远闪的灯**
+    action,                      // 给人看的一句
+    detail,                      // 服务器原话（受阻时才有），放 title 供排查
+    blockedKind: blocked ? blocked.kind : null,
+    blockedGroup: blocked ? blocked.group : null,
+    initiator: act ? act.by : null,
+  });
+});
+
+/**
  * C5-26：找客户「搜索中」的**真实进度**（第 N/M 个关键词 · 已入库几家）。只读。
  *
  * ⚠️ 它**只用于显示，绝不用于判完成**。今天刚栽过这个：用"total 有增量"推断"搜索完成了"，
@@ -1629,13 +1708,25 @@ app.post("/api/analyze/batch", async (c) => {
       ).bind(limit).all();
   const leads = rows.results as any[];
 
-  // 批⑦B：3 条并发（为什么是 3 见 ANALYZE_CONCURRENCY）。每条自己 try/catch，一条炸了不带走整批。
-  const results = await pool(leads, ANALYZE_CONCURRENCY, async (lead) => {
-    try { return await analyzeLead(c.env, lead); }
-    catch (e) { console.error("analyze:", lead.id, e); return { ok: false, id: lead.id, error: String(e) }; }
-  });
-  const ok = results.filter((r) => r.ok).length;
-  return c.json({ processed: results.length, ok, failed: results.length - ok, results });
+  // C5-28：这条路径是**前端驱动的分析循环**（Joe 在找客户弹窗里跑的），所以发起方 = user。
+  //   不在这里声明的话，状态栏就看不见它 —— 而它恰恰是 Joe 最常盯着的那件事。
+  //   ⚠️ 剩余条数从库里现查（真源），不拿前端传来的数当进度。
+  const left = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM leads WHERE status='new'").first<{ n: number }>();
+  await setActivity(c.env, "analyze", "user", { done: 0, total: left?.n ?? leads.length });
+  try {
+    // 批⑦B：3 条并发（为什么是 3 见 ANALYZE_CONCURRENCY）。每条自己 try/catch，一条炸了不带走整批。
+    const results = await pool(leads, ANALYZE_CONCURRENCY, async (lead) => {
+      try { return await analyzeLead(c.env, lead); }
+      catch (e) { console.error("analyze:", lead.id, e); return { ok: false, id: lead.id, error: String(e) }; }
+    });
+    const ok = results.filter((r) => r.ok).length;
+    return c.json({ processed: results.length, ok, failed: results.length - ok, results });
+  } finally {
+    // ⚠️ 只有队列真空了才清活动 —— 前端是一批一批打的，每批之间清一次会让状态栏闪。
+    const still = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM leads WHERE status='new'").first<{ n: number }>();
+    if (!(still?.n)) await clearActivity(c.env, "analyze");
+    else await setActivity(c.env, "analyze", "user", { done: 0, total: still.n });
+  }
 });
 
 // ---- 客户画像设置 ----
@@ -2155,8 +2246,13 @@ app.post("/api/discover", async (c) => {
     const roundAt = (await c.env.DB.prepare("SELECT datetime('now') AS t").first<{ t: string }>())?.t || "";
     await setSetting(c.env, "discover_round_id", `${roundAt}#${Math.floor(Math.random() * 1e6)}`);
     await setSetting(c.env, "discover_round_at", roundAt);
-    const out = await runDiscovery(c.env, body);
-    return c.json(out);
+    // C5-28：这条路径**一定是人点的**（Joe 在找客户弹窗里按的），所以发起方 = user。
+    //   状态栏据此加「你交办的：」前缀 —— 发起方是事实，落服务端，不靠前端记自己点没点过。
+    await setActivity(c.env, "search", "user", { done: 0, total: 0 });
+    try {
+      const out = await runDiscovery(c.env, body);
+      return c.json(out);
+    } finally { await clearActivity(c.env, "search"); }
   } catch (e: any) {
     return c.json({ error: e.message || String(e) }, 500);
   }
@@ -3661,8 +3757,12 @@ async function fastTick(env: Env, ctx: ExecutionContext): Promise<void> {
 
     // 3a) 分析新到的线索
     if (budget.has(45_000)) {
-      const r = await analyzePending(env, TICK_ANALYZE_MAX, { concurrency: ANALYZE_CONCURRENCY, budget });
-      analyzed = r.ok || 0;
+      // C5-28：干活的人**主动声明**自己在干什么（不靠别处推断），干完清掉。
+      await setActivity(env, "analyze", "auto", { total: TICK_ANALYZE_MAX });
+      try {
+        const r = await analyzePending(env, TICK_ANALYZE_MAX, { concurrency: ANALYZE_CONCURRENCY, budget });
+        analyzed = r.ok || 0;
+      } finally { await clearActivity(env, "analyze"); }
     }
 
     // 3b) 够分的立刻批准 —— **不等整点**（C5-19 的"打分完成即批"并入这里）。
@@ -3703,8 +3803,11 @@ async function fastTick(env: Env, ctx: ExecutionContext): Promise<void> {
       const room = Math.max(0, autoLimit - (await autoSentToday(env)));
       const take = Math.min(room, TICK_SEND_MAX);
       if (take > 0) {
-        const r = await sendApprovedBatch(env, take, undefined, true, { concurrency: SEND_CONCURRENCY, budget });
-        sent = r.sent || 0;
+        await setActivity(env, "send", "auto", { total: take });
+        try {
+          const r = await sendApprovedBatch(env, take, undefined, true, { concurrency: SEND_CONCURRENCY, budget });
+          sent = r.sent || 0;
+        } finally { await clearActivity(env, "send"); }
       }
     }
   } catch (e) {

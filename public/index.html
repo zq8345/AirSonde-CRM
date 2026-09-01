@@ -137,13 +137,22 @@
                background:var(--tint-blue); border:1px solid var(--border); color:var(--blue);
                padding:5px 10px; border-radius:8px; white-space:nowrap; }
     .an-chip:hover { border-color:var(--blue); }
-    /* C5-22 自动模式徽章。⚠️ 它是个按钮，所以**不做实心**（附录 C.7：一屏至多一个主动作，
-       而主动作永远该是页面正在做的那件事，不是一个状态指示）。两态靠底色+文字区分。 */
-    .auto-badge { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:600;
-                  padding:5px 10px; border-radius:7px; cursor:pointer; white-space:nowrap; }
-    .auto-badge.on  { background:var(--tint-blue); border:1px solid var(--blue); color:var(--blue); }
-    .auto-badge.off { background:var(--bg); border:1px solid var(--border-strong); color:var(--muted); }
-    .auto-badge.warn{ background:var(--tint-red); border:1px solid var(--red); color:var(--red); }
+    /* ⭐⭐ C5-28 状态栏。⚠️ 是按钮，所以**不做实心**（附录 C.7：主动作永远该是页面正在做的那件事，
+       不是一个状态指示）。四态靠底色 + 圆点 + 文字区分。 */
+    .status-bar { display:inline-flex; align-items:center; gap:7px; font-size:12px;
+                  padding:5px 10px; border-radius:7px; cursor:pointer; white-space:nowrap; max-width:340px; }
+    .status-bar .sb-badge { font-weight:600; }
+    .status-bar .sb-act { color:var(--muted); overflow:hidden; text-overflow:ellipsis; }
+    .status-bar .sb-dot { width:7px; height:7px; border-radius:50%; background:currentColor; flex-shrink:0; }
+    .status-bar.auto-running { background:var(--tint-blue); border:1px solid var(--blue); color:var(--blue); }
+    .status-bar.auto-blocked { background:var(--tint-amber); border:1px solid var(--amber); color:var(--amber); }
+    .status-bar.manual-busy  { background:var(--tint-blue); border:1px solid var(--blue); color:var(--blue); }
+    .status-bar.stopped      { background:var(--bg); border:1px solid var(--border-strong); color:var(--muted); }
+    /* ⚠️ 呼吸**只在真的有活在跑时**（.busy）才有 —— idle 必须静止。
+       一盏永远闪的灯等于没有灯：闪成常态之后，它闪就不再意味着任何事。 */
+    @keyframes sbPulse { 0%,100% { opacity:1 } 50% { opacity:.35 } }
+    .status-bar.busy .sb-dot { animation: sbPulse 1.6s ease-in-out infinite; }
+    @media (prefers-reduced-motion: reduce) { .status-bar.busy .sb-dot { animation:none } }
     .an-chip i { display:block; width:56px; height:4px; border-radius:2px; background:var(--border); overflow:hidden; }
     .an-chip i > b { display:block; height:100%; background:var(--blue); }
     .btn-quiet { background:transparent; border-color:transparent; color:var(--muted); }
@@ -768,11 +777,14 @@
       <input type="search" id="q" placeholder="搜索公司 / 邮箱 / 域名…" />
       <!-- C5-11 B：分析进度条 —— **不阻断**。关掉弹窗后它接着显示进度，点它把弹窗调回来。
            默认隐藏；有待分析线索时（含刷新后恢复）才出现。 -->
-      <!-- ⭐ C5-22：自动模式**常驻**徽章，全站每页可见。
-           今天出的事不是"没有开关"，是**状态不可见、变更无感知** —— 一个只住在设置页里的开关，
-           等于没人知道它现在是什么状态。点它直接去设置页那一格。 -->
-      <button id="auto-badge" class="auto-badge" style="display:none" onclick="openSettings()"></button>
-      <button id="an-chip" class="an-chip" style="display:none" onclick="openRestock()"></button>
+      <!-- ⭐⭐ C5-28：右上角**常驻状态栏**。语义 = 「徽章说班次，小字说实况」。
+           收编了两处旧真源：C5-22 的自动模式小牌 + C5-11 的「AI 分析 x/y」an-chip。
+           ⚠️ **两处原件已删，不留双真源** —— 这一单本身就是来收编它们的。
+           ⚠️ 四态与七种小字**全部由 /api/activity 服务端判定**，这里只渲染。
+           点它去机器房（"为什么机器这么干"的那一页）。 -->
+      <button id="status-bar" class="status-bar" style="display:none" onclick="openMachineRoom()">
+        <span class="sb-dot"></span><span class="sb-badge"></span><span class="sb-act"></span>
+      </button>
       <!-- 左栏导航的隐藏代理按钮（左栏 side-nav 的 handler 靠它们，勿删） -->
       <button id="btn-today" style="display:none">待办事项</button>
       <button id="btn-dashboard" style="display:none">数据看板</button>
@@ -1093,7 +1105,11 @@
        ⚠️「只搜某国」「本次条数」是**单次参数**，从此只活在这个弹窗里（总工 C5-3 ①）。 -->
   <div class="overlay" id="restock-overlay">
     <div class="modal" style="width:min(680px,96vw)">
-      <button class="modal-x" type="button" onclick="closeRestock()" title="关闭">×</button>
+      <!-- ⭐ C5-28（Joe 原话"记得加个最小化的按钮"）：他不敢点 ×，因为 **× 在弹窗上默认读作"取消"**。
+           这是真实的 affordance 盲点 —— 行为对不对不重要，**他不敢点就等于这个能力不存在**。
+           ⇒ 加一个显式「—」，与 × 同义；× 的悬浮提示也改成"收起"，让"收起 ≠ 取消"长在按钮上。 -->
+      <button class="modal-x" type="button" onclick="closeRestock()" title="收起（后台继续跑）" style="right:46px">—</button>
+      <button class="modal-x" type="button" onclick="closeRestock()" title="收起（后台继续跑）">×</button>
       <h2>➕ 找客户</h2>
       <!-- 积压刹车条：它的全部意义就是**拦在"再进货"这个决定前面**（总工裁定 A）。
            ⚠️ 条里三个「去处理」链接点下去要先关弹窗再跳，否则弹窗会盖在跳转后的列表上。 -->
@@ -1134,6 +1150,8 @@
       <div id="dp-progress" style="display:none;margin-top:12px">
         <div class="prog-track"><div class="prog-bar" id="dp-bar"></div></div>
         <div class="prog-log" id="dp-log"></div>
+        <!-- C5-28：说清"收起不等于取消"。⚠️ 计入字数预算，所以只写一句、不解释机制。 -->
+        <div class="hint" style="margin-top:6px">收起后继续后台运行，进度在右上角。</div>
         <div id="dp-result" style="margin-top:10px"></div>
       </div>
     </div>
@@ -3236,60 +3254,54 @@
     //   只做两态的话，"开着却一封没发"会长得跟"正常运行中"一模一样 —— 那正是今天这条 bug 的形状。
     // ⚠️ 理由文字取后端**唯一**那个 autoSendBlockedReason，不在这里另拼（铁律五）。
     let _autoState = null;
-    async function paintAutomationBadge(){
-      const el = document.getElementById('auto-badge'); if (!el) return;
-      let c = null;
-      try { c = await fetch('/api/settings/sending').then(r=>r.json()); } catch {}
-      if (!c || typeof c.automation_enabled !== 'boolean'){
-        // 铁律三：读不到就说读不到，**不显示一个看起来正常的默认值**。
-        el.style.display=''; el.className='auto-badge warn'; el.textContent='自动模式：读不到';
-        el.title='后台没返回开关状态 —— 这是"不知道"，不是"关着"'; _autoState=null; return;
+    // ══⭐⭐ C5-28：右上角状态栏 —— 「徽章说班次，小字说实况」══
+    //
+    // 收编了两处旧真源：C5-22 的自动模式小牌 + C5-11 的「AI 分析 x/y」an-chip。
+    // ⚠️ **判定全在服务端**（/api/activity）。前端一个 if 都不加：四态 × 七种小字若在这里拼，
+    //   就是把刚收编掉的双真源换个地方重造。
+    // ⚠️ 读不到就**说读不到**（铁律三），不显示一个看起来正常的默认值 ——
+    //   这一格恰恰最不能猜：它的全部意义就是让机器状态可见。
+    let _sbTimer = null;
+    async function paintStatusBar(){
+      const el = document.getElementById('status-bar'); if (!el) return;
+      let d = null;
+      try { d = await fetch('/api/activity').then(r => r.json()); } catch {}
+      el.style.display = '';
+      if (!d || !d.badge) {
+        el.className = 'status-bar stopped';
+        el.querySelector('.sb-badge').textContent = '状态读不到';
+        el.querySelector('.sb-act').textContent = '';
+        el.title = '后台没返回状态 —— 这是"不知道"，不是"停了"';
+        return;
       }
-      _autoState = c.automation_enabled;
-      el.style.display='';
-      if (!c.automation_enabled){
-        el.className='auto-badge off'; el.textContent='手动';
-        el.title='自动模式关：搜索/分析/批准/发送/跟进全停；收信与通知照常在线。点这里去设置。';
-      } else if (c.auto_send_blocked_reason){
-        el.className='auto-badge warn'; el.textContent='自动 · 发信受阻';
-        el.title=`自动模式开着，但发信这一步没在跑：${c.auto_send_blocked_reason}。点这里去设置。`;
-      } else {
-        el.className='auto-badge on'; el.textContent='自动 · 运行中';
-        el.title=`自动模式开：机器连续找客户/分析/批准/发信。今日还可发 ${c.send_room_today ?? '?'} 封。点这里去设置。`;
-      }
+      const LABEL = { 'auto-running':'自动·运行中', 'auto-blocked':'自动·发信受阻',
+                      'manual-busy':'手动·工作中', 'stopped':'已停·只收耳朵' };
+      el.className = 'status-bar ' + d.badge + (d.busy ? ' busy' : '');
+      el.querySelector('.sb-badge').textContent = LABEL[d.badge] || d.badge;
+      el.querySelector('.sb-act').textContent = d.action ? ' · ' + d.action : '';
+      // 受阻时把**服务器原话**挂上去（排查要的是它，不是那句人话）
+      el.title = (d.detail ? d.detail + "\n\n" : "") + "点这里去机器房看机器为什么这么干";
     }
-    window.paintAutomationBadge = paintAutomationBadge;
+    window.paintStatusBar = paintStatusBar;
+    /** 常驻轮询。⚠️ 有活在跑时快一点、闲着时慢下来 —— 闲着还每 3 秒打一次是白烧额度。 */
+    function startStatusPolling(){
+      const tick = async () => {
+        await paintStatusBar();
+        const busy = document.getElementById('status-bar')?.classList.contains('busy');
+        clearTimeout(_sbTimer);
+        _sbTimer = setTimeout(tick, busy ? 3000 : 15000);
+      };
+      tick();
+    }
 
-    // C5-26：顶栏 chip 的**搜索态**。与分析态共用同一个 chip（同一个位置只讲一件事），
-    //   文案区分两态，关掉弹窗后照样看得见进度。
-    // ⚠️ 搜索是**一个后端长请求**，关弹窗不会中断它 —— 所以这里可以如实说"关掉也在跑"。
-    //   （分析那一步是前端驱动的循环，措辞不同，别互相抄。）
-    function paintSearchChip(done, total, inserted){
-      const el = $("#an-chip"); if (!el) return;
-      if (!total) { el.style.display = "none"; return; }
-      const pct = Math.min(100, Math.round(done / total * 100));
-      el.style.display = "inline-flex";
-      el.innerHTML = `<i><b style="width:${pct}%"></b></i><span>搜索中 ${done}/${total} · 入库 ${inserted}</span>`;
-      el.title = "搜索在后台继续（关掉窗口也在跑）；点这里回到找客户";
-    }
-    window.paintSearchChip = paintSearchChip;
-
-    function paintAnalyzeChip(done, remaining, total){
-      const el = $("#an-chip"); if (!el) return;
-      if (!remaining) { el.style.display = "none"; return; }
-      const pct = total ? Math.min(100, Math.round((total - remaining) / total * 100)) : 0;
-      el.style.display = "inline-flex";
-      el.innerHTML = `<i><b style="width:${pct}%"></b></i><span>AI 分析中 ${done}/${total}</span>`;
-      el.title = "分析在后台继续；点这里看详情";
-    }
     /** 页面加载/刷新时：库里还有待分析的就自动接着跑（B2）。 */
     async function resumeAnalyzeIfPending(){
       const p = await fetch("/api/analyze/pending-ids?limit=1").then(r=>r.json()).catch(()=>({ids:[]}));
       if (!(p.ids || []).length) return;
       try {
-        await drainAnalyze((ok, remaining, total) => paintAnalyzeChip(ok, remaining, total));
+        await drainAnalyze(() => paintStatusBar());
       } finally {
-        paintAnalyzeChip(0, 0, 0);
+        paintStatusBar();
         // B4：跑完推飞书。**幂等在服务端**，这里放心调 —— 刷新恢复的那一次也会调到，不会重推。
         fetch("/api/discover/round-complete", { method:"POST" }).catch(()=>{});
       }
@@ -3743,7 +3755,7 @@
             if (pg && pg.running && pg.total) {
               setLog(`① 搜索中…第 ${pg.done}/${pg.total} 个关键词 · 已入库 ${pg.inserted} 家（可以关掉这个窗口）`);
               setBar(6 + Math.min(1, pg.done / pg.total) * 12);
-              paintSearchChip(pg.done, pg.total, pg.inserted);
+              paintStatusBar();
             }
           } catch {
             // ⚠️ 驱动请求失败要**说出来**：永远转圈会让"卡住了"和"在跑"长得一模一样，
@@ -3755,7 +3767,7 @@
         try {
           d = await fetch("/api/discover",{method:"POST",headers:{"content-type":"application/json"},
             body:JSON.stringify({countries, keywords:(_fcKwRows.length ? kws : undefined), perKeyword:per})}).then(r=>r.json()).catch(e=>({error:String(e)}));
-        } finally { clearInterval(poll); paintSearchChip(0, 0, 0); }
+        } finally { clearInterval(poll); paintStatusBar(); }
         if (d.error){ setLog("① 搜索失败：" + d.error); return; }
         setLog(`① 搜索完成：执行 ${d.searched} 次搜索，新增 ${d.inserted} 家，去重/跳过 ${d.skipped}。`
           + (d.msTotal ? `（用时 ${Math.round(d.msTotal/1000)} 秒：搜索 ${Math.round((d.msSearch||0)/1000)} 秒 + 入库 ${Math.round((d.msDb||0)/1000)} 秒）` : "")
@@ -3765,7 +3777,7 @@
 
         // ② AI 分析（复用 drainAnalyze 抽干，直到无 new 或达上限）
         const a2 = await drainAnalyze((ok, remaining, total)=>{
-          paintAnalyzeChip(ok, remaining, total);   // 顶栏进度条：关掉弹窗也看得见
+          paintStatusBar();   // 顶栏进度条：关掉弹窗也看得见
           setLog(`② AI 分析中…已分析 ${ok}，还剩 ${remaining} 条（抓官网 + 打分，每条约 10-30 秒）`);
           setBar(20 + (total ? Math.min(1, ok/total) : 0) * 50);
         });
@@ -3794,7 +3806,7 @@
         loadStats(); loadList(); loadFacets();
       } finally {
         pipelineRunning = false;
-        paintAnalyzeChip(0, 0, 0);
+        paintStatusBar();
         // B4：本轮跑完推飞书。幂等在服务端（discover_round_id vs notified + new 清零），
         //   所以这里无脑调 —— 刷新恢复的那条路径也会调到，不会重推。
         fetch("/api/discover/round-complete", { method:"POST" }).catch(()=>{});
@@ -4060,7 +4072,7 @@
           await fetch("/api/settings/sending",{method:"POST",headers:{"content-type":"application/json"},
             body:JSON.stringify({ automation_enabled: m.checked })});
           const el=$("#sendcfg-result"); if(el){ el.textContent = m.checked?"⚠️ 自动模式已开启（已推飞书）":"✅ 自动模式已关闭（已推飞书）"; setTimeout(()=>{ if(el) el.textContent=""; },3500); }
-          paintAutomationBadge();   // 顶栏徽章立刻跟上，不等下次刷新
+          paintStatusBar();   // 状态栏立刻跟上，不等下一次轮询
           loadSendCfg();            // 回填"为什么不发信"那一行
         }; }
       // ⭐ C5-2：自动闸从"填 0 = 跟随"改成**两个单选**。
@@ -5027,8 +5039,8 @@ ${esc(d.ours.body||'')}</div></details>`
     //   ⚠️ 进度真源是库（还剩多少 status='new'），不是内存 —— 所以刷新不归零、也不重复做。
     //   ⚠️ 不 await：它是后台活儿，不该拖住首屏。
     resumeAnalyzeIfPending();
-    // C5-22：进门就画一次自动模式徽章（全站常驻，不依赖进过哪一页）。同样不 await。
-    paintAutomationBadge();
+    // C5-28：进门就起状态栏轮询（全站常驻，不依赖进过哪一页）。同样不 await。
+    startStatusPolling();
     // 批㉔：飞书卡片「打开详情」深链 ?lead=N → 进门直接开该线索详情页（← 返回列表 可回）。
     // ⚠️ 二选一不并跑：openDetail 和 openToday 写的是同一个 #v-page，并跑会竞写——
     //   today 的 fetch 后到就把详情整页覆盖（实测抓到的，不是猜的）。

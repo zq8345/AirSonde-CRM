@@ -470,6 +470,12 @@ export async function runDiscovery(env: Env, opts: { keywords?: string[]; perKey
         at: new Date().toISOString().slice(0, 19).replace("T", " "),
         done: comboDone, total: combos.length, inserted, skipped, searched,
       }));
+      // C5-28：同一份进度也喂给状态栏的活动真源（一处产出、两处消费，不是两份数据）。
+      //   ⚠️ 发起方保持 "user"：这条管道只有人点得动（cron 走的是另一条）。
+      await setS(env, "activity_search", JSON.stringify({
+        kind: "search", by: "user", at: Date.now(),
+        done: comboDone, total: combos.length, note: `已入库 ${inserted}`,
+      }));
     } catch { /* 发布进度失败不能拖垮找客户本身 */ }
   };
   await publishProgress();
