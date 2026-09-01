@@ -43,7 +43,11 @@
     .dd-menu.dd-up { top:auto; bottom:calc(100% + 4px); left:0; right:auto; }   /* 左栏底部→菜单向上弹 */
     .tab { padding:7px 10px; border-radius:6px; cursor:pointer; display:flex; align-items:center; gap:5px; color:var(--muted); }
     .tab:hover { background:var(--panel); }
-    .tab.active { background:var(--tint-blue); color:var(--blue); font-weight:600; box-shadow:inset 3px 0 0 var(--blue); }
+    /* C5-10③（Joe：不要左边那种括号形）：去掉 `box-shadow:inset 3px 0 0` 那道竖条，
+       选中态只保留 tint 底色 + 文字变色。
+       ⚠️ **两处一起改**：派单以为只有阶段列表有竖条，实测 `.side-nav.active` 一模一样也有
+          —— 只改一处会把现在一致的两者改成不一致。 */
+    .tab.active { background:var(--tint-blue); color:var(--blue); font-weight:600; }
     .tab.active:hover { background:var(--tint-blue); }
     .tab .cnt { color:var(--muted); font-size:12px; }
     .tab.active .cnt { color:var(--blue); }
@@ -506,7 +510,11 @@
     .d-sec-head { display:flex; align-items:center; gap:7px; font-weight:600; font-size:14px; padding:5px 0; }
     .d-sec details, details.d-sec { margin:4px 0 12px; }
     .tag { display:inline-block; background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:2px 9px; font-size:12px; margin:2px 4px 0 0; }
-    .btn-ghost { background:transparent; }
+    /* C5-10④（Joe：返回列表的按钮改明显一些）：原来只是 transparent，视觉上就是一段文字。
+       改成**有边框的次级按钮** —— 与搜索框那次同一档处理力度（用 --border-strong）。
+       ⛔ 不做成主色实心：这一页的主按钮是「保存」/「找客户」，返回不该抢它们的位置。 */
+    .btn-ghost { background:var(--bg); border:1px solid var(--border-strong); color:var(--text); }
+    .btn-ghost:hover { background:var(--panel); border-color:var(--blue); color:var(--blue); }
     .btn-big { padding:9px 20px; font-size:15px; }
     .kv { display:grid; grid-template-columns:90px 1fr; gap:6px 12px; margin:14px 0; }
     .kv .k { color:var(--muted); }
@@ -650,7 +658,7 @@
     .nav-ico { flex:0 0 auto; opacity:.75; }
     .side-nav:hover .nav-ico, .side-nav.active .nav-ico { opacity:1; }
     .side-nav:hover { background:var(--panel); }
-    .side-nav.active { background:var(--tint-blue); color:var(--blue); font-weight:600; box-shadow:inset 3px 0 0 var(--blue); }  /* #42 与漏斗 tab 选中态一致 */
+    .side-nav.active { background:var(--tint-blue); color:var(--blue); font-weight:600; }  /* 与漏斗 tab 选中态一致（C5-10③ 同步去竖条） */
     .side-nav.active:hover { background:var(--tint-blue); }
     /* #41 全站 hover 交互统一：可点元素加平滑过渡 + 细腻反馈（贴合 CDS 深色后台，不浮夸） */
     button, .tab, tr.row, .side-nav, .dp-copy, .td-act, .fc-chip, label.cc,
@@ -744,7 +752,7 @@
         <thead><tr><th><input type="checkbox" id="sel-all" title="全选当前筛选" onclick="event.stopPropagation();toggleSelAll(this.checked)"> 公司</th><th>评分</th><th>阶段</th><th>邮箱</th><th>分类</th><th>国家</th><th class="chcol">LinkedIn</th><th class="chcol">WhatsApp</th><th class="chcol">Facebook</th><th class="chcol">Instagram</th><th class="chcol">电话</th><th>录入时间</th></tr></thead>
         <tbody id="rows"></tbody>
       </table>
-      <div class="empty" id="empty" style="display:none">暂无数据。点上方「➕ 补货」加线索——自动搜一轮，或导入自有名单 CSV。</div>
+      <div class="empty" id="empty" style="display:none">暂无数据。点上方「➕ 找客户」加线索——自动搜一轮，或导入自有名单 CSV。</div>
       </div><!-- /.table-card -->
       </div><!-- /#v-list -->
       <div id="v-page" style="display:none"></div>
@@ -985,7 +993,7 @@
   <div class="overlay" id="restock-overlay">
     <div class="modal" style="width:min(680px,96vw)">
       <button class="modal-x" type="button" onclick="closeRestock()" title="关闭">×</button>
-      <h2>➕ 补货 —— 再找一批客户</h2>
+      <h2>➕ 找客户</h2>
       <!-- 积压刹车条：它的全部意义就是**拦在"再进货"这个决定前面**（总工裁定 A）。
            ⚠️ 条里三个「去处理」链接点下去要先关弹窗再跳，否则弹窗会盖在跳转后的列表上。 -->
       <div id="fc-backlog" class="fc-backlog" style="display:none;margin-bottom:12px"></div>
@@ -1005,7 +1013,7 @@
           </div>
           <!-- 估算行：从蓝底横幅降成卡内一行安静文字；只有批量大时才由 .fc-warn 变警示色 -->
           <div id="dp-transparency" class="rs-est"></div>
-          <button id="dp-run" class="primary" style="margin-top:12px">▶ 开始找客户</button>
+          <button id="dp-run" class="primary" style="margin-top:12px">▶ 开始搜索</button>
           <div class="hint" id="dp-msg" style="margin-top:6px"></div>
         </div>
 
@@ -1372,7 +1380,7 @@
         + `<div class="side-div"></div>`;
       // C5-4v A：页面级「补货」按钮 —— 只在「全部」页出现（给整个库进货，不属于某一格）
       { const rb=$("#btn-restock");
-        if(rb){ rb.innerHTML = `${ICON.plus}<span>补货</span>`;
+        if(rb){ rb.innerHTML = `${ICON.plus}<span>找客户</span>`;
                 rb.style.display = (current==='all') ? 'inline-flex' : 'none'; } }
       $("#side").innerHTML = navTop + tabHtml(TABS[0]) + `<div class="side-div"></div>` +
         chain.map((t,i) => tabHtml(t) + (i < chain.length - 1 ? `<div class="side-arrow">↓</div>` : "")).join("");
@@ -1524,7 +1532,7 @@
         { t:"标记成交", cls:"btn-won", sel:true, fn:"toolStatusSel('won','标记成交')" },
         { t:"婉拒归档 → 已忽略", cls:"btn-amber", sel:true, fn:"toolStatusSel('ignored','婉拒归档')" },
         { t:"🤖 起草回复", cls:"", sel:true, fn:"toolDraftReply()" },
-        { t:"⟳ 拉取新回复", cls:"", fn:"toolFetchReplies()" },
+        { t:"⟳ 拉取新回复", cls:"", fleet:true, fn:"toolFetchReplies()" },   // fleet=全量动作，不依赖选中
       ],
       won: [],          // 终点，无出口动作
       ignored: [
@@ -1805,10 +1813,23 @@
       //   现在统一由表决定：`all` 有条目就渲染，没有就空 —— 少一处只有读代码才知道的例外。
       const defs = GROUP_TOOLS[current] || [];
       const n = selectedIds.size;
-      // C5-4v A：**没选中就不出现**。常驻一条"已选 0 条"是噪音（Joe 点名）。
-      //   ⚠️ 判据要两条都成立：这一格有动作 **且** 有选中 —— 只判后者的话，
-      //      在没有出口动作的格子里选几条会冒出一条空条。
-      if(!defs.length || n === 0){ bar.style.display="none"; bar.innerHTML=""; return; }
+      // 🔴 C5-10②（回归修复，缺陷是我在 C5-4v 引进的）：
+      //   当时为了去掉常驻的"已选 0 条"噪音，加了 `n===0 就整条藏起来` ——
+      //   但工具条里有两类按钮，那一刀没分辨它们：
+      //     · 选中依赖（sel:true）：没勾选确实无从谈起
+      //     · **全量（fleet）**：跟选中集无关（「⟳ 拉取新回复」）
+      //   结果空的「已回复」页上那颗按钮**根本点不到**，而空态文案还在指着它 ——
+      //   入口指向一个看不见的东西，比没有入口更糟。
+      //   ⇒ 按**结构**修不按个案修：本组只要含 fleet 按钮，工具条就出现；
+      //     以后任何组加全量按钮都自动可达，不必再有人想起这条规则。
+      const hasFleet = defs.some(d => d.fleet);
+      if(!defs.length || (n === 0 && !hasFleet)){ bar.style.display="none"; bar.innerHTML=""; return; }
+      // fleet-only 态（没勾选、只靠全量按钮撑出来的工具条）：**不显示「已选 0 条」前缀** ——
+      //   那句在这个状态下正是当初要去掉的那种噪音。
+      // ⚠️ 但选中依赖的按钮**照常渲染成灰的 + 写明"先勾选线索"**（toolGate 已经这么做），
+      //   不隐藏 —— 那是批⑲ 里 Joe 自己定的规矩：「没有按钮，我不选的时候不知道能干什么」。
+      //   派单给了"隐藏或禁用"两个选项，这里选禁用，因为它与那条既有裁定一致。
+      const fleetOnly = (n === 0 && hasFleet);
       // ⭐ 批⑬③：当前**选中集**的构成 —— 给动态标题 t() 和 hideIf() 用。
       //   ⚠️ 用 _loadedLeads 而不是重新请求：它就是当前列表的那批对象，loadList 每次都刷。
       const _picked = _loadedLeads.filter(l => selectedIds.has(String(l.id)));
@@ -1830,7 +1851,7 @@
              ⚠️ 这些公司的官网抓不到 —— 机器判不了分，所以它们不在「待审批」里
              <span class="hint" style="font-weight:400">（可能网址错了/换了。改对网址再分析，里面可能有真客户）</span>
            </div>` : "";
-      bar.innerHTML = banner + `<span>已选 <b id="bulk-n">${n}</b> 条</span>`
+      bar.innerHTML = banner + (fleetOnly ? `` : `<span>已选 <b id="bulk-n">${n}</b> 条</span>`)
         // ⭐ 批⑫：`only1` = **只在恰好选中 1 条时出现**（不是灰着 —— 总工原话：
         //   "批量按钮摆在那儿 + 灰着，比不摆更让人困惑"）。
         //   用在「💬 他回了」上：渠道和备注是**每条不一样的**（这家 WhatsApp、那家 LinkedIn），
@@ -4025,7 +4046,7 @@ ${esc(d.ours.body||'')}</div></details>`
         else if (rNow!=null && rPrev!=null && w.sent > prev.sent*(1+DB_TREND_DELTA) && rNow < rPrev*(1-DB_TREND_DELTA))
           j = `<div class="db-judge">发得更多了，回信率却掉了 —— 该看看信写得怎么样 ${act('去改文案',"openSettings()")}</div>`;
         else if (prev.sent > 0 && w.sent < prev.sent*(1-DB_TREND_DELTA))
-          j = `<div class="db-judge">这周发得比上周少 —— 多半是没客户可发了 ${act('去补货',"openRestock()")}</div>`;
+          j = `<div class="db-judge">这周发得比上周少 —— 多半是没客户可发了 ${act('去找客户',"openRestock()")}</div>`;
         else if (rNow!=null && rPrev!=null && w.sent > prev.sent*(1+DB_TREND_DELTA) && rNow >= rPrev)
           j = `<div class="db-judge">量涨了、回信率没掉 —— 照这个方向继续</div>`;
         b1 = `<div class="db-wkchart">${bars}</div><div class="hint db-legend"><span style="color:var(--amber)">■</span> 发信　<span style="color:var(--green)">■</span> 回信　<span class="db-dim">近 ${wk.length} 周</span></div>${j}`;
