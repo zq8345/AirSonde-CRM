@@ -1795,22 +1795,8 @@
       return (Number(l.fetch_fail_count)||0) > 0
         ? ` <span class="fail-badge fail-retry" title="机器自动重试中，无需操作">⏳ 重试 ${Number(l.fetch_fail_count)}/3</span>` : "";
     }
-    function renderUnscoredGroups(leads, rowHtml){
-      const A = leads.filter(l => unscoredGroupOf(l) === 'A');
-      const B = leads.filter(l => unscoredGroupOf(l) === 'B');
-      const head = (title, n, hint, btn, aid) => `<tr class="grp-head" id="${aid||''}"><td colspan="99">
-        <b>${title}</b><span class="grp-n">${n}</span><span class="hint">${hint}</span>${btn||""}</td></tr>`;
-      // ⚠️ 两个组头**即使为 0 也渲染**：这一页要回答的第一个问题就是"这里面是什么"，
-      //   组整个消失掉，Joe 就无从知道"什么样的线索会进到这里"。空组给一句人话说明。
-      // 批㉖：组头降为**普通分组标题行**（标题+计数徽章+一句提示）——「全部忽略(N)」组级大按钮
-      //   删除：批量动作只在顶部批量条一处（勾选后用「忽略选中」），同一件事不在页面出现两次。
-      return head("① 排队等 AI 打分", A.length, "AI 每小时自动处理，无需操作", "", "gj-unscored-A")
-        + (A.length ? A.map(rowHtml).join("")
-           : `<tr><td colspan="99" class="grp-empty">这一组现在是空的 —— 新找到、还没轮到打分的线索会落在这里</td></tr>`)
-        + head("② 官网抓不到", B.length, "机器判不了分 —— 点行进详情处理（改网址 / 人工批准 / 忽略），或勾选后用上方批量条", "", "gj-unscored-B")
-        + (B.length ? B.map(rowHtml).join("")
-           : `<tr><td colspan="99" class="grp-empty">这一组现在是空的 —— 连续 3 次抓不到官网的线索会落到这里</td></tr>`);
-    }
+    // C5-17：renderUnscoredGroups 已删 —— 待分析页横带撤掉后它没有调用点了（死代码不留）。
+    //   分组谓词 `unscoredGroupOf` **保留**：工具栏的筛选 chips 与计数都靠它。
     // ⭐⭐ 批⑲ 页面二：「待审批」按分数分三段，每段一个明确的下一步。
     //
     // ⚠️⚠️ 段带必须**连续无缝**：`≥60 / 31-59 / ≤30`。
@@ -2437,8 +2423,16 @@
       renderOrphans();   // 批⑧：孤儿回复条（只在「已回复」格出现；不 await，别让它拖慢列表）
       const { leads } = await fetch(`/api/leads?${filterQuery()}`).then(r=>r.json());
       $("#empty").style.display = leads.length ? "none" : "block";
-      _loadedIds = leads.map(l => String(l.id));
       _loadedLeads = leads;
+      // 🔴 C5-17：**「全选」的作用域必须等于"屏幕上看得见的行"**。
+      //   原来 `_loadedIds` 取的是**未筛的全量** ⇒ 筛了「排队打分」再点表头全选，
+      //   会把屏幕上根本没显示的「官网抓不到」那批一起圈进去
+      //   （Joe 实测：全选 136 条把 43 条抓不到的一起圈了）。
+      //   ⇒ 先算出当前渲染集 rowsData，再由它决定 _loadedIds。**一个口径，不是两个。**
+      const rowsData = ((current === 'ready' || current === 'unscored') && _readyFilter)
+        ? leads.filter(l => (current === 'ready' ? readyGroupOf(l) : unscoredGroupOf(l)) === _readyFilter)
+        : leads;
+      _loadedIds = rowsData.map(l => String(l.id));
       // 小修：列表每次 reload 后把已选与当前结果集求交集——去掉不在当前筛选/分组可见集里的 id，
       // 让"已选N条"与批量操作永远=当前可见的选中项（无分页，全量加载，交集剪枝安全）。
       { const visible = new Set(_loadedIds); for (const id of [...selectedIds]) if (!visible.has(id)) selectedIds.delete(id); }
@@ -2448,21 +2442,26 @@
           <td><div style="display:flex;align-items:center;gap:6px"><input type="checkbox" class="rowchk" ${selectedIds.has(String(l.id))?'checked':''} onclick="event.stopPropagation()" onchange="toggleSel(${l.id},this.checked)"><div class="co-name" title="${esc(l.company_name)||''}">${isDue(l)?`<span class="due-flag" title="该跟进了：${esc(l.next_action)||''} (${esc(l.next_action_date)})">🔔 </span>`:""}${esc(l.company_name)||"<span class='muted'>—</span>"}${l.has_click?`<span title="点击过开发信（强意向）" style="margin-left:4px">🔥</span>`:(l.has_open?`<span title="打开过开发信" style="margin-left:4px">👀</span>`:"")}</div></div>${(()=>{const fb=unscoredRowExtra(l);if(l.website){const w=safeHref(l.website);const inner=w?`<a class="wsite" href="${esc(w)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="margin:0;display:inline-block;max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(hostOf(l.website))}</a>`:`<span class="wsite" title="链接协议不合法，已按纯文本显示" style="margin:0;display:inline-block;max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(hostOf(l.website))}</span>`;return `<span style="display:flex;align-items:center;gap:6px;margin-left:22px;min-width:0">${inner}${fb}</span>`;}return fb?`<span style="display:flex;margin-left:22px">${fb}</span>`:"";})()}${(current==='replied'&&(l.latest_reply_cat||l.latest_reply_summary))?`<div style="margin-left:22px;margin-top:3px;display:flex;align-items:center;gap:6px;min-width:0">${l.latest_reply_cat?`<span class="pill" style="background:${catColor[l.latest_reply_cat]||'#6b7480'};color:var(--bg);flex-shrink:0">${esc(catLabel[l.latest_reply_cat]||l.latest_reply_cat)}</span>`:''}${l.latest_reply_summary?`<span class="co-name muted" style="font-size:12px" title="${esc(l.latest_reply_summary)}">🤖 ${esc(l.latest_reply_summary)}</span>`:''}</div>`:''}</td>
           <td>${scoreBadge(l.match_score)}</td>
           <td class="stgcol"><span class="stg ${stg.cls}">${stg.badge}</span>${stg.sub?`<span class="stg-sub">${stg.sub}</span>`:""}${readyReplyBtn(l)}</td>
-          <td>${l.email?esc(l.email):"<span class='miss'>缺邮箱</span>"}</td>
+          ${/* ⭐ C5-17：「缺邮箱」红标撤掉，改居中长横线。
+                 理由（Joe 指认）：缺邮箱是**信息不全，不是故障**——全库 92 条都顶着红字，
+                 红色就此贬值，真正该报警的「抓取失败·403」反而淹在里面。
+                 ⚠️ **只撤这一个**：抓取失败/403 那个红标保留（那才是"机器卡住了、要人管"）。 */''}
+          <td style="text-align:center">${l.email?`<span style="text-align:left;display:block">${esc(l.email)}</span>`:'<span class="muted">—</span>'}</td>
           <td>${l.customer_category?`<span class="pill ptype" title="${esc(l.customer_type)||''}">${esc(l.customer_category_label||l.customer_category)}</span>`:"<span class='muted'>—</span>"}</td>
           <td>${l.country?esc(countryName(l.country)):"<span class='muted'>—</span>"}</td>
           ${chanCell(l.channels,'linkedin',l.company_name)}${chanCell(l.channels,'whatsapp',l.company_name)}${chanCell(l.channels,'facebook',l.company_name)}${chanCell(l.channels,'instagram',l.company_name)}${chanCell(l.channels,'phone',l.company_name)}
           <td class="muted" style="white-space:nowrap;font-size:12px">${fmtDate(l.created_at)}</td>
         </tr>`; };
       // ⭐ 批⑲ 页面一：「待分析」换成**按下一步动作分组**的视图；其余格保持原来的平铺表格，一个字不动。
-      // C5-12：待联系页的分组筛选。⚠️ **只过滤渲染，不过滤计数** ——
-      //   页顶那三个数必须始终是全量分组数（筛着 A 时也要看得见 C 还有几条），
-      //   否则一点筛选，另外两组的数就变 0，人会以为线索没了。
-      const rowsData = ((current === 'ready' || current === 'unscored') && _readyFilter)
-        ? leads.filter(l => readyGroupOf(l) === _readyFilter) : leads;
-      $("#rows").innerHTML =
-          current === 'unscored' ? renderUnscoredGroups(rowsData, rowHtml)
-        : rowsData.map(rowHtml).join("");
+      // C5-12：分组筛选**只过滤渲染，不过滤计数** —— 页顶那几个数必须始终是全量分组数
+      //   （筛着 A 时也要看得见 C 还有几条），否则一点筛选另外两组就变 0，人会以为线索没了。
+      //   ⚠️ rowsData 已在上面算过（因为 _loadedIds 要用它）—— 这里不再算第二遍。
+      //   ⚠️ 上面那份还修了一个真 bug：待分析页要用 unscoredGroupOf 而不是 readyGroupOf
+      //     （原来两页共用 readyGroupOf，待分析页筛出来的是错的组）。
+      // ⭐ C5-17（Joe 用红叉重申）：待分析页的**两条横带撤掉**，回到平铺表格 ——
+      //   与待联系页（C5-12）同一处理。分组没消失：它变成了工具栏上的筛选 chips。
+      //   ⚠️ renderUnscoredGroups 一并删除（撤了横带它就没有调用点了，留着是死代码）。
+      $("#rows").innerHTML = rowsData.map(rowHtml).join("");
       renderGroupJump(current, leads);   // 计数用**未筛的** leads（见上）
       document.querySelectorAll("tr.row").forEach(tr =>
         tr.onclick = () => openDetail(tr.dataset.id));

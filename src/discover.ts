@@ -179,6 +179,12 @@ const JUNK_DOMAINS = [
   "pinterest.", "starlink.com", "spacex.com", "maps.google", "bbb.org",
   "quora.", "medium.com", "apple.com", "play.google", "wa.me", "t.me",
   "fandom.", "craigslist.",
+  // 政府/学术机构域（C5-17）。生产实测存量 22 条全是这一族（EPA / CDC / NIST / OSHA /
+  //   各国环保署 / 大学）—— 它们发布标准和数据，不采购检测仪；**没有一条是误伤的真公司**。
+  //   用**后缀片段**而不是逐个域名：新的政府站每周都会冒出来（schoolinfrastructure.nsw.gov.au
+  //   这种），逐个拉黑永远追不上。
+  //   ⚠️ 写 ".gov"（带前导点）而不是 "gov"：后者会误杀 govan-engineering.com 这类真公司。
+  ".gov", ".edu", "ncbi.nlm.nih", "pubmed.",
   // 招聘站
   "indeed.", "glassdoor.", "ziprecruiter.", "simplyhired.", "monster.", "snagajob.",
   // 比价/评测/聚合站（非采购方）
