@@ -72,6 +72,31 @@
           多一个变量就多一处会跟真实状态漂开的地方。 */
     #restock-overlay.rs-running .rs-grid { display:none; }
     #restock-overlay.rs-running #fc-backlog { display:none !important; }
+    /* ══ C5-8 待办事项：优先级清单 ══ 字号/字重/颜色全取自附录 C 闭集 */
+    .td-layer { margin-bottom:16px; }
+    .td-t { font-size:15px; font-weight:600; margin:0 0 12px; }
+    .td-row { display:flex; align-items:flex-start; gap:12px; padding:10px 0; }
+    .td-row + .td-row { border-top:1px solid var(--border); }
+    .td-ic { flex:0 0 auto; font-size:15px; line-height:1.5; }
+    /* ⚠️ 这里原来是 `display:flex; flex-direction:column` —— 于是行文里的 <b>数字</b>
+       被当成一个 flex 子项**单独占一行**，屏幕上出现「2 / 条客户回信等你处理」这种断行。
+       正文要按普通文本流排，只有 .td-sub 需要另起一行 —— 用 block + 子元素控制，不用 flex。 */
+    .td-tx { flex:1; min-width:0; font-size:14px; line-height:1.5; }
+    .td-tx > .td-sub { display:block; margin-top:3px; }
+    .td-sub { font-size:12px; color:var(--muted); line-height:1.5; }
+    .td-go { flex:0 0 auto; font-size:13px; padding:6px 12px; border-radius:8px;
+             background:var(--bg); border:1px solid var(--border-strong); color:var(--text); cursor:pointer; white-space:nowrap; }
+    .td-go:hover { border-color:var(--blue); color:var(--blue); }
+    .td-hot .td-ic, .td-hot b { color:var(--red); }        /* 钱在门口：最扎眼的一层 */
+    .td-bad .td-ic { color:var(--amber); }
+    .td-none { font-size:14px; color:var(--muted); }
+    .td-prog { font-size:14px; margin-bottom:12px; }
+    .td-prog b { color:var(--blue); }
+    /* ④ 机器汇报**是一行小字不是卡片** —— 它不需要你做任何事，不配占一张卡 */
+    .td-report { font-size:12px; color:var(--muted); padding:2px 4px; }
+    .td-report b { color:var(--text); font-weight:600; }
+    .td-report a { margin-left:8px; }
+
     /* ══ C5-7 数据看板 ══ 字号/字重/颜色全部取自附录 C 的闭集 */
     .db-block { margin-bottom:16px; }
     .db-t { font-size:15px; font-weight:600; margin:0 0 14px; }
@@ -1370,7 +1395,7 @@
       //   降级成「已联系」页的筛选/排序（跟 🔥 点过链接同一层），不占左栏一格。
       // C5-4v：导航与页名统一叫「待办事项」（Joe 定），emoji 退场换单色线条图标。
       //   ⚠️ 只改 label 与图标：`data-nav="today"` / `btn-today` / activeView 的 'today' 是契约，一字不动。
-      const navTop = `<div class="side-nav" data-nav="today" onclick="document.getElementById('btn-today').click()">${ICON.todo}<span>待办事项</span></div>`
+      const navTop = `<div class="side-nav" data-nav="today" onclick="document.getElementById('btn-today').click()">${ICON.todo}<span>待办事项${_todoCount ? ` (${_todoCount})` : ''}</span></div>`
           + `<div class="side-nav" data-nav="dashboard" onclick="document.getElementById('btn-dashboard').click()">${ICON.dash}<span>数据看板</span></div>`
       // C5-1：「📬 回复箱」导航项**撤除** —— 回信列表已内嵌进「今天」页（客户回你了 = 今天最该看的事，
       //   它不该是一个要你自己想起来去点的第二个入口）。
@@ -4177,148 +4202,131 @@ ${esc(d.ours.body||'')}</div></details>`
     // 只回答一个问题：今天先干哪一件？ → 按紧急度排 · 0 的不显示 · 每条=一句人话+一个跳转 · 这里不做动作。
     // 删掉了：4 张固定卡片（0 也占半屏）、「新高分线索」列表（与待审批同一批人，重复）、
     //        「322家待发送」那条假数（口径已换成真能发的 sendable）、页内动作按钮。
+    // ⚠️ C5-8：待办条目数的**唯一推导处**。页内清单与左栏「待办事项 (N)」都从这里取。
+    //   两处各算各的正是本单在修的那类缺陷（inbox 的 items 与 counts 就是这么对不上的），
+    //   所以这里从一开始就只写一次。
+    //   口径：第 ①②③ 层条目总和（第 ④ 层是汇报不是待办，不计）；未点火时 = 还缺的核心钥匙数。
+    function todoCountOf(d){
+      if (!d) return 0;
+      const ign = d.ignition || {};
+      if (ign.coreReady === false)
+        return (ign.capabilities || []).filter(c => c.core && !c.ignited).length;
+      const A = d.alerts || {}, sp = d.serper || {};
+      const over = sp.budget != null && sp.budget > 0 && sp.usedToday >= sp.budget;
+      return ((d.hotReplies || []).length ? 1 : 0)
+           + ((d.reviewCount || 0) ? 1 : 0)
+           + ((A.replyFailStreak >= 2) ? 1 : 0)
+           + (A.breakerTrippedAt ? 1 : 0)
+           + (over ? 1 : 0);
+    }
+    let _todoCount = null;   // 最近一次 /api/today 推出来的数；loadStats 重建导航时读它
+    // 就地更新导航上那个数字。
+    // ⚠️ 不调 refreshNavHighlight —— 它**只切 class，不重建导航文字**（我以为它会，去读了才知道）；
+    //    也不调 loadStats —— 为一个数字重跑一整轮统计请求不划算。
+    function paintTodoCount(){
+      const el = document.querySelector('.side-nav[data-nav="today"] span');
+      if (el) el.textContent = `待办事项${_todoCount ? ` (${_todoCount})` : ''}`;   // 0 时不显示括号
+    }
+
+    // ══ C5-8 待办事项页重构 ══
+    //   验收标准一句话（总调度给的，也是我做取舍的尺子）：
+    //     **进来到离开不超过两分钟，走的时候清单比来的时候短。**
+    //   ⇒ 页面不是"仪表盘"也不是"叙事"，是一张**优先级清单**：每条 = 一句人话 + 一个动作，
+    //     处理完那条就消失。四层从上到下按"不理会怎样"排：
+    //       ① 钱在门口   —— 不理就凉
+    //       ② 等你拍板   —— 你不点机器就停着
+    //       ③ 机器出事   —— 只在真出事时出现
+    //       ④ 机器汇报   —— 一行小字，不是卡片
+    //   ⚠️ **空层整层不渲染**（不是渲染一个空卡）—— 为没发生的事立卡就是 Joe 嫌的废话（铁律四）。
     async function openToday(retried){
       showMainView('today');
       $("#v-page").innerHTML = pageHeader('待办事项','') + `<p class="hint">加载中…</p>`;
       const d = await fetch("/api/today").then(r=>r.json()).catch(e=>({error:String(e)}));
       if (d.error){ $("#v-page").innerHTML = pageHeader('待办事项','') + `<div class="load-error">${loadErrorHtml('today-retry', retried)}</div>`;
         const b=$("#today-retry"); if(b) b.onclick=()=>openToday(true); return; }
-      const serper = d.serper||{};
-      const overBudget = serper.budget!=null && serper.usedToday>=serper.budget && serper.budget>0;
-      // ⭐⭐ 批⑪B：待办砍到**两类**。Joe 原话："跟九个格子里面存在重复……重点可以前置，但是不要过于臃肿"。
-      //
-      // 判断标准（总工给的，比清单有用）：
-      //   **格子说的是"有多少"，待办说的是"这一件会跑掉"。**
-      //   一件事如果在左栏格子上看一眼就知道，它就不该在这里再说一遍。
-      //
-      // 逐条过完这条标准之后删掉的四条（不是照抄清单，是用标准判的）：
-      //   · 👀 今天 N 家点了开发信 → 点过链接 ≠ 等你回复，**不会跑掉**；
-      //     而且批⑨③ 已经把它降级成「已联系」格里的 🔥 置顶 —— 打开那格第一眼就看见
-      //   · 🔔 N 家今天该跟进 → **日期是 Joe 自己定的**，今天不跟明天跟，没人会跑掉；
-      //     而且批⑪B 已经把它做成「已联系」的格内筛选
-      //   · 📤 N 家现在就能发 → 左栏「待联系」格上写着数（Joe 说的"重复"）
-      //   · ✅ N 家已打分待审批 → 左栏「待审批」格上写着数。总工原话："**待审批 244 条不会跑掉**"
-      //
-      // 留下的两类：
-      //   ① 🔥 客户回你了 —— **唯一"钱在门口"的事**：人主动回你了，不理就凉了
-      //   ② ⚠️ 系统警报 —— **机器停摆**：不理它不会自己好，而且一直在损失
-      const A = d.alerts || {};
-      const items = [
-        // ① 钱在门口
-        { n:(d.hotReplies||[]).length, cls:'tri-hot',  icon:'🔥', text:n=>`<b>${n}</b> 条客户回复还没处理`, sub:'有人主动回你了——这是最该先看的', go:'去已回复', fn:"gotoGroup('replied')" },
-        // ② 机器停摆。⚠️ 熔断和收回复失败**是我补的** —— 它们今天都真发生过（05:01 熔断跳闸、
-        //    Michael 那封此刻还卡着），而待办里**根本没有它们**。总工说第②类是"熔断/IMAP 断/Serper 到顶"，
-        //    代码里却只有第三个。**最贵的两个故障，恰恰是待办看不见的那两个。**
-        // IMAP 小修②（已批）：判据从「replyFailLast 非空即亮（且成功后不清，一次抖动挂永久红条）」
-        //   改为「连败 ≥2 轮才亮」——瞬时抖动（小修①会立刻重试）不再打扰；replyFailLast 只作证据文本。
-        { n:(A.replyFailStreak>=2)?1:0, cls:'tri-warn', icon:'⚠️', text:()=>`收客户回复失败（已连续 ${A.replyFailStreak} 轮）—— <b>现在客户回信可能收不到</b>`, sub:String(A.replyFailLast).slice(0,110), go:'去设置', fn:"openSettings()" },
-        { n:A.breakerTrippedAt?1:0,    cls:'tri-warn', icon:'⚠️', text:()=>`自动发送已熔断 —— <b>现在没有在自动发信</b>`, sub:(A.breakerReason||'退订率超阈值')+'；确认后到设置页手动重开（不会自动恢复）', go:'去设置', fn:"openSettings()" },
-        // ⚠️ 批⑭②：「抓不到官网」的警报卡**撤了**。批⑬② 我把它当"系统警报"（机器停摆类），
-        //   但 Joe 定性它是"信息不全"不是"故障" → 它不该在待办里当警报叫。
-        //   它现在回「待分析」格正常待着（待分析 = new + 无分），Joe 从那儿处理。
-        //   ⭐ 但 gotoGroup('noscore') 这个**子筛选入口保留**（待分析格里"只看抓不到官网的"）。
-        { n:overBudget?1:0,            cls:'tri-warn', icon:'⚠️', text:()=>`今日 Serper 搜索预算已用满（${serper.usedToday}/${serper.budget}）`, sub:'自动搜索已停，明天恢复；要继续到设置页 · 方向盘调高预算', go:'去调预算', fn:"openSettings()" },
-      ].filter(x=>x.n>0);
 
-      // ================= C2-D 操作员首页：三句话 =================
-      // Joe 的原话是这页「复杂、看不懂」。所以判据不是"信息全不全"，是**30 秒内看不看得完**。
-      // 三句话固定顺序，回答他每天真正在问的三件事：
-      //   ① 今天发了几封   —— 机器有没有在替我干活
-      //   ② 谁回了         —— 钱在不在门口
-      //   ③ 需要我做什么   —— 我现在要不要动手
-      // ⚠️ **每个数字给结论，不给算式**：熔断窗口/爬坡系数/轮转组合/子请求水位这些
-      //    全部搬进「🛠 机器房」（二级页）。首页出现工程术语 = 这次改版失败。
-      // ⚠️ 三句话**永远都在**（哪怕是 0）：一句"今天还没发信"和一片空白不是一回事 ——
-      //    空白让人怀疑是页面坏了，一句话让人知道系统在说"确实没有"。
-      const ign = d.ignition || {};
-      const st = d.sentToday || {};
-      const hot = (d.hotReplies||[]).length;
+      _todoCount = todoCountOf(d); paintTodoCount();   // 计数与清单同源：同一份 d、同一个推导函数
+      const A = d.alerts || {}, ign = d.ignition || {}, st = d.sentToday || {}, tw = d.todayWork || {};
+      const serper = d.serper || {};
+      const overBudget = serper.budget != null && serper.budget > 0 && serper.usedToday >= serper.budget;
+      const hot = (d.hotReplies || []).length;
+      const review = d.reviewCount || 0;
       const notIgnited = ign.coreReady === false;
 
-      // ① 今天发了几封
-      const sentLine = notIgnited
-        ? `<b>今天没发信</b> —— 机器还没点火<span class="say-sub">配齐钥匙前不发信是对的，不是故障</span>`
-        : (st.cold>0
-            ? `今天发了 <b>${st.cold}</b> 封开发信<span class="say-sub">首触 ${st.initial||0} · 跟进 ${st.followup||0}${st.transactional?` · 另有 ${st.transactional} 封确认/回信`:''}</span>`
-            : `<b>今天还没发信</b><span class="say-sub">机器已点火；没发多半是没有已批准且有邮箱的线索</span>`);
+      const row = (cls, icon, text, sub, go, fn) =>
+        `<div class="td-row ${cls}"><span class="td-ic">${icon}</span>
+           <span class="td-tx">${text}${sub?`<span class="td-sub">${sub}</span>`:''}</span>
+           ${go?`<button class="td-go" onclick="${fn}">${go} →</button>`:''}</div>`;
+      const layer = (title, rowsHtml) => rowsHtml ? `<div class="page-card td-layer"><div class="td-t">${title}</div>${rowsHtml}</div>` : '';
 
-      // ② 谁回了
-      const replyLine = hot>0
-        ? `<b>${hot}</b> 个客户回了你，还没处理<span class="say-sub">这是唯一"不理就凉了"的事</span>`
-        : `<b>还没有人回信</b><span class="say-sub">有人回你时，这句会变成红色并排到最上面</span>`;
-
-      // ③ 需要你做什么 —— 未点火时它就是点火清单；点着了就是真告警 + 该你决定的事
-      let todoInner;
+      // ── 未点火态：点火清单**就是**待办清单 ─────────────────────────────
+      // 三句话叙事在这一态退役。给的是**进度感**："差临门一脚"比三张叙事卡短且有劲。
+      // ⚠️ 已配的钥匙不逐条列（那归机器房）；每配好一把，对应条目自动消失 —— 真值派生。
       if (notIgnited) {
-        const off = (ign.capabilities||[]).filter(c=>!c.ignited && c.core);
-        todoInner = `<b>去把这 ${off.length} 把钥匙配上</b>，机器才能开始干活
-          <span class="say-sub">${off.map(c=>`${esc(c.label)}（${esc(c.missing.join('/'))}）`).join(' · ')}</span>
-          <span class="say-sub">配好后机器自己会跑：搜客户 → 打分 → 写信 → 你批 → 发出去</span>`;
-      } else if (items.length) {
-        todoInner = `<b>${items.length}</b> 件事需要你<span class="say-sub">${items.map(x=>esc(String(x.sub).slice(0,40))).join(' · ')}</span>`;
-      } else if (d.reviewCount>0) {
-        todoInner = `<b>${d.reviewCount}</b> 家等你批一下<span class="say-sub">批过之后机器会自动发信</span>`;
-      } else {
-        todoInner = `<b>今天没你的事</b><span class="say-sub">机器在跑，有事它会在这里说</span>`;
+        const caps = ign.capabilities || [];
+        const core = caps.filter(c => c.core);
+        const coreOn = core.filter(c => c.ignited).length;
+        const missing = core.filter(c => !c.ignited);
+        const prog = `<div class="td-prog">核心链路 <b>${coreOn}/${core.length}</b> 已通 —— 还差最后 <b>${missing.length}</b> 把钥匙</div>`;
+        // ⚠️ 字段名是 `missing` 不是 `keys` —— `keys` 只活在服务端的 CAPABILITIES 常量里，
+        //    **没有进返回体**。我第一版按印象写了 c.keys.join(...)，浏览器一跑就 TypeError。
+        //    （断言产出不断言我以为的形状：拿 /api/ignition 的真实返回核过才改的。）
+        // ⚠️ **不能用 `c.unlocks`**：那是给机器房写的技术描述，里面带 `Serper` 这类**宪法禁词**
+        //    （待办页在禁词表管辖内，机器房才豁免）—— 第一版直接照搬，被字数闸当场抓住。
+        //    改用 `c.label`：它本来就是这把钥匙"解锁什么"的人话说法（自动找客户 / 发开发信 …）。
+        const rows = missing.map(c =>
+          row('td-key', '🔌', `<b>${esc(c.label)}</b>`,
+              `还差 ${esc((c.missing || []).join(' + '))}`, '', '')).join('');
+        $("#v-page").innerHTML = pageHeader('待办事项','')
+          + `<div class="page-card td-layer">${prog}${rows}
+               <div class="hint" style="margin-top:12px">配法：<code>npx wrangler secret put &lt;钥匙名&gt;</code>　值只在你手里。</div></div>`
+          + `<div class="td-report">今天机器：发了 <b>${st.cold ?? 0}</b> 封 · 收了 <b>${tw.replies ?? 0}</b> 封 · 新增 <b>${tw.newLeads ?? 0}</b> 家</div>`;
+        return;
       }
 
-      const rows = items.length
-        ? items.map(x=>`<div class="tri-row ${x.cls}">
-            <span class="tri-icon">${x.icon}</span>
-            <span class="tri-text">${x.text(x.n)}<span class="tri-sub">${esc(x.sub)}</span></span>
-            <button class="tri-go" onclick="${x.fn}">${esc(x.go)} →</button>
-          </div>`).join('')
-        : '';
+      // ── ① 钱在门口 ────────────────────────────────────────────────────
+      // ⚠️ 官网询盘（INBOUND 点火后）应排在冷回信**之上**（宪法附录 A：主动找上门比冷回信更热）。
+      //    /api/today 目前没有独立的询盘字段 —— 不假装有：等 INBOUND 点火、字段加上再排。
+      // ⚠️ 「处理完就消失」的判据落在**数据**上：hotReplies 现在由后端按
+      //    `handled_at IS NULL` 过滤（UNHANDLED_HOT_REPLY_WHERE）。**不做前端本地隐藏** ——
+      //    那种一刷新就回来，等于骗人。
+      const l1 = hot ? row('td-hot', '🔥',
+        `<b>${hot}</b> 条客户回信等你处理`, '有人主动回你了，这是最该先看的',
+        '去处理', "gotoGroup('replied')") : '';
 
-      // ── C5-1：回信区内嵌（回复箱并入本页，导航项已撤）────────────────────
-      // ⚠️ 按宪法铁律四：**空的时候整块不出现**。三句话已经说了"还没有人回信"，
-      //    再摆一个空标题既是噪音、又白吃字数预算。
-      let inboxHtml = "";
-      try {
-        const inbox = await fetch("/api/replies/inbox?tab=pending").then(r=>r.json()).catch(()=>null);
-        const list = (inbox && inbox.items) || [];
-        if (list.length) {
-          inboxHtml = `<div class="sec-title" style="margin-top:18px">客户回信 —— <b>${list.length}</b> 条等你处理</div>
-            <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden">` +
-            list.slice(0, 12).map(it=>`
-              <div onclick="openReplyDetail(${it.id})" style="cursor:pointer;padding:10px 12px;border-bottom:1px solid var(--border);border-left:3px solid var(--red)">
-                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-                  <b>${esc(it.company_name||it.from_email||'(未知)')}</b>
-                  ${it.category?`<span class="pill" style="background:${catColor[it.category]||'#6b7480'};color:var(--bg)">${esc(catLabel[it.category]||it.category)}</span>`:''}
-                  <span class="hint">${esc((it.received_at||'').slice(0,16))}</span>
-                </div>
-                <div class="hint" style="margin-top:3px;color:var(--text)">${esc(it.preview||'(空)')}</div>
-              </div>`).join('') +
-            `</div><div id="ri-detail" style="margin-top:12px"></div>`;
-        }
-      } catch { /* 回信区拿不到不该拖垮整页 —— 三句话仍要出得来 */ }
+      // ── ② 等你拍板 ────────────────────────────────────────────────────
+      // 判据沿用：格子说"有多少"，待办只收"卡着机器/会跑掉"的 —— 不把左栏计数复制进来。
+      //   待审批之所以进得来：**你不点，机器就停在这儿**（不是"有多少条"，是"卡住了"）。
+      const l2 = review ? row('td-wait', '✅',
+        `<b>${review}</b> 家已打分待批准`, '批过之后机器自动发信；不批就一直停着',
+        '去批', "gotoGroup('review')") : '';
 
-      // ── C5-1：等你拍板区（同样，空则不出现）──────────────────────────
-      let decideHtml = "";
-      if (!notIgnited && d.reviewCount > 0) {
-        decideHtml = `<div class="sec-title" style="margin-top:18px">等你拍板</div>
-          <div class="tri-row tri-warn"><span class="tri-icon">✅</span>
-            <span class="tri-text"><b>${d.reviewCount}</b> 家已打分待批准<span class="tri-sub">批过之后机器自动发信</span></span>
-            <!-- 🔴 C6-B/P1-3：原来传的是 'pending'，**不是合法格 key**（TABS 里只有
-             all/unscored/review/ready/sent/replied/won/ignored/blacklisted）。
-             它**不报错**：current 被设成 "pending"，但没有任何格会高亮，列表按一个不存在的
-             状态去查 —— 用户落进一个"看不出哪里不对"的空状态。这比抛异常更难发现。
-             「等你拍板」对应的格是**待审批 = review**。 -->
-        <button class="tri-go" onclick="gotoGroup('review')">去看看 →</button></div>`;
-      }
+      // ── ③ 机器出事（只在真出事时出现）────────────────────────────────
+      //   三条判据一个字不改，原样迁入。
+      const l3 = [
+        (A.replyFailStreak >= 2) ? row('td-bad', '⚠️',
+          `收客户回复失败（已连续 ${A.replyFailStreak} 轮）—— <b>现在客户回信可能收不到</b>`,
+          esc(String(A.replyFailLast || '').slice(0, 110)), '去设置', "openSettings()") : '',
+        A.breakerTrippedAt ? row('td-bad', '⚠️',
+          `自动发送已停 —— <b>现在没有在自动发信</b>`,
+          esc(A.breakerReason || '退订率过高') + '；确认后到设置页手动重开（不会自动恢复）', '去设置', "openSettings()") : '',
+        overBudget ? row('td-bad', '⚠️',
+          `今日搜索预算已用满（${serper.usedToday}/${serper.budget}）`,
+          '自动搜索已停，明天恢复；要继续到设置页 · 方向盘调高预算', '去调预算', "openSettings()") : '',
+      ].join('');
+
+      // ── 空态：清单上真的没事 ─────────────────────────────────────────
+      const nothing = !l1 && !l2 && !l3;
 
       $("#v-page").innerHTML = pageHeader('待办事项','')
-        + `<div class="say-list">
-             <div class="say ${notIgnited?'say-mute':''}"><span class="say-i">📤</span><span class="say-t">${sentLine}</span></div>
-             <div class="say ${hot>0?'say-hot':''}"><span class="say-i">${hot>0?'🔥':'📭'}</span><span class="say-t">${replyLine}</span></div>
-             <div class="say ${notIgnited?'say-mute':(items.length?'say-act':'')}" ${notIgnited?`onclick="openMachineRoom()" style="cursor:pointer"`:''}><span class="say-i">${notIgnited?'🔌':'👉'}</span><span class="say-t">${todoInner}</span></div>
-           </div>`
-        + (rows ? `<div class="tri-list" style="margin-top:14px">${rows}</div>` : '')
-        + inboxHtml
-        + decideHtml
-        // ⚠️ 这句自己也**不许带术语** —— 我第一版写成"（预算/熔断/爬坡/点火明细）"，
-        //    被自己那条"首页禁术语"判据当场抓住。判据管的是整页，不是只管上面三句。
-        + `<p class="hint" style="margin-top:16px">想看机器内部怎么跑的 → <a href="javascript:void(0)" onclick="openMachineRoom()">🛠 机器房</a></p>`;
+        + layer('钱在门口', l1)
+        + layer('等你拍板', l2)
+        + layer('机器出事了', l3)
+        + (nothing ? `<div class="page-card td-layer"><div class="td-none">今天没有需要你的事 —— 机器在跑</div></div>` : '')
+        // ④ 机器汇报行：**一行小字，不是卡片**。数字为 0 也照实写 ——
+        //    "发了 0 · 收了 0 · 新增 0" 和一片空白不是一回事（前者说明它在跑但没产出）。
+        + `<div class="td-report">今天机器：发了 <b>${st.cold ?? 0}</b> 封 · 收了 <b>${tw.replies ?? 0}</b> 封 · 新增 <b>${tw.newLeads ?? 0}</b> 家
+             <a href="javascript:void(0)" onclick="openMachineRoom()">机器房 →</a></div>`;
     }
     // ================= C2-D「🛠 机器房」=================
     // 首页从这里搬走的东西全部落在这一页：预算/轮转、熔断窗口与阈值、爬坡算式、点火明细、班次。

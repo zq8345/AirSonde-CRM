@@ -197,6 +197,17 @@ const STATUS_GROUPS: Record<string, string[]> = {
 // ⚠️ **口径散在四处、没有真源**，正是"待审批 194 vs 真值 115"能长期存在的原因。
 //    用它的地方：/api/leads 的 group=review、/api/leads/facets、/api/stats 的 reviewScored。
 const REVIEW_WHERE = "l.status IN ('analyzed','pending') AND a.match_score IS NOT NULL";
+
+// ⚠️⚠️ C5-8：「这封回信还需要 Joe 出手吗」——**唯一口径**，两个消费方共用这一份。
+//   缺陷原文：/api/today 的 hotReplies **不看 handled_at** ⇒ Joe 在工作台点过「已处理」，
+//   待办上那条**永远不消失**，直到线索转成交/忽略为止。
+//   ⇒ 提成常量而不是两处各写一遍 —— 这次的缺陷正是"两处手写不同步"造成的，
+//     修成"两处此刻碰巧一致"不算修（总调度原话，同意）。
+//   ⚠️ 生产库已确认有 `handled_at` 列（2026-08-31 PRAGMA 实查，不是从 schema.sql 推断），
+//     所以这里直接引用它，不需要 COALESCE 兜底，也不必让 /api/today 去补列。
+const UNHANDLED_HOT_REPLY_WHERE =
+  "r.category IN ('interested','inquiry') AND r.handled_at IS NULL " +
+  "AND (l.status IS NULL OR l.status NOT IN ('won','ignored','blacklisted'))";
 /** status 是 analyzed/pending 但**没分数**的那些 —— 抓不到官网、AI 判不了。
  *  ⚠️ 批⑭ 改了对它们的定性：**不是"故障"，是"信息不全"**（Joe 定的）——
  *     工具没够着 ≠ 线索不合格。它们回「待分析」，跟 status='new' 的一起等处理，不再进 off-funnel 桶。 */
@@ -1283,8 +1294,7 @@ app.get("/api/today", async (c) => {
   // ② 未处理热回复（interested/inquiry，且线索未成交/忽略/黑名单）
   const hotReplies = (await db.prepare(
     "SELECT r.id, r.lead_id, r.from_email, r.category, r.summary, r.received_at, l.company_name FROM replies r " +
-    "LEFT JOIN leads l ON l.id = r.lead_id WHERE r.category IN ('interested','inquiry') " +
-    "AND (l.status IS NULL OR l.status NOT IN ('won','ignored','blacklisted')) ORDER BY r.id DESC LIMIT 50"
+    "LEFT JOIN leads l ON l.id = r.lead_id WHERE " + UNHANDLED_HOT_REPLY_WHERE + " ORDER BY r.id DESC LIMIT 50"
   ).all()).results;
   // ③ 今天有参与（打开/点击）的线索
   const engagedToday = (await db.prepare(
@@ -1337,6 +1347,17 @@ app.get("/api/today", async (c) => {
     alerts,                         // ⚠️系统警报：熔断 / 收回复失败（批⑪B）
     sentToday: await sentTodayBreakdown(c.env),   // C2-D 首页第一句
     ignition: ignitionReport(c.env),              // C2-D 首页第三句 + 机器房
+    // C5-8 第④层「机器汇报行」：今天机器干了什么。**加字段不加端点**（总调度口径）。
+    //   ⚠️ 数字为 0 也照实给 —— 前端那一行"发了 0 · 收了 0 · 新增 0"是有信息的
+    //     （"机器在跑但今天没产出" ≠ "机器没在跑"），不许因为是 0 就不显示。
+    todayWork: {
+      replies: (await db.prepare(
+        "SELECT COUNT(*) AS n FROM replies WHERE received_at IS NOT NULL AND date(received_at) = date('now')"
+      ).first<{ n: number }>())?.n || 0,
+      newLeads: (await db.prepare(
+        "SELECT COUNT(*) AS n FROM leads WHERE created_at IS NOT NULL AND date(created_at) = date('now')"
+      ).first<{ n: number }>())?.n || 0,
+    },
   });
 });
 
@@ -2507,11 +2528,17 @@ app.get("/api/replies/inbox", async (c) => {
 
   const counts: Record<string, number> = { pending: 0, declined: 0, noise: 0, orphan: 0 };
   const items: any[] = [];
+  // ⚠️⚠️ C5-8：**一个谓词，两处共用**。
+  //   缺陷原文：`counts` 排除了已处理的（`!(tab==="pending" && r.handled_at)`），
+  //   而 `items.push` 只判了 `tab !== want` —— 于是已处理的回信**仍出现在待处理列表里**，
+  //   角标数字却不算它：列表和数字对不上，而两边单看都"合理"。
+  //   ⇒ 抽成一个函数，两处都调它。写成两份、靠人去同步，正是这次缺陷的成因；
+  //     "改完此刻碰巧一致"不算修好。
+  const stillNeedsYou = (r: any, tab: string) => !(tab === "pending" && r.handled_at);
   for (const r of rows) {
     const tab = tabOf(r);
-    // 待处理格只数**没处理过的** —— 这个数字是"还剩多少你的活"，处理完就该减少
-    if (!(tab === "pending" && r.handled_at)) counts[tab]++;
-    if (tab !== want) continue;
+    if (stillNeedsYou(r, tab)) counts[tab]++;
+    if (tab !== want || !stillNeedsYou(r, tab)) continue;
     items.push({
       id: r.id, lead_id: r.lead_id, company_name: r.company_name,
       category: r.category, from_email: r.from_email, subject: r.subject,
