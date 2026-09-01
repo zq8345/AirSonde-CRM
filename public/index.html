@@ -139,18 +139,26 @@
     .an-chip:hover { border-color:var(--blue); }
     /* ⭐⭐ C5-28 状态栏。⚠️ 是按钮，所以**不做实心**（附录 C.7：主动作永远该是页面正在做的那件事，
        不是一个状态指示）。四态靠底色 + 圆点 + 文字区分。 */
-    .status-bar { display:inline-flex; align-items:center; gap:7px; font-size:12px;
-                  padding:5px 10px; border-radius:7px; cursor:pointer; white-space:nowrap; max-width:340px; }
+    /* ⭐ C5-28 打磨②：轻量组合 —— **圆点 + 徽章文字 + 分隔点 + 动作小字**，
+       去掉整条的粗边框与实底（原来是个带框胶囊，文字挤在一起、还整条变色）。
+       层级交给**字重与颜色**：徽章 600/主色，动作小字 400/灰、降一档字号。间距走 8px 网格。 */
+    .status-bar { display:inline-flex; align-items:baseline; gap:8px; font-size:14px;
+                  padding:6px 8px; border:0; background:transparent; border-radius:8px;
+                  cursor:pointer; white-space:nowrap; max-width:420px; }
+    .status-bar:hover { background:var(--panel); }        /* 可点这件事要看得出来 */
     .status-bar .sb-badge { font-weight:600; }
-    .status-bar .sb-act { color:var(--muted); overflow:hidden; text-overflow:ellipsis; }
-    .status-bar .sb-dot { width:7px; height:7px; border-radius:50%; background:currentColor; flex-shrink:0; }
-    .status-bar.auto-running { background:var(--tint-blue); border:1px solid var(--blue); color:var(--blue); }
-    .status-bar.auto-blocked { background:var(--tint-amber); border:1px solid var(--amber); color:var(--amber); }
-    .status-bar.manual-busy  { background:var(--tint-blue); border:1px solid var(--blue); color:var(--blue); }
-    .status-bar.stopped      { background:var(--bg); border:1px solid var(--border-strong); color:var(--muted); }
-    /* ⚠️ 呼吸**只在真的有活在跑时**（.busy）才有 —— idle 必须静止。
-       一盏永远闪的灯等于没有灯：闪成常态之后，它闪就不再意味着任何事。 */
-    @keyframes sbPulse { 0%,100% { opacity:1 } 50% { opacity:.35 } }
+    .status-bar .sb-sep  { color:var(--border-strong); }
+    .status-bar .sb-act  { font-size:12px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; }
+    /* ⚠️ 受阻时**只有圆点和徽章文字变 amber**，不整条变色 —— 整条变色会把顶栏染成一片，
+       而它要表达的只是"有件事需要你知道"。 */
+    .status-bar .sb-dot { width:8px; height:8px; border-radius:50%; background:currentColor;
+                          flex-shrink:0; align-self:center; }
+    .status-bar.auto-running, .status-bar.manual-busy { color:var(--blue); }
+    .status-bar.auto-blocked { color:var(--amber); }
+    .status-bar.stopped      { color:var(--muted); }
+    /* ⚠️ 呼吸**只作用在圆点上**、且只在真的有活在跑时（.busy）——
+       idle 必须静止（一盏永远闪的灯等于没有灯），文字更不能跟着抖。 */
+    @keyframes sbPulse { 0%,100% { opacity:1 } 50% { opacity:.3 } }
     .status-bar.busy .sb-dot { animation: sbPulse 1.6s ease-in-out infinite; }
     @media (prefers-reduced-motion: reduce) { .status-bar.busy .sb-dot { animation:none } }
     .an-chip i { display:block; width:56px; height:4px; border-radius:2px; background:var(--border); overflow:hidden; }
@@ -163,6 +171,10 @@
                 box-shadow:0 2px 10px -6px rgba(16,20,24,.4); }
     .toolbar { display:flex; gap:10px; margin-bottom:10px; align-items:center; flex-wrap:wrap; }
     input,select,textarea,button { font:inherit; }
+    /* C5-28 打磨④：240px 装不下「搜索公司 / 邮箱 / 域名…」这句占位文案（Joe 实测显示不全）。
+       状态栏移到最右后顶栏有空间，加到 300px。 */
+    /* ⚠️ 这条**管不到 #q**（下面的 id 规则赢它）。留着是给别处的 search 输入框用的，
+       别再往这里加针对搜索框的宽度改动 —— 加了也不会生效。 */
     input[type=search] { background:var(--panel); border:1px solid var(--border); color:var(--text);
                          padding:7px 10px; border-radius:6px; width:240px; }
     button { background:var(--panel); border:1px solid var(--border); color:var(--text);
@@ -741,7 +753,12 @@
        #q 的父元素叫 `.hdr-right-zone`（某次改名留下的死规则），实际生效的是通用的
        `input[type=search]`。我第一版就把"边框加深"改进了这条死规则里，
        浏览器一量才发现颜色没变。⇒ 判据要落在**产出（computed style）**，不落在"我改了哪一行"。 */
-    #q { width:160px; min-width:110px; padding:7px 10px; background:var(--bg);
+    /* 🔴 C5-28 打磨④：**真正控制搜索框宽度的是这条 `#q`**（id 选择器赢过 `input[type=search]`）。
+       我第一版把 300px 改进了通用那条 —— 那条输了，屏幕上纹丝不动（实测仍是 160）。
+       **这是本仓栽过的同一个坑**（那句注释就在上面：某次改名留下的死规则）：
+       ⇒ 判据要落在"渲染出来的宽度"上，改之前先问"现在这个值是谁给的"。
+       240→300：「搜索公司 / 邮箱 / 域名…」实测文案宽 138px，160 的框内宽只有 140，勉强贴边。 */
+    #q { width:300px; min-width:300px; flex-shrink:0; padding:7px 10px; background:var(--bg);
          border:1.5px solid var(--border-strong); color:var(--text); border-radius:8px; font-size:13px; }
     .hdr-right .gear-btn { padding:6px 10px; }
     .hdr-left { width:178px; flex-shrink:0; display:flex; align-items:center; justify-content:center; }  /* 正对左侧栏(178px)：logo 上下+左右居中 */
@@ -782,12 +799,16 @@
            ⚠️ **两处原件已删，不留双真源** —— 这一单本身就是来收编它们的。
            ⚠️ 四态与七种小字**全部由 /api/activity 服务端判定**，这里只渲染。
            点它去机器房（"为什么机器这么干"的那一页）。 -->
-      <button id="status-bar" class="status-bar" style="display:none" onclick="openMachineRoom()">
-        <span class="sb-dot"></span><span class="sb-badge"></span><span class="sb-act"></span>
-      </button>
       <!-- 左栏导航的隐藏代理按钮（左栏 side-nav 的 handler 靠它们，勿删） -->
       <button id="btn-today" style="display:none">待办事项</button>
       <button id="btn-dashboard" style="display:none">数据看板</button>
+      <!-- ⭐ C5-28 打磨①：状态栏移到顶栏**最右**（Joe 最初圈的就是右上角；第一批落在搜索框旁边不对）。
+           `margin-left:auto` 把它顶到最右端 —— 全站每页同位（它住在 header 里，不随视图切换）。 -->
+      <button id="status-bar" class="status-bar" style="display:none;margin-left:auto"
+              onclick="openMachineRoom()" title="查看机器房明细">
+        <span class="sb-dot"></span><span class="sb-badge"></span>
+        <span class="sb-sep">·</span><span class="sb-act"></span>
+      </button>
     </div>
   </header>
   <div class="wrap">
@@ -3300,9 +3321,12 @@
                       'manual-busy':'手动·工作中', 'stopped':'已停·只收耳朵' };
       el.className = 'status-bar ' + d.badge + (d.busy ? ' busy' : '');
       el.querySelector('.sb-badge').textContent = LABEL[d.badge] || d.badge;
-      el.querySelector('.sb-act').textContent = d.action ? ' · ' + d.action : '';
-      // 受阻时把**服务器原话**挂上去（排查要的是它，不是那句人话）
-      el.title = (d.detail ? d.detail + "\n\n" : "") + "点这里去机器房看机器为什么这么干";
+      // 分隔点由 CSS 结构承担，所以小字里不再自己带 ' · '；没有小字时把分隔点一起藏掉
+      el.querySelector('.sb-act').textContent = d.action || '';
+      { const sep = el.querySelector('.sb-sep'); if (sep) sep.style.display = d.action ? '' : 'none'; }
+      // C5-28 打磨③：悬浮提示统一成「查看机器房明细」——"可点"这件事要说得出来点了会去哪。
+      // 受阻时把**服务器原话**顶在最前面（排查要的是它，不是那句人话）。
+      el.title = (d.detail ? d.detail + "\n\n" : "") + "查看机器房明细";
     }
     window.paintStatusBar = paintStatusBar;
     /** 常驻轮询。⚠️ 有活在跑时快一点、闲着时慢下来 —— 闲着还每 3 秒打一次是白烧额度。 */
