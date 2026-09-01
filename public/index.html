@@ -130,6 +130,13 @@
     .db-locked { color:var(--muted); }
     .db-locked .db-dimbar i { background:var(--border-strong); }
     @media (max-width:820px){ .db-dimrow { grid-template-columns:minmax(0,1fr) 72px auto; } .db-dimbar { display:none; } }
+    /* C5-11 B：顶栏分析进度条 —— 不阻断、可点回弹窗。字号/颜色取自附录 C 闭集 */
+    .an-chip { display:inline-flex; align-items:center; gap:8px; font-size:12px; cursor:pointer;
+               background:var(--tint-blue); border:1px solid var(--border); color:var(--blue);
+               padding:5px 10px; border-radius:8px; white-space:nowrap; }
+    .an-chip:hover { border-color:var(--blue); }
+    .an-chip i { display:block; width:56px; height:4px; border-radius:2px; background:var(--border); overflow:hidden; }
+    .an-chip i > b { display:block; height:100%; background:var(--blue); }
     .btn-quiet { background:transparent; border-color:transparent; color:var(--muted); }
     .btn-quiet:hover { background:var(--panel); border-color:var(--border); color:var(--text); }
     /* C5-4v A：批量条**只在选中 ≥1 条时出现**（常驻一条"已选 0 条"是噪音），出现时浮起 */
@@ -707,6 +714,9 @@
     <div class="hdr-left"><img src="/airsonde-logo-green-transparent.png?v=6" alt="AIRSONDE" title="回待办事项" onclick="openToday()" style="height:28px;width:auto;max-width:150px;display:block"></div>
     <div class="hdr-right-zone">
       <input type="search" id="q" placeholder="搜索公司 / 邮箱 / 域名…" />
+      <!-- C5-11 B：分析进度条 —— **不阻断**。关掉弹窗后它接着显示进度，点它把弹窗调回来。
+           默认隐藏；有待分析线索时（含刷新后恢复）才出现。 -->
+      <button id="an-chip" class="an-chip" style="display:none" onclick="openRestock()"></button>
       <!-- 左栏导航的隐藏代理按钮（左栏 side-nav 的 handler 靠它们，勿删） -->
       <button id="btn-today" style="display:none">待办事项</button>
       <button id="btn-dashboard" style="display:none">数据看板</button>
@@ -1040,6 +1050,9 @@
           <div id="dp-transparency" class="rs-est"></div>
           <button id="dp-run" class="primary" style="margin-top:12px">▶ 开始搜索</button>
           <div class="hint" id="dp-msg" style="margin-top:6px"></div>
+          <!-- C5-11 B3：这句是**能力说明不是装饰** —— 不写的话，Joe 不知道关掉页面会怎样，
+               只能干等着（"别让用户干等黑盒"）。cron 兜底本来就有，这里只是把它说出来。 -->
+          <div class="hint" style="margin-top:8px">跑起来后可以关掉这个窗口，分析会继续；顶栏有进度。整页关掉也不要紧，后台每小时会接着做完。</div>
         </div>
 
         <div class="rs-card">
@@ -1950,7 +1963,7 @@
     window.toolAnalyzeSel = async () => {
       const ids=[...selectedIds].map(Number); if(!ids.length) return;
       const N=ids.length;
-      if(!(await uiConfirm({ title:`立即分析 ${N} 条`, body:`将对**选中的 ${N} 条**逐条抓官网 + AI 打分 + 写开发信。\n约每条 10-30 秒，期间请勿关页面。`, confirmText:"开始分析" }))) return;
+      if(!(await uiConfirm({ title:`立即分析 ${N} 条`, body:`将对**选中的 ${N} 条**逐条抓官网 + AI 打分。\n约每条 10-30 秒，期间请勿关页面。`, confirmText:"开始分析" }))) return;
       const bar=$("#group-tools"); bar.classList.add("analyzing"); bar.querySelectorAll("button").forEach(b=>b.disabled=true);
       const prog = k => `⏳ 已分析 <b>${k}</b>/${N}<span class="bulk-prog"><span class="bulk-prog-fill" style="width:${Math.round(k/N*100)}%"></span></span>`;
       toolMsg(prog(0)); let fail=0;
@@ -2596,7 +2609,7 @@
                   ${preSend ? `<span class="hint">发出不可撤（发件 sales@airsonde.net）。</span>` : `<span class="hint">已发送，如需再触达请用下方「安排跟进」。</span>`}<span class="hint" id="send-msg"></span>
                 </div>
                 <div id="tr-panel" style="display:none;margin-top:8px"></div>
-              </div>` : `<div class="dp-card"><div class="hint">尚无 AI 分析。点底部「AI 分析」抓官网+打分+写信${!lead.email?"（无邮箱可先「找邮箱」）":""}。</div></div>`}
+              </div>` : `<div class="dp-card"><div class="hint">尚无 AI 分析。点底部「AI 分析」抓官网 + 打分${!lead.email?"（无邮箱可先「找邮箱」）":""}。</div></div>`}
               ${(lead.status==='sent' && lead.has_click) ? `<div class="dp-card" id="warm-sec"><div class="k muted">🔥 趁热跟进${lead.has_followup?`（已发过跟进）`:``}</div><div class="hint" style="margin:2px 0 6px">点过链接＝有意向，生成短暖跟进你审后发。</div><div id="warm-body"><button class="btn-amber" onclick="draftWarm(${lead.id})">✍ 生成趁热跟进</button> <span class="hint" id="warm-msg"></span></div></div>` : ''}
             </div>
             <div class="dp-right">
@@ -2999,30 +3012,121 @@
 
     // 抽干式分析：循环调 /api/analyze/batch 直到无 new（或达轮数上限），onProgress(ok,remaining,total) 报进度。
     // 每批是独立请求、各有自己的子请求预算，故能把大量积压全打完（不受单请求子请求上限约束）。
+    // ══ C5-11 A：分析提速 —— 前端并行 K 个批次，ids 不相交分块 ══
+    //
+    // ⚠️ **不动 ANALYZE_CONCURRENCY（服务端那个 3）**。它不是拍脑袋定的：
+    //   Workers 每次调用**同时最多 6 路出站连接**，每条线索在飞 1-2 路，3 条正好 3-6 路顶格。
+    //   开到 4 只会在 6 路上限排队，吞吐不涨 —— 那是错的杠杆。
+    // ✅ 真正的杠杆：**那个 6 路上限是"每次调用"的**。并行发 K 个请求 = K 个独立调用
+    //   = K×3 条在飞，不碰任何单调用限制。
+    //
+    // ⚠️⚠️ **ids 必须不相交**（本方案的命门）：`/api/analyze/batch` 不传 ids 时是
+    //   `WHERE status='new' ORDER BY id LIMIT n` —— **没有认领机制**，K 个并行调用会抓到
+    //   同一批行 ⇒ 同一条线索分析多次 = **重复烧 AI 的钱**。
+    //   所以每轮先取一次待分析 id，切成 K 份互不相交的块，各自用既有 `ids` 参数发。
+    //   服务端仍带 `status='new'` 过滤 ⇒ 已被别人做完的自然跳过，天然幂等。
+    // ── C5-11 B：弹窗解放 ──────────────────────────────────────────────
+    //   关掉弹窗 ≠ 停止分析。循环由前端驱动，弹窗只是"看不看"。
+    //   ⚠️ 进度以**库**为真源（还剩多少 status='new'），不是内存计数 ——
+    //     所以刷新页面、重开弹窗，进度都接得上，不会归零。
+    let _anRunning = false;                 // 只防同一页面重复起循环，不作为进度真源
+    function paintAnalyzeChip(done, remaining, total){
+      const el = $("#an-chip"); if (!el) return;
+      if (!remaining) { el.style.display = "none"; return; }
+      const pct = total ? Math.min(100, Math.round((total - remaining) / total * 100)) : 0;
+      el.style.display = "inline-flex";
+      el.innerHTML = `<i><b style="width:${pct}%"></b></i><span>AI 分析中 ${done}/${total}</span>`;
+      el.title = "分析在后台继续；点这里看详情";
+    }
+    /** 页面加载/刷新时：库里还有待分析的就自动接着跑（B2）。 */
+    async function resumeAnalyzeIfPending(){
+      const p = await fetch("/api/analyze/pending-ids?limit=1").then(r=>r.json()).catch(()=>({ids:[]}));
+      if (!(p.ids || []).length) return;
+      try {
+        await drainAnalyze((ok, remaining, total) => paintAnalyzeChip(ok, remaining, total));
+      } finally {
+        paintAnalyzeChip(0, 0, 0);
+        // B4：跑完推飞书。**幂等在服务端**，这里放心调 —— 刷新恢复的那一次也会调到，不会重推。
+        fetch("/api/discover/round-complete", { method:"POST" }).catch(()=>{});
+      }
+    }
+
+    const ANALYZE_PARALLEL = 3;   // K：并行批次数。撞 429 就降（见下方退避）
+    const ANALYZE_CHUNK    = 6;   // 每块条数。K×CHUNK = 单轮吞吐（3×6=18）
+
     async function drainAnalyze(onProgress){
-      const BATCH = 8, MAX_ROUNDS = 100; // 100×8=800 上限，防死循环
+      // 🔴 **并发守卫装在这里，不装在调用点**。
+      //   调用点今天有两个（页面初始化的 resumeAnalyzeIfPending、找客户的 runPipeline），
+      //   明天可能有第三个。两个循环同时跑会各自取 id ⇒ **两批 id 重叠 ⇒ 同一条线索分析两次
+      //   ⇒ 重复烧 AI 的钱** —— 正是 ids 分块要防的那件事，从另一个门溜进来。
+      //   （devguard 那条"往上收敛只守一个口子"的同一条纪律。）
+      if (_anRunning) return { done:0, ok:0, skipped:"已有分析循环在跑" };
+      _anRunning = true;
+      try { return await drainAnalyzeInner(onProgress); }
+      finally { _anRunning = false; }
+    }
+    async function drainAnalyzeInner(onProgress){
+      const MAX_ROUNDS = 100;
+      let k = ANALYZE_PARALLEL;
       const st0 = await fetch("/api/stats").then(r=>r.json()).catch(()=>({byStatus:{}}));
       const total0 = (st0.byStatus||{}).new || 0;
-      let doneOk = 0, doneProc = 0, rounds = 0, prevNew = Infinity, stuck = 0;
+      let doneOk = 0, doneProc = 0, rounds = 0, prevNew = Infinity, stuck = 0, rateLimited = 0;
+
       while (rounds < MAX_ROUNDS){
-        const st = await fetch("/api/stats").then(r=>r.json()).catch(()=>({byStatus:{}}));
-        const newCount = (st.byStatus||{}).new || 0;
-        if (!newCount) break;
-        // 停滞检测：new 数连续 2 轮没下降(如 LLM key 失效每条都失败) → 停，别空转到上限
-        if (newCount >= prevNew) { if (++stuck >= 2) return { done:doneProc, ok:doneOk, remaining:newCount, rounds, stalled:true }; }
+        // 取待分析 id：**同时兼作进度判据**（剩多少 = 还有多少 id），
+        //   省掉原来轮首那次单独的 /api/stats 往返。
+        const pend = await fetch(`/api/analyze/pending-ids?limit=${k * ANALYZE_CHUNK}`)
+          .then(r=>r.json()).catch(()=>({ids:[]}));
+        const ids = pend.ids || [];
+        if (!ids.length) break;
+
+        // 停滞检测（原逻辑保留）：连续 2 轮没减少（如 AI key 失效每条都失败）→ 停，别空转到上限
+        if (ids.length >= prevNew) { if (++stuck >= 2)
+          return { done:doneProc, ok:doneOk, remaining:ids.length, rounds, stalled:true }; }
         else stuck = 0;
-        prevNew = newCount;
-        if (onProgress) onProgress(doneOk, newCount, Math.max(total0, doneProc + newCount));
-        const a = await fetch("/api/analyze/batch", { method:"POST", headers:{"content-type":"application/json"},
-          body:JSON.stringify({limit:BATCH}) }).then(r=>r.json()).catch(e=>({error:String(e)}));
-        if (a.error) return { done:doneProc, ok:doneOk, error:a.error };
-        doneOk += a.ok || 0; doneProc += a.processed || 0;
-        loadStats(); loadList(); loadFacets();
+        prevNew = ids.length;
+        if (onProgress) onProgress(doneOk, ids.length, Math.max(total0, doneProc + ids.length));
+
+        // 切成 k 份**不相交**的块（轮转分配，让每块长度尽量均匀）
+        const chunks = Array.from({length:k}, () => []);
+        ids.forEach((id, i) => chunks[i % k].push(id));
+
+        const outs = await Promise.all(chunks.filter(ch=>ch.length).map(ch =>
+          fetch("/api/analyze/batch", { method:"POST", headers:{"content-type":"application/json"},
+            body:JSON.stringify({ ids: ch, limit: ch.length }) })
+            .then(r=>r.json()).catch(e=>({error:String(e)}))));
+
+        let roundProc = 0, hit429 = false;
+        for (const a of outs){
+          if (a.error){
+            // ⚠️ 只在**确实是限流**时降 K，别把普通错误也当限流处理（那会白白变慢）
+            if (/429|rate.?limit|too many/i.test(String(a.error))) hit429 = true;
+            else return { done:doneProc, ok:doneOk, error:a.error };
+            continue;
+          }
+          doneOk += a.ok || 0; roundProc += a.processed || 0;
+        }
+        doneProc += roundProc;
+
+        if (hit429){
+          // 退避 + 降 K，不硬扛（总调度已批这个顺序：先撞再降，不预先保守）
+          rateLimited++;
+          k = Math.max(1, k - 1);
+          if (onProgress) onProgress(doneOk, ids.length, Math.max(total0, doneProc + ids.length));
+          await new Promise(r => setTimeout(r, 2000 * rateLimited));
+        }
+
         rounds++;
-        if (!a.processed) break; // 防空转
+        // ⚠️ 整表重渲染**降频**：原来每轮都 loadStats+loadList+loadFacets（每 8 条 3 个往返
+        //   外加整表重画）。分析中途的中间态没人盯着看，每 4 轮刷一次足够，收尾时再刷一次全的。
+        if (rounds % 4 === 0) { loadStats(); loadList(); loadFacets(); }
+        if (!roundProc && !hit429) break;   // 一条都没推进且不是限流 → 防空转
       }
+
+      loadStats(); loadList(); loadFacets();
       const stF = await fetch("/api/stats").then(r=>r.json()).catch(()=>({byStatus:{}}));
-      return { done:doneProc, ok:doneOk, remaining:(stF.byStatus||{}).new || 0, rounds, hitCap:rounds>=MAX_ROUNDS };
+      return { done:doneProc, ok:doneOk, remaining:(stF.byStatus||{}).new || 0,
+               rounds, rateLimited, finalK:k, hitCap:rounds>=MAX_ROUNDS };
     }
 
     // 批③顶栏收口：#btn-batch(批量分析) 已删 —— 功能归「待分析」格的「立即分析选中」。
@@ -3363,7 +3467,8 @@
 
         // ② AI 分析（复用 drainAnalyze 抽干，直到无 new 或达上限）
         const a2 = await drainAnalyze((ok, remaining, total)=>{
-          setLog(`② AI 分析中…已分析 ${ok}，还剩 ${remaining} 条（抓官网+打分+写信，每条约 10-30 秒）`);
+          paintAnalyzeChip(ok, remaining, total);   // 顶栏进度条：关掉弹窗也看得见
+          setLog(`② AI 分析中…已分析 ${ok}，还剩 ${remaining} 条（抓官网 + 打分，每条约 10-30 秒）`);
           setBar(20 + (total ? Math.min(1, ok/total) : 0) * 50);
         });
         if (a2.error) setLog("② 分析出错：" + a2.error);
@@ -3391,6 +3496,10 @@
         loadStats(); loadList(); loadFacets();
       } finally {
         pipelineRunning = false;
+        paintAnalyzeChip(0, 0, 0);
+        // B4：本轮跑完推飞书。幂等在服务端（discover_round_id vs notified + new 清零），
+        //   所以这里无脑调 —— 刷新恢复的那条路径也会调到，不会重推。
+        fetch("/api/discover/round-complete", { method:"POST" }).catch(()=>{});
         // ⚠️ `dp-save` 现在住在设置页方向盘，弹窗单独打开时它可能不在 DOM 里 ——
         //    原来这行是 `$("#"+id).disabled=false` 无守卫，一旦取到 null 就抛，
         //    而它在 finally 里 ⇒ **会把真正的错误吞掉换成一个 TypeError**。
@@ -4545,6 +4654,10 @@ ${esc(d.ours.body||'')}</div></details>`
     fetch("/api/settings/sending").then(r=>r.json()).then(c=>{ if (c && c.chat_script) _chatScript = c.chat_script; }).catch(()=>{});
 
     loadStats(); loadFacets(); loadList();
+    // C5-11 B2：刷新/重开页面时，库里还有待分析的就**自动接着跑**。
+    //   ⚠️ 进度真源是库（还剩多少 status='new'），不是内存 —— 所以刷新不归零、也不重复做。
+    //   ⚠️ 不 await：它是后台活儿，不该拖住首屏。
+    resumeAnalyzeIfPending();
     // 批㉔：飞书卡片「打开详情」深链 ?lead=N → 进门直接开该线索详情页（← 返回列表 可回）。
     // ⚠️ 二选一不并跑：openDetail 和 openToday 写的是同一个 #v-page，并跑会竞写——
     //   today 的 fetch 后到就把详情整页覆盖（实测抓到的，不是猜的）。

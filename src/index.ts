@@ -1421,6 +1421,67 @@ app.post("/api/leads/:id/analyze", async (c) => {
 });
 
 // ---- AI 分析：批量（默认处理 5 条 new 线索）----
+// C5-11 B4：一轮找客户跑完 → 推飞书。**幂等做在服务端**，不靠前端记状态。
+//   为什么不由前端判重：弹窗可关、页面可刷新、cron 也可能接手 —— 前端的"我推过了"随时会丢，
+//   丢了就重推。⇒ 判据放库里：`discover_round_id`（每次 /api/discover 开跑时写）
+//   与 `discover_round_notified` 不相等、且 status='new' 已清零，才推，推完把 id 记上。
+//   照 rescan 收尾的 larkSend 先例（index.ts ~2903），不新发明。
+app.post("/api/discover/round-complete", async (c) => {
+  const roundId = (await getSetting(c.env, "discover_round_id", "")).trim();
+  if (!roundId) return c.json({ pushed: false, why: "本轮没有记录（可能不是从找客户发起的）" });
+  const notified = (await getSetting(c.env, "discover_round_notified", "")).trim();
+  if (notified === roundId) return c.json({ pushed: false, why: "本轮已推过" });   // 幂等
+  const left = (await c.env.DB.prepare("SELECT COUNT(*) AS n FROM leads WHERE status='new'")
+    .first<{ n: number }>())?.n || 0;
+  if (left > 0) return c.json({ pushed: false, why: `还剩 ${left} 家没分析完`, remaining: left });
+
+  // 本轮统计：以 discover_round_at 之后入库的线索为一轮（真值派生，不靠前端传数字）
+  const since = (await getSetting(c.env, "discover_round_at", "")).trim() || "1970-01-01";
+  const row = await c.env.DB.prepare(
+    `SELECT COUNT(*) AS total,
+            SUM(CASE WHEN a.match_score >= ? THEN 1 ELSE 0 END) AS hi,
+            SUM(CASE WHEN l.email IS NULL OR l.email = '' THEN 1 ELSE 0 END) AS noEmail,
+            SUM(CASE WHEN a.lead_id IS NULL OR a.match_score IS NULL THEN 1 ELSE 0 END) AS nil
+       FROM leads l LEFT JOIN lead_analysis a ON a.lead_id = l.id
+      WHERE l.created_at >= ?`
+  ).bind(APPROVE_MIN_SCORE, since).first<any>();
+  const total = Number(row?.total || 0), hi = Number(row?.hi || 0);
+  const noEmail = Number(row?.noEmail || 0), nil = Number(row?.nil || 0);
+
+  await setSetting(c.env, "discover_round_notified", roundId);   // 先记再推：推失败也不重推刷屏
+  try {
+    if (larkConfigured(c.env)) {
+      await larkSend(c.env, { msg_type: "text", content: { text:
+        `AIRSONDE ✅ 本轮找客户完成
+` +
+        `· 本轮共分析 ${total} 家
+` +
+        `· ${hi} 家 ≥${APPROVE_MIN_SCORE} 分
+` +
+        `· ${noEmail} 家 缺邮箱
+` +
+        `· ${nil} 家 官网抓不到（未打分，不是不合格）` } });
+    }
+  } catch (e) { console.error("round-complete digest:", e); }
+  return c.json({ pushed: true, stats: { total, hi, noEmail, nil } });
+});
+
+// C5-11：待分析 id 清单（**只读，纯增量**）——给前端做"不相交分块"用。
+//   ⚠️ 为什么需要它：`/api/analyze/batch` 的选行是 `WHERE status='new' ORDER BY id LIMIT n`，
+//     **没有认领机制**。前端要并行发 K 个批次提速，如果每个都让服务端自己选，K 个调用会抓到
+//     **同一批行** ⇒ 同一条线索被分析多次 = **重复烧 AI 的钱**。
+//     所以由前端先取一次全量 id、切成 K 份**互不相交**的块，各自用既有的 `ids` 参数发出去。
+//   ⚠️ 没有加 `status='analyzing'` 这类认领列：请求中途死掉会留下**永远解不开的悬挂状态**，
+//     而 id 分块方案天然幂等 —— 失败的那块线索仍是 'new'，cron 会兜底捡回去。
+//   ⚠️ 老客户端不调它，只增不改：Joe 浏览器里可能还开着旧页面在跑老循环。
+app.get("/api/analyze/pending-ids", async (c) => {
+  const cap = Math.min(Math.max(Number(c.req.query("limit")) || 500, 1), 2000);
+  const rows = (await c.env.DB.prepare(
+    "SELECT id FROM leads WHERE status = 'new' ORDER BY id ASC LIMIT ?"
+  ).bind(cap).all()).results as any[];
+  return c.json({ ids: rows.map((r) => Number(r.id)), capped: rows.length >= cap });
+});
+
 app.post("/api/analyze/batch", async (c) => {
   const body = await jsonBody<{ limit?: number; ids?: number[] }>(c);
   const limit = Math.min(Math.max(Number(body.limit) || 5, 1), 20);
@@ -1880,6 +1941,13 @@ app.get("/u/:token", async (c) => {
 app.post("/api/discover", async (c) => {
   const body = await jsonBody<{ keywords?: string[]; perKeyword?: number; countries?: string[] }>(c);
   try {
+    // C5-11 B4：给这一轮打个标记，供 /api/discover/round-complete 判重与统计。
+    //   ⚠️ **在 runDiscovery 之前写**：搜索途中若被预算闸提前停止，那些已入库的线索也算这一轮。
+    //   ⚠️ round_at 用 datetime('now')（UTC，与 leads.created_at 同一口径）——
+    //      拿 toISOString() 会带 T 和毫秒，和 created_at 的格式比大小会出错。
+    const roundAt = (await c.env.DB.prepare("SELECT datetime('now') AS t").first<{ t: string }>())?.t || "";
+    await setSetting(c.env, "discover_round_id", `${roundAt}#${Math.floor(Math.random() * 1e6)}`);
+    await setSetting(c.env, "discover_round_at", roundAt);
     const out = await runDiscovery(c.env, body);
     return c.json(out);
   } catch (e: any) {
