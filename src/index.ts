@@ -1205,7 +1205,8 @@ app.get("/api/activity", async (c) => {
 
   // ── 动作小字（七种，服务端拼好）──────────────────────────
   const effective = effectiveEarly, sentToday = sentTodayEarly;
-  let action = "", detail = "";
+  // quotaNote = 额度类静态信息：**不进常驻小字**，只进 title（见下面 C5-29 的说明）。
+  let action = "", detail = "", quotaNote = "";
   if (act) {
     const n = (a: any) => (a.total ? `${a.done ?? 0}/${a.total}` : String(a.done ?? ""));
     action = act.kind === "search"   ? `搜索中 ${n(act)}${act.note ? " · " + act.note : ""}`
@@ -1216,17 +1217,20 @@ app.get("/api/activity", async (c) => {
     // ⭐ 插队语义（Joe 亲自问定的）：自动模式下人工交办的活，**徽章不变**，小字加前缀。
     //    模式 ≠ 动作，人插手不换班。发起方落在服务端（activity.by），不靠前端记自己点没点过。
     if (auto && act.by === "user") action = "你交办的：" + action;
-  } else if (auto && sentToday >= effective) {
-    // ⚠️ 额度型待机**要说明原因**，否则"发满了"和"坏了"在屏幕上长得一样。
-    //    明天的上限用爬坡真值算，不写死。
-    const tomorrow = Math.max(await numSetting(c.env, "send_ramp_floor", RAMP_FLOOR, 1, 5000),
-                              Math.floor(sentToday * await numSetting(c.env, "send_ramp_factor", RAMP_FACTOR, 1, 10)));
-    action = `今日发满 ${sentToday} 封 · 明天上限 ${tomorrow}`;
   } else {
-    // ⚠️ 总开关关且无活动时**小字留空**：徽章已经写着「已停·只收耳朵」了，
-    //   小字再说一遍就是"徽章和小字在说同一句话"（渲染测试里真的看到 "已停·只收耳朵 · 已停 · 只收耳朵"）。
-    //   语义是「徽章说班次，小字说实况」—— 没有实况就别硬凑一句。
-    action = auto ? "待机 · 盯着收信" : "";
+    // ⭐ C5-29 追加（Joe 原话"把今日发满30封，明天上限45删掉"）：
+    //   **常驻小字只说"正在干什么"，不做静态额度播报。**
+    //   他要的"小字说实况"指的是**活的实况**；机器没在干活时右上角就该只剩「● 自动·运行中」。
+    //   ⚠️ 额度信息**没有丢**，只是换了住处：进 title（悬浮可见）+ 机器房（它的常驻展示位）。
+    //     这跟"删掉信息"是两回事 —— 铁律五：一个事实一个展示位，别处链接过去。
+    action = "";
+    if (auto && sentToday >= effective) {
+      const tomorrow = Math.max(await numSetting(c.env, "send_ramp_floor", RAMP_FLOOR, 1, 5000),
+                                Math.floor(sentToday * await numSetting(c.env, "send_ramp_factor", RAMP_FACTOR, 1, 10)));
+      quotaNote = `今日发满 ${sentToday} 封 · 明天上限 ${tomorrow}`;
+    } else if (auto) {
+      quotaNote = `今日已发 ${sentToday}/${effective} 封`;
+    }
   }
   if (blocked) { detail = blocked.raw; action = blocked.human; }
 
@@ -1235,6 +1239,7 @@ app.get("/api/activity", async (c) => {
     busy: !!act,                 // 前端据它决定"呼吸"动画 —— **idle 必须静止，别做成永远闪的灯**
     action,                      // 给人看的一句
     detail,                      // 服务器原话（受阻时才有），放 title 供排查
+    quotaNote,                   // 额度类静态信息：前端放进 title，不放进常驻小字
     blockedKind: blocked ? blocked.kind : null,
     blockedGroup: blocked ? blocked.group : null,
     initiator: act ? act.by : null,
@@ -1976,8 +1981,23 @@ const DEFAULT_CHAT_SCRIPT =
 
 // ---- 发信设置（每日上限 + 公司名 + 合规地址 + 卖点 + 一键开聊话术）----
 app.get("/api/settings/sending", async (c) => {
-  const br = await getBreakerStatus(c.env);
-  const sysLimit = await systemDailySendLimit(c.env);
+  // ⭐ C5-29 提速：AI 花费的刷新丢到**后台**，界面读取不等它（配合 getAiUsage 的 cacheOnly）。
+  //   ⚠️ waitUntil 里的失败不能冒泡 —— 它只是刷个缓存，砸不到这次响应上。
+  try {
+    c.executionCtx.waitUntil(
+      getAiUsage(c.env, (k, d) => getSetting(c.env, k, d), (k, v) => setSetting(c.env, k, v))
+        .catch((e) => console.error("ai-usage-refresh:", e))
+    );
+  } catch { /* 某些运行环境没有 executionCtx —— 没有就不刷，界面照常出 */ }
+
+  // ⭐ C5-29 提速：**去重 + 并行**。原来这个端点有 41 个串行 await，其中
+  //   systemDailySendLimit 调了 6 次、coldSentToday 调了 4 次 —— 同一个数算六遍，
+  //   每一遍都是一次 D1 往返。这不是"慢一点"，是把延迟乘了个常数。
+  const [br, sysLimit, coldToday] = await Promise.all([
+    getBreakerStatus(c.env),
+    systemDailySendLimit(c.env),
+    coldSentToday(c.env),
+  ]);
   const autoLimit = await autoSendDailyLimit(c.env, sysLimit.effective);
   return c.json({
     // ⭐ 系统级发信上限：走唯一咽喉点 systemDailySendLimit（**不要**在这里自己 getSetting，
@@ -2005,7 +2025,7 @@ app.get("/api/settings/sending", async (c) => {
     yesterday_cold: sysLimit.yesterdayCold,
     effective_send_limit: sysLimit.effective,
     // 系统闸只卡冷发(initial+followup)；事务信(确认/回真人)豁免但在用量里显示，见 send.ts coldSentToday
-    cold_sent_today: await coldSentToday(c.env),
+    cold_sent_today: coldToday,
     company_name: await getSetting(c.env, "company_name", "AirSonde"),
     company_address: await getSetting(c.env, "company_address", DEFAULT_COMPANY_ADDRESS),
     company_website: await getSetting(c.env, "company_website", c.env.SITE_URL || "https://airsonde.com"),
@@ -2032,16 +2052,9 @@ app.get("/api/settings/sending", async (c) => {
     //   这就是铁律三那条"不许显示一个看起来正常的默认值"的同一种病：
     //   **显示一个他设的、但此刻并不生效的数，比不显示更误导。**
     //   ⚠️ 上一段我给新旋钮做了"生效值+来源"，却漏了真正卡住他的这一个 —— 派单原话是"全部"。
-    send_limit_effective: await (async () => { const { effective } = await systemDailySendLimit(c.env); return effective; })(),
-    send_limit_capped_by: await (async () => {
-      const info = await systemDailySendLimit(c.env);
-      if (info.effective >= info.limit) return null;                 // 没被压低，你填的数就是生效数
-      return info.rampEnabled ? "ramp" : "other";                    // 被新域保护压低
-    })(),
-    send_room_today: await (async () => {
-      const { effective } = await systemDailySendLimit(c.env);
-      return Math.max(0, effective - (await coldSentToday(c.env)));
-    })(),
+    send_limit_effective: sysLimit.effective,
+    send_limit_capped_by: sysLimit.effective >= sysLimit.limit ? null : (sysLimit.rampEnabled ? "ramp" : "other"),
+    send_room_today: Math.max(0, sysLimit.effective - coldToday),
     automation_changed_at: await getSetting(c.env, "automation_changed_at", ""),
     auto_send_blocked_reason: await autoSendBlockedReason(c.env),
     // 自动闸默认跟随系统闸（走 resolver，不在这里自己 getSetting）——老写法的硬默认 15/生产 200
@@ -2063,7 +2076,11 @@ app.get("/api/settings/sending", async (c) => {
     // ⭐ 批⑪C：AI **花了多少钱** —— 问 OpenRouter 要真数，不猜单价。
     //   它一条同时答 Joe 的两个问题："最近用这么多正常吗"（daily/monthly）+ "是不是设了限额"（limit）。
     //   带 10 分钟缓存（settings），别每次开页面都打人家一次。拿不到时**绝不返回 0**（见 getAiUsage）。
-    ai_cost: await getAiUsage(c.env, (k, d) => getSetting(c.env, k, d), (k, v) => setSetting(c.env, k, v)),
+    // 🔴 C5-29 根因修复：这里**只吃缓存，永不等外网**。
+    //   原来它在缓存过期时同步去打 OpenRouter 的账单接口、且那个 fetch 没有超时 ——
+    //   对方一慢，整个设置页就打不开（Joe 实测 10s 超时，黄条报的就是这个端点）。
+    //   刷新交给下面的后台任务（ctx.waitUntil），界面读取一秒都不为它等。
+    ai_cost: await getAiUsage(c.env, (k, d) => getSetting(c.env, k, d), (k, v) => setSetting(c.env, k, v), { cacheOnly: true }),
     ai_today: {
       analyzed: (await c.env.DB.prepare(
         "SELECT COUNT(*) AS n FROM lead_analysis WHERE date(analyzed_at)=date('now')").first<{ n: number }>())?.n || 0,
@@ -2398,7 +2415,7 @@ app.post("/api/settings/search", async (c) => {
 
 // ---- 关键词池管理 ----
 app.get("/api/keywords", async (c) => {
-  const rows = await c.env.DB.prepare("SELECT id, keyword, weight, sent_count, reply_count FROM keywords ORDER BY weight DESC, id ASC").all();
+  const rows = await c.env.DB.prepare("SELECT id, keyword, weight, sent_count, reply_count FROM keywords WHERE COALESCE(archived,0)=0 ORDER BY weight DESC, id ASC").all();
   const keywords = (rows.results as any[]).map((k) => ({
     ...k,
     reply_rate: k.sent_count > 0 ? k.reply_count / k.sent_count : null,  // 无发送则为 null（新词，无数据）
@@ -2418,8 +2435,30 @@ app.post("/api/keywords", async (c) => {
   await c.env.DB.prepare("INSERT INTO keywords (keyword) VALUES (?) ON CONFLICT(keyword) DO NOTHING").bind(kw).run();
   return c.json({ ok: true });
 });
+/**
+ * C5-29③：把关键词**下架**（从轮转移除），不是删除它。
+ *
+ * 🔴 原实现是 `DELETE FROM keywords WHERE id=?` —— 而战绩（sent_count / reply_count）
+ *   **就存在这一行上**，硬删会把它一起销毁。派单明确要求"历史战绩数据保留在库不清"，
+ *   所以 **"从轮转移除" ≠ "删除这一行"**。改成标 archived。
+ * ⚠️ 迁移做成**幂等自愈**：老库没有这一列，ALTER 一次即可；已存在就吞掉那个错。
+ *   （这仓的规矩是 schema.sql 为单一真源、不跑增量脚本，所以自愈式 ALTER 是这里唯一
+ *    既不破规矩又能上线的做法；schema.sql 里已同步加上该列，新库天然就有。）
+ */
+async function ensureKeywordArchivedColumn(env: Env): Promise<void> {
+  try { await env.DB.prepare("ALTER TABLE keywords ADD COLUMN archived INTEGER NOT NULL DEFAULT 0").run(); }
+  catch { /* 已经有这一列 —— 正常，不是错误 */ }
+}
 app.delete("/api/keywords/:id", async (c) => {
-  await c.env.DB.prepare("DELETE FROM keywords WHERE id=?").bind(Number(c.req.param("id"))).run();
+  await ensureKeywordArchivedColumn(c.env);
+  const r = await c.env.DB.prepare("UPDATE keywords SET archived=1 WHERE id=?")
+    .bind(Number(c.req.param("id"))).run();
+  return c.json({ ok: true, archived: r.meta.changes || 0 });
+});
+/** 下架的恢复口（Joe 手滑时不至于没救）。 */
+app.post("/api/keywords/:id/restore", async (c) => {
+  await ensureKeywordArchivedColumn(c.env);
+  await c.env.DB.prepare("UPDATE keywords SET archived=0 WHERE id=?").bind(Number(c.req.param("id"))).run();
   return c.json({ ok: true });
 });
 

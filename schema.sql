@@ -118,6 +118,10 @@ CREATE TABLE IF NOT EXISTS keywords (
   weight      REAL NOT NULL DEFAULT 1.0,
   sent_count  INTEGER NOT NULL DEFAULT 0,
   reply_count INTEGER NOT NULL DEFAULT 0,
+  -- C5-29③：软删标记。**"从轮转移除" ≠ "删除这一行"** ——
+  --   战绩（sent_count / reply_count）就存在这一行上，硬删会把它一起销毁，
+  --   而派单明确要求"历史战绩数据保留在库不清"。所以下架用标记，不用 DELETE。
+  archived    INTEGER NOT NULL DEFAULT 0,
   created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

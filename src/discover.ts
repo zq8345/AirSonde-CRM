@@ -729,7 +729,8 @@ async function setS(env: Env, key: string, value: string): Promise<void> {
 
 // 关键词池：优先 keywords 表，空则用默认；P0-a 尊重面板勾选（active_keywords 非空则只用勾选的）
 export async function getKeywords(env: Env): Promise<string[]> {
-  const rows = await env.DB.prepare("SELECT keyword FROM keywords ORDER BY weight DESC, id ASC").all();
+  // C5-29③：下架的关键词不进轮转。⚠️ COALESCE 兜住老库还没 ALTER 过的情况。
+  const rows = await env.DB.prepare("SELECT keyword FROM keywords WHERE COALESCE(archived,0)=0 ORDER BY weight DESC, id ASC").all();
   const list = (rows.results as any[]).map((r) => r.keyword);
   if (!list.length) return DEFAULT_KEYWORDS;
   const akRaw = (await getS(env, "active_keywords", "")).trim();   // P0-a：面板"取消勾选"的关键词 cron 真的不跑

@@ -698,6 +698,26 @@
     .set-page .transparency { background:var(--panel); border:1px solid var(--border); color:var(--muted);
                               border-radius:8px; padding:10px 12px; font-size:13px; margin:0 0 12px; }
     .set-page #cfg-limit-badge { background:var(--panel); border:1px solid var(--border); color:var(--muted); }
+    /* ══⭐⭐ C5-30：设置页**预览态**皮肤 ══
+       预览态 = 只读的 label-value，零输入框外观。
+       ⚠️ **同一份 markup 两种皮肤**，不写第二套 HTML —— 两套 HTML 就是两处字段清单，
+         加一个字段忘了改另一处，界面就开始说谎（这一族单一直在治这个）。
+       ⚠️ 例外（Joe 已认可）：**自动模式总开关**和只读动作按钮在预览态保持可用 ——
+         它们是**操作不是配置**，紧急停机不该先点「编辑」。用 .cfg-live 标出来。 */
+    /* ⚠️ 勾选框也要锁：我第一版写的是 `input:not([type=checkbox])`，那会让「新域保护」
+       「自动跟进」这些**配置项**在预览态照样能改 —— 违反"其余字段一律编辑态才可改"。
+       免锁的判据是 **`.cfg-live` 这个显式标记**（操作 ≠ 配置），不是"它是不是勾选框"。 */
+    .set-page.preview input:not(.cfg-live):not([type=checkbox]),
+    .set-page.preview select:not(.cfg-live),
+    .set-page.preview textarea {
+      border:0; background:transparent; padding-left:0; box-shadow:none;
+      pointer-events:none; resize:none; color:var(--text); }
+    .set-page.preview textarea { min-height:0; height:auto; overflow:hidden; }
+    .set-page.preview .set-num { width:auto; min-width:0; }
+    /* 预览态里那些"只在编辑时才有意义"的按钮整体退场（无对象的按钮不出现，同附录 C.8） */
+    .set-page.preview .edit-only { display:none !important; }
+    /* 勾选框在预览态锁住（.cfg-live 的除外）：只读要看得出来，所以顺带降透明度。 */
+    .set-page.preview input[type=checkbox]:not(.cfg-live) { pointer-events:none; opacity:.55; }
     .set-page .auto-box { border-radius:10px; padding:12px 14px; margin:0 0 4px; }
     .set-page .auto-row { padding:6px 0; }
     /* 动作条：保存是唯一实心；测试卡片是动作不是设置，降为描边次级 */
@@ -890,7 +910,14 @@
       <div class="pg-titlewrap"><span class="pg-title">设置</span></div>
       <!-- C5-4v①：保存移进吸顶页头右侧 —— "存不存得下"是全页共同的状态，理应跟着页头走。
            ⚠️ _cfgLoaded 闸照旧管住它（openSettings 里 disabled + title），这里只换位置。 -->
-      <button class="primary" id="save-sendcfg" style="margin-left:auto">保存</button>
+      <!-- ⭐⭐ C5-30：设置页分**预览态 / 编辑态**。
+           预览态 = 只读的 label-value，零输入框；点「编辑」才进编辑态。
+           ⚠️ **不写第二套 markup** —— 同一份字段两套 HTML 就是双真源（这一单本身在治这病）。
+              改成"一份 markup 两种皮肤"：预览态用 CSS 把输入框渲染成纯文本 + JS 置 readonly。
+           ⚠️ 加载失败时**禁用「编辑」**（防线前置，比拦保存更早，见 C5-30 第 3 条）。 -->
+      <button class="primary" id="cfg-edit" style="margin-left:auto">编辑</button>
+      <button class="primary" id="save-sendcfg" style="margin-left:auto;display:none">保存</button>
+      <button class="btn-ghost" id="cfg-cancel" style="display:none">取消</button>
       <span class="hint" id="sendcfg-result" style="margin:0 0 0 10px"></span>
     </div>
     <!-- 加载失败横幅：这一页原来**没有**（其余四页都有）。缺它的后果不是难看，是**页面静默空白**：
@@ -908,10 +935,9 @@
            它们不是没用，是**回答"机器怎么想的"** —— 那是机器房的职责，不是这一页的。
            ⚠️ 禁词表对本页生效（熔断/爬坡/算式…），所以这里的措辞是"新域保护""自动停发"。 -->
 
-      <!-- ── ① 你是谁 —— 这些字会出现在每一封信里 ── -->
+      <!-- ── ① 公司信息 —— 这些字会出现在每一封信里 ── -->
       <div class="set-card">
-        <div class="sec-title">① 你是谁</div>
-        <div class="sec-sub">会出现在每封信里，收信人看得到。</div>
+        <div class="sec-title">① 公司信息</div>
         <div class="set-grid">
           <div class="k">公司名</div>
           <div class="v"><input id="cfg-company" class="set-in"></div>
@@ -921,22 +947,22 @@
 
           <div class="k">公司地址</div>
           <div class="v"><textarea id="cfg-address" style="min-height:72px" placeholder="e.g. AirSonde, 123 Example St, City, Country"></textarea>
-            <div class="hint">合规要求，须真实：每封信页脚都带它。</div></div>
+</div>
 
           <div class="k">卖点</div>
           <!-- C6-B/P2-4：placeholder 里的 "flexible MOQs" 删掉 —— 它就在"只写站得住的事实"那句提示旁边，
                却在**示范一句我们答不上来的商务承诺**（MOQ 是工厂问题清单三-9 未答项），
                而这个框的内容会被 AI 直接引用进真发的开发信。Y2 清了 landing/卖点默认值，漏了这一处。 -->
           <div class="v"><textarea id="cfg-selling" style="min-height:76px" placeholder="e.g. Factory-direct IAQ monitors (CO2/PM2.5/TVOC); OEM & private-label.（认证/产能/MOQ/案例未经工厂书面确认前不要写）"></textarea>
-            <div class="hint">AI 会引用；只写站得住的事实。</div></div>
+</div>
 
           <div class="k">开场白</div>
           <div class="v"><textarea id="cfg-chatscript" style="min-height:96px" placeholder="Hi {company} team — AirSonde builds air quality monitors factory-direct…"></textarea>
-            <div class="hint">{company} 会替换成公司名。</div></div>
+</div>
 
           <div class="k">存档邮箱</div>
           <div class="v"><input id="cfg-bcc" class="set-in" placeholder="留空 = 不存档">
-            <div class="hint">选填，每封外发密送一份。</div></div>
+</div>
         </div>
       </div>
 
@@ -951,7 +977,7 @@
              ⚠️ C5-25 砍字纪律：解释一律进 (?)（data-help，闸的 measure 会剔除它，不占预算），
                 页面正文只留「这是什么 + 现在是多少」（铁律一）。**删掉的是解释，不是能力。** -->
         <div class="auto-box">
-          <label class="auto-row"><input type="checkbox" id="cfg-automation">
+          <label class="auto-row"><input type="checkbox" id="cfg-automation" class="cfg-live">
             <span><b>自动模式</b>
               <span class="gj-help" data-help title="开：机器连续地找客户、分析、批准（≥分数线）、写信发信、跟进，不等整点。关：这些出站动作全停，但收回信、AI 分类和飞书通知照常在线——错过回信只有损失没有风险。改一下就生效，不用按保存。">(?)</span></span></label>
           <div class="hint" id="cfg-automation-why" style="margin-left:26px"></div>
@@ -1001,7 +1027,6 @@
       <!-- ── ③ 无回复自动跟进 ── -->
       <div class="set-card">
         <div class="sec-title">③ 无回复自动跟进</div>
-        <div class="sec-sub">没人回就自动再发一封。</div>
         <label style="display:flex;gap:8px;align-items:center;cursor:pointer;margin:0 0 16px">
           <input type="checkbox" id="fu-enabled"> <span class="hint" style="margin:0">开启自动跟进</span>
         </label>
@@ -1030,7 +1055,6 @@
           <div class="sec-row"><span class="sec-title" style="margin:0">客户画像 · 打分标准</span>
             <span class="hint" id="fc-profile-badge" style="margin:0"></span></div>
           <div class="hint" id="fc-profile-summary" style="margin:4px 0;cursor:pointer" onclick="toggleProfile()">（加载中…）</div>
-          <div class="hint" style="margin:3px 0 8px">抓来的线索都用这份画像给 AI 打分——越具体越准。</div>
           <textarea id="fc-profile" placeholder="描述你的理想客户；留空用内置默认画像"></textarea>
           <span id="fc-profile-caret" hidden></span>
 
@@ -1049,28 +1073,26 @@
                Joe 存一次关键词，只要这个勾当时没打上，整个自动找客户就被静默写成 0，界面零提示。
                生产真发生过。这条防线迁移时一字不动。 -->
           <label style="display:flex;align-items:center;gap:7px;margin-top:6px;cursor:pointer;font-size:13px">
-            <input type="checkbox" id="dp-auto"> 开启后台每小时自动搜索新客户
+            <input type="checkbox" id="dp-auto" class="cfg-live"> 开启后台每小时自动搜索新客户
             <span class="hint" style="margin:0">（默认关；每轮只跑一小批，受下方预算封顶）</span>
           </label>
           <div class="set-numrow" style="margin-top:12px">
             <span style="font-size:13px">搜索预算上限</span>
             <input id="fc-serper-budget" type="number" min="0" max="2500" step="10" class="set-num" style="width:96px">
             <span class="hint">次/天 · 到上限自动停（含手动+后台）</span>
-            <button id="fc-serper-save" class="mini">保存预算</button>
+            <!-- C5-29④：「保存预算」已删 —— 全页统一由页头那颗「保存」提交。 -->
           </div>
           <div class="hint" style="margin-top:4px">今日已用 → 机器房。</div>
 
-          <div class="set-numrow" style="margin-top:16px">
-            <button id="dp-save" class="primary">💾 保存方向盘</button>
-            <span class="hint" id="dp-save-msg" style="margin:0"></span>
-          </div>
+          <!-- C5-29④：「保存方向盘」已删 —— 页头那颗「保存」统一提交全页（含画像/关键词/预算）。
+               ⚠️ `dp-save-msg` 这个 span 保留：saveSearchCfg 的结果提示仍写它（删了会抛空引用）。 -->
+          <span class="hint" id="dp-save-msg" style="display:none"></span>
         </div>
       </div>
 
       <!-- ── ④ 飞书通知 + 当前账号 ── -->
       <div class="set-card">
         <div class="sec-title">⑤ 通知与账号</div>
-        <div class="sec-sub">有回信/询盘时推到群里。</div>
         <div id="notify-status" class="transparency"></div>
         <label style="display:flex;gap:8px;align-items:center;cursor:pointer;margin:0 0 16px"><input type="checkbox" id="ntf-enabled"> <span class="hint" style="margin:0">开启飞书通知</span></label>
         <div class="set-numrow" style="margin-bottom:16px">
@@ -3326,7 +3348,10 @@
       { const sep = el.querySelector('.sb-sep'); if (sep) sep.style.display = d.action ? '' : 'none'; }
       // C5-28 打磨③：悬浮提示统一成「查看机器房明细」——"可点"这件事要说得出来点了会去哪。
       // 受阻时把**服务器原话**顶在最前面（排查要的是它，不是那句人话）。
-      el.title = (d.detail ? d.detail + "\n\n" : "") + "查看机器房明细";
+      // C5-29：额度类静态信息（今日已发 / 发满 / 明天上限）**只进悬浮**，不占常驻小字 ——
+      //   常驻小字只说"正在干什么"。信息没丢，只是换了住处（悬浮 + 机器房）。
+      el.title = (d.detail ? d.detail + "\n\n" : "")
+        + (d.quotaNote ? d.quotaNote + "\n" : "") + "查看机器房明细";
     }
     window.paintStatusBar = paintStatusBar;
     /** 常驻轮询。⚠️ 有活在跑时快一点、闲着时慢下来 —— 闲着还每 3 秒打一次是白烧额度。 */
@@ -3759,10 +3784,21 @@
       //   不受这里影响）。只存关键词勾选 + 每关键词条数。
       await fetch("/api/settings/search", {method:"POST",headers:{"content-type":"application/json"},
         body:JSON.stringify({ activeKeywords:(_fcKwRows.length ? getSelectedKeywords() : null), perKeyword:Number($("#dp-perkw").value)||10 })});
+      // C5-29④：搜索预算并入统一保存（原来它有一颗自己的「保存预算」小按钮，已删）。
+      // ⚠️ 元素不在 DOM 时（弹窗单独打开）**跳过，不提交** —— 提交一个读不到的值就是拿 0 覆盖真设置。
+      { const b = $("#fc-serper-budget");
+        if (b && String(b.value).trim() !== "") {
+          await fetch("/api/settings/search", {method:"POST",headers:{"content-type":"application/json"},
+            // ⚠️ 字段名是 `serperBudget`（后端 src/index.ts 认的就是它）。
+            //   写错名字**不会报错，只会静默不生效** —— 保存看起来成功了，值一个字没变。
+            body:JSON.stringify({ serperBudget: Number(b.value) })}).catch(()=>{});
+        } }
       const prof = $("#fc-profile"); if (prof) await fetch("/api/settings/profile", {method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({profile:prof.value})}).catch(()=>{});
       return true;
     }
-    $("#dp-save").onclick = async () => { if (await saveSearchCfg()) { const m=$("#dp-save-msg"); if(m) m.textContent = "✅ 已保存"; setTimeout(()=>{ const m2=$("#dp-save-msg"); if(m2) m2.textContent=""; }, 2500); } };
+    // C5-29④：「保存方向盘」按钮已删，改由页头那颗「保存」统一提交（见 save-sendcfg）。
+    // ⚠️ 这里原本是 `$("#dp-save").onclick = …` —— 元素删了还给它绑事件就是**空引用抛错**，
+    //   而它会中断后面整段初始化。今天刚为同一种病修过一次线上故障（cfg-auto-min）。
 
     // 一键流水线：搜索 → 分析 → 补邮箱，进度可见
     let pipelineRunning = false;
@@ -3955,8 +3991,28 @@
     //   ②的形状是「我没收到 ≠ 用户想清空」：加载失败与"用户真的清空了"在保存那一刻长得一模一样。
     //   所以修法不是只加个提示：**没成功加载过，就不许保存**（_cfgLoaded 闸，见 save-sendcfg）。
     let _cfgLoaded = false;
+    // ══⭐⭐ C5-30：设置页两态 ══
+    // ⚠️ 「编辑」在**加载失败时禁用** —— 防线前置比拦保存更早：
+    //   拦保存是等他填完一屏才告诉他不行；禁用编辑是一开始就不让他白填。
+    function setSettingsMode(mode){          // "preview" | "edit"
+      const sp = document.querySelector('#v-settings .set-page'); if (!sp) return;
+      const edit = mode === "edit";
+      sp.classList.toggle('preview', !edit);
+      // ⚠️ CSS 的 pointer-events 挡得住鼠标，**挡不住键盘 Tab 进去改** —— 所以再用属性兜一层。
+      //   readonly 只对文本类有效；勾选框要用 disabled。这里是手动 fetch 提交（读 .checked），
+      //   disabled 不影响保存路径。
+      sp.querySelectorAll('input:not([type=checkbox]):not(.cfg-live), textarea').forEach(el => { el.readOnly = !edit; });
+      sp.querySelectorAll('input[type=checkbox]:not(.cfg-live)').forEach(el => { el.disabled = !edit; });
+      sp.querySelectorAll('select:not(.cfg-live)').forEach(el => { el.disabled = !edit; });
+      const show = (id, on) => { const e = $(id); if (e) e.style.display = on ? '' : 'none'; };
+      show('#cfg-edit', !edit); show('#save-sendcfg', edit); show('#cfg-cancel', edit);
+      window._settingsMode = mode;
+    }
+    window.setSettingsMode = setSettingsMode;
+
     window.openSettings = async (retried) => {
       showMainView('settings');
+      setSettingsMode("preview");            // 每次进来都回预览态（上一次的编辑状态到此为止）
       const errBox = $("#cfg-loaderr");
       if (errBox) { errBox.style.display = 'none'; errBox.innerHTML = ''; }
       // C5-24 热修：两个配置接口都走 fetchCfg（超时 + 指数退避 3 次 + 失败时指名道姓）。
@@ -3997,12 +4053,16 @@
           const b = $("#cfg-retry"); if (b) b.onclick = () => openSettings(true);
         }
         const sv = $("#save-sendcfg"); if (sv) { sv.disabled = true; sv.title = "配置没加载成功，保存已禁用（防止空值覆盖）"; }
+        // C5-30 第 3 条：加载失败时**连「编辑」都禁用** —— 防线前置。
+        //   拦保存是等他填完一屏才说不行；禁用编辑是一开始就不让他白填。
+        const eb2 = $("#cfg-edit"); if (eb2) { eb2.disabled = true; eb2.title = "配置没加载成功，先点上方「点此重试」"; }
       }
     }
 
     /** 把读回来的配置填进控件。⚠️ 抽出来是为了让**填充失败也能走失败分支**（见上面的红字）。 */
     async function fillSettingsFields(c, fu){
       { const sv = $("#save-sendcfg"); if (sv) { sv.disabled = false; sv.title = ""; } }
+      { const eb2 = $("#cfg-edit"); if (eb2) { eb2.disabled = false; eb2.title = ""; } }
       { const sp = document.querySelector('#v-settings .set-page'); if (sp) sp.classList.remove('cfg-unloaded'); }
       $("#cfg-limit").value = c.daily_send_limit;
       $("#cfg-company").value = c.company_name || "";
@@ -4176,6 +4236,13 @@
     // 批⑩A：整页唯一的「保存」—— 三块设置一起存（发信 + 跟进 + 飞书）。
     // ⚠️ 三个请求各自会失败。**每一段失败都必须说出来** —— 原来 followup 那发是 fire-and-forget
     //    （没读返回值），存失败了 Joe 也看不见，正是我们一路在修的那种静默病。
+    // C5-30：进编辑态 / 取消（取消 = 丢弃改动、重新拉一次配置回预览态）
+    { const eb = $("#cfg-edit"); if (eb) eb.onclick = () => setSettingsMode("edit"); }
+    { const cb = $("#cfg-cancel"); if (cb) cb.onclick = () => {
+        // ⚠️ 「取消」必须**重新加载**，不能只切皮肤 —— 只切皮肤会把他改了一半的值留在框里，
+        //   下次点编辑看到的是脏值，而他以为自己取消过了。
+        openSettings();
+      }; }
     $("#save-sendcfg").onclick = async () => {
       // ⛔ 没成功加载过就不许保存 —— 空表单一存就是把公司名/地址/卖点抹成空串。
       //   （按钮已 disabled，这里是第二道：防止有人用键盘/脚本绕过 disabled。闸不能只有一层。）
@@ -4222,6 +4289,12 @@
         ? `<span style="color:var(--danger,#c0392b)">⚠️ 有 ${bad.length} 段没存上：${esc(bad.join("；"))}</span>`
         : "✅ 已保存（发信 + 跟进 + 飞书通知）") + clampNote;
       if (!bad.length) renderAutomation(await fetch("/api/settings/sending").then(r=>r.json()).catch(()=>({})));   // 熔断/已发数回读，别让页面停在旧值
+      // C5-29④：方向盘（画像 / 关键词选择 / 搜索预算）也由这颗「保存」统一提交 ——
+      //   原来它们各有一颗自己的保存钮，Joe 得记住"改了哪块就点哪颗"。
+      try { await saveSearchCfg(); } catch (e) { console.error("save-wheel:", e); }
+      // C5-30②：保存成功才回预览态。⚠️ **有段没存上就留在编辑态** ——
+      //   把他打回只读会让"没存上的那几个字"看起来像已经存好了。
+      if (!bad.length) setSettingsMode("preview");
     };
 
     // 飞书通知设置

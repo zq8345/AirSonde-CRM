@@ -552,6 +552,8 @@ export interface AiUsage {
   stale?: boolean;     // true = 这次没取到，显示的是旧值
   /** C2-C：true = 这把能力**从未点火**（key 没配），不是故障 —— 前端据此改用中性文案 */
   notIgnited?: boolean;
+  /** C5-29：true = 还没有任何缓存值，后台正在取。**不是故障，也不是 0** —— 前端显示"读取中"。 */
+  pending?: boolean;
   error?: string;
 }
 
@@ -562,10 +564,24 @@ export interface AiUsage {
  *    长得一模一样。这两件事必须分开：有旧值就报旧值 + 标明多久前；连旧值都没有就 ok:false。
  *    （这跟批⑧ 那个"没有新邮件 vs 取不到"是同一个病：**别让"不知道"伪装成一个数**。）
  */
+/**
+ * 🔴 C5-29 根因修复：**外部调用绝不许阻塞界面读取。**
+ *
+ * 生产实测（Joe 截图）：`/api/settings/sending` 超时 10s、设置页整页打不开。
+ * 根因就在下面这个 `fetch("https://openrouter.ai/api/v1/key")` —— 缓存一过期它就同步去打人家的
+ * 账单接口，**而且没有任何超时**。对方一慢，整个设置页跟着挂。
+ * ⇒ 两条一起加：
+ *   ① `cacheOnly`：界面读取只吃缓存，**永不等外网**；刷新交给后台（ctx.waitUntil）。
+ *   ② 真去打的时候也带**自身超时护栏**（4s）——"某个子项慢"不该有能力拖垮整体。
+ * ⚠️ 缓存过期但拿得到旧值时，**返回旧值并标 stale + 年龄**，不返回空 ——
+ *   "有个 10 分钟前的数" 比 "读不到" 有用得多，前提是**说清它是旧的**。
+ */
+const AI_USAGE_FETCH_TIMEOUT_MS = 4000;
 export async function getAiUsage(
   env: Env,
   get: (k: string, d?: string) => Promise<string>,
   set: (k: string, v: string) => Promise<void>,
+  opts: { cacheOnly?: boolean } = {},
 ): Promise<AiUsage> {
   const cachedRaw = await get("ai_usage_cache", "");
   const cachedAt = Number(await get("ai_usage_cache_at", "0")) || 0;
@@ -578,15 +594,27 @@ export async function getAiUsage(
     } catch { return null; }
   };
   if (age < AI_USAGE_TTL_MS) { const c = parseCache(); if (c) return c; }
+  // ① 只吃缓存：过期也先把旧值端上去（标 stale），刷新由调用方在后台做。
+  if (opts.cacheOnly) {
+    const c = parseCache();
+    if (c) return { ...c, stale: true };
+    return { ok: false, pending: true, error: "AI 花费还没读到（后台正在取，稍后刷新即有）" };
+  }
 
   // ⭐ C2-C：**从未配置 ≠ 读取失败**。带 notIgnited 标记回去，前端据此显示
   //   「未点火 · 差 OPENROUTER_API_KEY」而不是红色的"AI 用量读取失败"。
   //   ⚠️ 仍然走 ok:false —— 调用方"没有可信数字"这一点没变（绝不返回 0 冒充"今天没花钱"）。
   if (!env.OPENROUTER_API_KEY) return { ok: false, notIgnited: true, error: "未点火：AI 打分与写信还差 OPENROUTER_API_KEY（从未配置，不是故障）" };
   try {
-    const res = await fetch("https://openrouter.ai/api/v1/key", {
-      headers: { authorization: `Bearer ${env.OPENROUTER_API_KEY}` },
-    });
+    // ② 自身超时护栏：不加的话"对方慢"就等于"我们挂"。
+    const ctl = new AbortController();
+    const to = setTimeout(() => ctl.abort(), AI_USAGE_FETCH_TIMEOUT_MS);
+    let res: Response;
+    try {
+      res = await fetch("https://openrouter.ai/api/v1/key", {
+        headers: { authorization: `Bearer ${env.OPENROUTER_API_KEY}` }, signal: ctl.signal,
+      });
+    } finally { clearTimeout(to); }
     if (!res.ok) throw new Error(`OpenRouter /key 返回 ${res.status}`);
     const j: any = await res.json();
     const d = j?.data ?? j;   // 接口把真身放在 data 里；万一哪天平铺了也认
