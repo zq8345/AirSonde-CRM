@@ -2893,13 +2893,26 @@
     //   批准的闸是 approveGateReason，而它**故意不检查邮箱**（Joe 的规矩："缺数据=信息不全，
     //   不是不合格"）——批准 = 这家值得碰；能不能走邮件那条路是**发送那一刻**的事。
     //   缺邮箱时「补邮箱」降为次动作跟在旁边，两个动作都在，Joe 自己选先做哪个。
+    // C5-36：Hunter 按钮只对**够格**的线索出现（≥分数线 或 已人工放行）。
+    // ⚠️ 这是"别让他白点"，**不是安全边界** —— 真正的闸在服务端（hunterGateReason + 月度额度）。
+    //   前端判据与服务端**同一条**，但前端永远不是那道闸：藏起来的按钮挡不住直接调接口。
+    function hunterEligible(lead, a){
+      if (lead && lead.email && String(lead.email).trim()) return false;   // 有邮箱不用花钱
+      const sc = a && a.match_score != null ? Number(a.match_score) : null;
+      return (sc != null && sc >= SCORE_LINE) || Number(lead && lead.human_approved) === 1;
+    }
+    function hunterBtn(lead, a, id){
+      if (!hunterEligible(lead, a)) return "";   // 无对象的按钮不出现（附录 C.8 同族）
+      return ` <button class="btn-ghost" onclick="findMail(${id},true)" title="Hunter 按域名查，每家 1 积分（本月额度有限，只用在 ≥${SCORE_LINE} 分或你已放行的线索上）">Hunter 找(1积分)</button>`;
+    }
+
     function primaryActionOf(lead, a, ctx){
       const { scored, belowLine, gateReason } = ctx;
       const id = lead.id;
       const st = lead.status;
       const noMail = !lead.email;
       const mailBtn = `<button class="btn-ghost" onclick="findMail(${id},false)">✉️ 补邮箱</button>`
-        + ` <button class="btn-ghost" onclick="findMail(${id},true)" title="Hunter 按域名查，每家 1 积分">Hunter 找(1积分)</button>`;
+        + ` ${hunterBtn(lead, a, id)}`;
 
       // 待分析（还没打分）→ 先让 AI 看一眼官网。分析本身会顺带抓邮箱，所以它先于补邮箱。
       if (st === 'new') return { label: "🔍 AI 分析", onclick: `analyzeOne(${id})`,
@@ -2927,7 +2940,7 @@
       if (['approved','queued'].includes(st)) {
         if (noMail) return { label: "✉️ 补邮箱", onclick: `findMail(${id},false)`,
           hint: "这家还没有邮箱，发不出信；也可以直接走右侧社媒渠道",
-          extras: ` <button class="btn-ghost" onclick="findMail(${id},true)" title="Hunter 按域名查，每家 1 积分">Hunter 找(1积分)</button>` };
+          extras: ` ${hunterBtn(lead, a, id)}` };
         return { label: "📤 发送", onclick: `confirmSend(${id})`,
           disabled: !!gateReason, disabledWhy: gateReason, extras: "" };
       }

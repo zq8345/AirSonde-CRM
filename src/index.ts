@@ -2727,12 +2727,37 @@ app.get("/api/leads/:id/find-email-diag", async (c) => {
   });
 });
 
+/**
+ * ⭐ C5-36：允不允许为这条线索花一个 Hunter 积分。**两个入口共用这一个判据。**
+ *
+ * Joe 的政策（三条同时满足）：① 分数 ≥60 或已人工放行 ② 缺邮箱 ③ 免费深挖已跑过且没挖到。
+ * ⚠️ 第 ③ 条**由结构保证、不需要状态字段**：`findLeadEmail` 本来就是先跑免费抓取、
+ *   `if (ranked.length) return {source:"scrape"}`，挖到就返回了，根本走不到 Hunter 分支。
+ *   —— 能靠结构保证的，就别再造一个要维护的标记位。
+ * ⚠️ 月度额度不在这儿判：它在 `hunterDomainSearch` 里（真正花钱那一行），
+ *   两处都判会漂，而漏判的那一处就是漏出去的钱。
+ */
+function hunterGateReason(lead: any, score: number | null): string | null {
+  if (lead?.email && String(lead.email).trim()) return "这条已经有邮箱了，不用花积分";
+  const ok = Number(score) >= APPROVE_MIN_SCORE || Number(lead?.human_approved) === 1;
+  if (!ok) return `只有 ≥${APPROVE_MIN_SCORE} 分或你已人工放行的线索才值得花 Hunter 积分（这条 ${score ?? "未打分"}）`;
+  return null;
+}
+
 app.post("/api/leads/:id/find-email", async (c) => {
   const id = Number(c.req.param("id"));
   const body = await jsonBody<{ useHunter?: boolean }>(c);
   const lead = await c.env.DB.prepare("SELECT * FROM leads WHERE id=?").bind(id).first<any>();
   if (!lead) return c.json({ error: "not found" }, 404);
-  const r = await findLeadEmail(c.env, lead.website || "", !!body.useHunter);
+  // C5-36：花积分前先过资格闸。⚠️ 拒绝时**不静默降级成免费抓取** —— 那会让 Joe 以为
+  //   "Hunter 查过了、确实没有"，而事实是根本没查。说清楚为什么没花这个钱。
+  let useHunter = !!body.useHunter;
+  if (useHunter) {
+    const sc = await c.env.DB.prepare("SELECT match_score FROM lead_analysis WHERE lead_id=?").bind(id).first<{ match_score: number | null }>();
+    const why = hunterGateReason(lead, sc?.match_score ?? null);
+    if (why) return c.json({ error: why, hunterBlocked: true }, 400);
+  }
+  const r = await findLeadEmail(c.env, lead.website || "", useHunter);
   if (r.email) {
     await c.env.DB.prepare("UPDATE leads SET email=?, updated_at=datetime('now') WHERE id=?").bind(r.email, id).run();
   }
@@ -2756,13 +2781,28 @@ app.post("/api/emails/find-batch", async (c) => {
     : await c.env.DB.prepare(`${base} ORDER BY id ASC LIMIT ?`).bind(limit).all();
   const leads = rows.results as any[];
   const results = [];
+  // C5-36：批量路径**逐条过同一个资格闸**（不是整批一个判断）——一批里有的够格有的不够，
+  //   整批放行就等于给不够格的那几条烧了积分。分数一次查出来，别在循环里逐条打库。
+  const scoreMap = new Map<number, number | null>();
+  if (useHunter && leads.length) {
+    const marks = leads.map(() => "?").join(",");
+    const rs = await c.env.DB.prepare(`SELECT lead_id, match_score FROM lead_analysis WHERE lead_id IN (${marks})`)
+      .bind(...leads.map((l) => l.id)).all();
+    for (const r of rs.results as any[]) scoreMap.set(Number(r.lead_id), r.match_score);
+  }
+  let hunterSkipped = 0;
   for (const lead of leads) {
-    const r = await findLeadEmail(c.env, lead.website, useHunter);
+    // 不够格的**降级为免费抓取**（而不是整条跳过）：免费那条路本来就该跑，且不花钱。
+    const allowHunter = useHunter && !hunterGateReason(lead, scoreMap.get(Number(lead.id)) ?? null);
+    if (useHunter && !allowHunter) hunterSkipped++;
+    const r = await findLeadEmail(c.env, lead.website, allowHunter);
     if (r.email) {
       await c.env.DB.prepare("UPDATE leads SET email=?, updated_at=datetime('now') WHERE id=?").bind(r.email, lead.id).run();
     }
     results.push({ id: lead.id, website: lead.website, email: r.email, source: r.source });
   }
+  // ⚠️ 跳过了几条**要说出来**：静默跳过会让"没够格所以没花钱"和"花了钱没查到"长得一样。
+  if (hunterSkipped) console.log(`find-batch: ${hunterSkipped} 条不够格花 Hunter 积分（<60 分且未人工放行），已降级为免费抓取`);
   const found = results.filter((r) => r.email).length;
   const hunterUsed = results.filter((r) => r.source === "hunter").length;  // 实际花掉的 Hunter 积分数
   return c.json({ processed: results.length, found, hunterUsed, results });

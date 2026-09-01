@@ -72,7 +72,45 @@ export async function findLeadEmail(env: Env, website: string, useHunter = false
   return { email: null, source: "none", candidates: [] };
 }
 
+// ══⭐ C5-36：Hunter 积分的**月度闸**（Joe 拍板：免费档 25 次/月，自然月重置）══
+//
+// 成本量级决定了它必须有闸：Hunter 单次约 ¥0.7，而一条线索其余全部成本（搜索+打分+抓站）只有几分钱
+// —— **贵一个数量级**。所以它只配用在已验证的高价值缺口上。
+//
+// ⚠️ 计数与拦截放在**真正花钱的这一个函数里**，不放调用方：
+//   放调用方就得每加一个入口记得抄一遍，而"漏抄一处"的代价是真金白银。
+//   （同 send.ts 把日限放进 sendApprovedBatch 而不是各个按钮里，是同一条纪律。）
+// ⚠️ 自然月键 `hunter_used_YYYY-MM` —— 月份变了自然从 0 开始，不需要任何定时清零任务
+//   （需要有人记得跑的重置，就是迟早忘记的重置）。
+export const HUNTER_MONTHLY_DEFAULT = 25;
+export async function hunterUsage(env: Env): Promise<{ used: number; limit: number; key: string }> {
+  const key = `hunter_used_${new Date().toISOString().slice(0, 7)}`;
+  const get = async (k: string, d: string) => {
+    try { const r = await env.DB.prepare("SELECT value FROM settings WHERE key=?").bind(k).first<{ value: string }>(); return r?.value ?? d; }
+    catch { return d; }
+  };
+  const used = Number(await get(key, "0")) || 0;
+  const raw = (await get("hunter_monthly_limit", "")).trim();
+  const n = Number(raw);
+  const limit = raw !== "" && Number.isFinite(n) && n >= 0 ? Math.floor(n) : HUNTER_MONTHLY_DEFAULT;
+  return { used, limit, key };
+}
+
 async function hunterDomainSearch(env: Env, domain: string): Promise<string[]> {
+  // 🔴 月度额度闸：用尽就**静默停到下个月**（不是错误，是设计）——但日志要说出来，
+  //   否则"没花钱"和"想花但被拦了"在数据上长得一样。
+  const q = await hunterUsage(env);
+  if (q.used >= q.limit) {
+    console.log(`hunter: 本月额度已用尽（${q.used}/${q.limit}），跳过 —— 下月 1 号自动恢复`);
+    return [];
+  }
+  // ⚠️ **先记账再调用**：调用成功但记账失败 = 花了钱没记上，下次还会花。
+  //   记多一次的代价是少查一家；记少一次的代价是超支。两种错不对称，宁可先记。
+  try {
+    await env.DB.prepare(
+      "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value"
+    ).bind(q.key, String(q.used + 1)).run();
+  } catch (e) { console.error("hunter 记账失败，为安全起见不调用：", e); return []; }
   // #45：API key 走 Authorization 头、不进 query（防 key 落进 URL 访问日志）。Hunter v2 官方支持 Bearer/X-API-KEY 头。
   const url = `https://api.hunter.io/v2/domain-search?domain=${encodeURIComponent(domain)}&limit=10`;
   const res = await fetch(url, { headers: { authorization: `Bearer ${env.EMAIL_FINDER_API_KEY}` } });
