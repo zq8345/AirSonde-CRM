@@ -161,7 +161,7 @@
     button:hover { border-color:var(--border-strong); }
     button:disabled { opacity:.5; cursor:not-allowed; }
     button.primary { background:var(--blue); border-color:var(--blue); color:var(--bg); }
-    button.mini { padding:5px 10px; font-size:13px; }
+    button.mini { padding:5px 10px; font-size:12px; }   /* C5-24：收进 3 档（12 次要 / 14 正文 / 17 标题） */
     .filters { display:flex; gap:8px; margin-bottom:14px; align-items:center; flex-wrap:wrap; }
     .filters select { background:var(--panel); border:1px solid var(--border); color:var(--text); padding:6px 8px; border-radius:6px; }
     .filters .fl { color:var(--muted); font-size:12px; margin-right:-2px; }
@@ -189,6 +189,7 @@
     /* 时间线 */
     .tl-row { display:flex; gap:8px; padding:5px 0; border-bottom:1px solid var(--border); }
     .tl-time { color:var(--muted); white-space:nowrap; font-size:12px; min-width:96px; }
+    .tl-text { font-size:12px; }   /* C5-24：时间线是辅助信息，归 12 那一档 */
     .due-flag { color:var(--amber); }
     button.tgl-on { background:var(--amber); border-color:var(--amber); color:var(--bg); }
     /* 销售漏斗阶段徽章 */
@@ -239,8 +240,11 @@
       background:var(--blue); border:none; color:var(--bg); font-size:12px; }
     /* 批⑦A：草稿改成发送时才生成 → 详情页必须说清"为什么这儿是空的"，不能留个空白 textarea 当哑谜 */
     .draft-none { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:6px; padding:10px 12px;
-      border:1px dashed var(--border); border-radius:7px; font-size:13px; }
+      border:1px dashed var(--border); border-radius:7px; font-size:14px; }
     .draft-none .hint { flex:1; min-width:180px; }
+    /* ⚠️ `<b>` 的浏览器默认字重是 **700**，不显式压住就会自己长出第三档 ——
+       "我没写 700" 不等于 "页面上没有 700"（判据要落在渲染出来的值上，不落在我写了什么）。 */
+    .dp b, .draft-none b { font-weight:600; }
     /* 批⑥A 重扫进度：428 家要跑 1-2 小时，**绝不能是黑盒** —— 必须实时看得见在动 */
     .rescan-bar { margin-top:9px; padding:9px 11px; border:1px solid var(--border); border-radius:7px;
       background:var(--bg); font-size:13px; line-height:1.7; }
@@ -351,7 +355,7 @@
     .hdrmenu .mi .cnt { color:var(--muted); font-size:12px; }
     /* 一键开聊按钮 */
     .chat-row { display:flex; flex-wrap:wrap; gap:8px; margin:6px 0 2px; }
-    .btn-chat { display:inline-flex; align-items:center; gap:5px; padding:8px 12px; border-radius:8px; font-size:13px;
+    .btn-chat { display:inline-flex; align-items:center; gap:5px; padding:8px 12px; border-radius:8px; font-size:14px;
                 text-decoration:none; border:1px solid var(--border); background:var(--bg); color:var(--text); cursor:pointer; }
     .btn-chat:hover { border-color:var(--border-strong); }
     .ptype { background:var(--tint-blue); color:var(--blue); }
@@ -376,14 +380,18 @@
     /* 详情整页 v3（渲进 #v-page，两栏：左=理由/开发信/话术，右=国家来源/联系方式/下一步/时间线）*/
     .dp { max-width:1100px; }
     .dp-top { display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:12px; }
-    .dp-company { font-size:17px; font-weight:700; overflow:hidden; text-overflow:ellipsis; }
+    /* C5-24：详情页字重收到两档（400 正文 / 600 强调）。17px 的字号本身已经足够把标题顶出来，
+       再加 700 是**用两种手段说同一件事**。附录 C.2 的三档闭集不变，只是这一页用不到 700。 */
+    .dp-company { font-size:17px; font-weight:600; overflow:hidden; text-overflow:ellipsis; }
     .dp-scoremeta { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-left:auto; }
     /* C5-14 头部合并：公司名下的一行身份元信息（国家 · 来源 · 关键词） */
     .dp-idmeta { font-size:12px; color:var(--muted); margin-top:0; line-height:1.6; }   /* 间距对齐 8px 网格：不留 2px 这种半档 */
     /* C5-14 判断理由分层：结论一句先看见，证据段退到次级 —— 原来整段同一个字重，
        等于把"合格不合格"和"因为官网写了什么"摊成一样重要，读的人得自己找结论。 */
     .dp-verdict { font-size:14px; font-weight:600; line-height:1.6; }
-    .dp-evidence { font-size:13px; font-weight:400; color:var(--muted); line-height:1.6; margin-top:8px; white-space:pre-wrap; }
+    /* C5-24：证据段从 13px 收到 14px —— **层级交给颜色**（次级灰）而不是再降一号字。
+       同一个层级用两种手段表达，就会长出第 4 档字号。 */
+    .dp-evidence { font-size:14px; font-weight:400; color:var(--muted); line-height:1.6; margin-top:8px; white-space:pre-wrap; }
     .dp-chips { margin-top:8px; display:flex; gap:6px; flex-wrap:wrap; }
     .dp-chips .tag { font-size:12px; margin:0; }
     .dp-body { display:grid; grid-template-columns:1fr 340px; gap:14px; align-items:start; }
@@ -400,12 +408,12 @@
     .dp-group { margin-bottom:28px; }                       /* 组间距靠留白分隔，不靠线 */
     .dp-group:last-child { margin-bottom:0; }
     .dp-group-t { font-size:12px; font-weight:600; color:var(--muted); margin-bottom:8px; letter-spacing:.02em; }
-    .dp-kv { display:flex; justify-content:space-between; gap:16px; padding:4px 0; font-size:13px; line-height:1.6; }
+    .dp-kv { display:flex; justify-content:space-between; gap:16px; padding:4px 0; font-size:14px; line-height:1.6; }
     .dp-kv > span:first-child { flex-shrink:0; }
     .dp-contact { display:flex; align-items:center; gap:8px; padding:5px 0; border-bottom:1px solid var(--border); }
     .dp-contact:last-child { border-bottom:0; }
     .dp-c-ic { width:20px; text-align:center; flex-shrink:0; }
-    .dp-c-val { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; }
+    .dp-c-val { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:14px; }
     .dp-copy { flex-shrink:0; background:var(--bg); border:1px solid var(--border); color:var(--muted); cursor:pointer; font-size:12px; padding:2px 8px; border-radius:6px; }
     .dp-copy:hover { color:var(--text); border-color:var(--blue); }
     /* #44 开发信中文对照面板（只读、内联，不弹窗） */
@@ -579,8 +587,11 @@
     .btn-big { padding:9px 20px; font-size:15px; }
     .kv { display:grid; grid-template-columns:90px 1fr; gap:6px 12px; margin:14px 0; }
     .kv .k { color:var(--muted); }
+    /* ⚠️ C5-24：这里原来还挂着 `font-family:ui-monospace,…`，而 C5-2c 的注释明写"等宽字体已退场"
+       —— **注释说退场了、代码里还在**，是这仓最典型的"说了没做"。实测详情页字族 2 种就是它。
+       改为继承页面字族（全站单一字族）。 */
     textarea { width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text);
-               border-radius:6px; padding:8px; min-height:120px; font-family:ui-monospace,Consolas,monospace; }
+               border-radius:6px; padding:8px; min-height:120px; font-family:inherit; line-height:1.6; }
     .actions { display:flex; gap:8px; margin-top:16px; flex-wrap:wrap; align-items:center; }
     /* ══ C5-14 · 宪法附录 C.7：按钮收敛为三级 ══
        起因 Joe 嫌详情页"丑乱"。数过：一屏上同时有绿/深绿/棕/黄/蓝五种实心按钮，每种都在喊"点我"。
@@ -903,7 +914,7 @@
              他的原话是"所有环节都动起来""都是立即执行"——那是**一个意图**，不该让他勾两个格子
              再自己在脑子里做与运算。底层仍是那两个位，总开关是架在其上的与门（见 send.ts）。
              ⚠️ 关掉时**耳朵不关**：收信/分类/飞书通知照常——错过回信只有损失没有风险。
-             ⚠️ `cfg-auto-min` 这个 span 必须留着：评分分层那行仍在读它。
+             ⚠️ 分数线由下面「评分分层」那行的 `rb-hi` 显示（与 auto_approve_min 同一真值）。
              ⚠️ C5-25 砍字纪律：解释一律进 (?)（data-help，闸的 measure 会剔除它，不占预算），
                 页面正文只留「这是什么 + 现在是多少」（铁律一）。**删掉的是解释，不是能力。** -->
         <div class="auto-box">
@@ -2686,26 +2697,17 @@
                  待分析时「AI 分析」升为主按钮（见下），这里就不再重复出一个。 -->
             ${isUnscored ? '' : `<button class="btn-ghost" onclick="analyzeOne(${lead.id})">${scored?"重新 AI 分析":"🔍 AI 分析"}</button>
             <span class="dp-sep"></span>`}
-            <!-- 主操作：跟这条线索所在的格联动 -->
-            ${isUnscored ? `<button class="primary dp-primary" onclick="analyzeOne(${lead.id})">🔍 AI 分析</button>
-                   <span class="hint">还没打分，先让 AI 看一眼官网（后台每小时也会自动跑）</span>`
-              : inReview ? (!lead.email
-                ? `<button class="primary dp-primary" onclick="findMail(${lead.id},false)">✉️ 补邮箱</button>
-                   <button class="btn-ghost" onclick="findMail(${lead.id},true)" title="Hunter 按域名查，每家 1 积分">Hunter 找(1积分)</button>`
-                : belowLine
-                  // ⭐ 批⑥C：<60 且有邮箱 → 主按钮是「手动发这家」（human_approved 路径），不是一个**灰着点不动的「批准」**。
-                  //   Joe 的用法是"打开一条信息就能当场处理完，不用回列表"——他在详情页看完证据判断机器杀错了，
-                  //   就该在这里直接放行，而不是记住公司名再回翻牌堆找一遍。
-                  //   走的是同一条 human-approve 端点（单条、只豁免分数线、邮箱/合规/幂等/压制/日上限一个不豁免）。
-                  ? `<button class="primary dp-primary" ${lead.human_approved?'disabled title="已经人工放行过了"':''} onclick="detailHumanApprove(${lead.id})">✉️ 手动发这家</button>
-                     <span class="hint">${lead.human_approved?'已人工放行，等下一轮自动发送':`${a.match_score} 分低于 ${SCORE_LINE} 分线 —— 机器不会发它。你判断杀错了就放行`}</span>`
-                  : `<button class="primary dp-primary" ${gateReason?`disabled title="${esc(gateReason)}"`:""} onclick="approveAndReview(${lead.id})">✅ 批准</button>`)
-              : inReady ? `<button class="primary dp-primary" ${gateReason?`disabled title="${esc(gateReason)}"`:""} onclick="confirmSend(${lead.id})">📤 发送</button>`
-              : isViewed ? `<button class="primary dp-primary" onclick="draftWarm(${lead.id})">🔥 趁热跟进</button>`
-              : isSent ? `<button class="primary dp-primary" onclick="focusNextAction()">📅 安排跟进</button>`
-              : isReplied ? `<button class="primary dp-primary" onclick="setStatus(${lead.id},'won')">🤝 标记成交</button>
-                            <button class="btn-danger-text" onclick="setStatus(${lead.id},'ignored')">婉拒归档</button>`
-              : ''}
+            <!-- ⭐ C5-24：主操作收敛成**一个推导函数** primaryActionOf()。
+                 原来是一串就地写的三元嵌套：每加一种情况就多一个分支，彼此不知道对方存在。
+                 🔴 它藏着一个真缺陷（生产实证 Instrukart id=414：85 分、缺邮箱、批不了）：
+                    「待审批 + 缺邮箱」整支走「补邮箱」，**根本不渲染「批准」** ——
+                    而 approveGateReason 按 Joe 定的规矩**故意不拦缺邮箱**
+                    （"缺数据 = 信息不全，不是不合格"；批准 = 值得碰，能不能发邮件是发送那一刻的事）。
+                    ⇒ 界面把一个本该能做的动作藏了。全库 92 条缺邮箱里一堆 ≥60 都卡在这。
+                 ⚠️ 修法不是"再加一个分支"，是把"这条线索的下一步是什么"**只判一次**。 -->
+            ${(() => { const P = primaryActionOf(lead, a, { scored, belowLine, gateReason });
+              return `<button class="primary dp-primary" ${P.disabled ? `disabled title="${esc(P.disabledWhy)}"` : ""} onclick="${P.onclick}">${P.label}</button>`
+                   + (P.hint ? ` <span class="hint">${P.hint}</span>` : "") + (P.extras || ""); })()}
             ${gateReason && inReview && lead.email && !belowLine ? `<span class="hint" style="color:var(--amber)">⚠️ ${esc(gateReason)}</span>` : ''}
             ${/* ⭐ 批⑥C「他回了」：邮件回复能靠 IMAP 自动收，**WhatsApp/LinkedIn/电话的回复机器看不见**。
                  Joe 在手机上收到回复，得有个地方一键告诉系统 —— 否则这条线索会一直躺在"等回复"里，
@@ -2782,6 +2784,68 @@
         </div>`;
       loadTimeline(lead.id);
     }
+    // ══ C5-24：「这条线索的下一步是什么」—— **只判一次** ══
+    //
+    // 返回 {label, onclick, hint, disabled, disabledWhy, extras}。extras = 跟主动作同组的次动作。
+    // ⚠️ 一屏至多一个主动作（宪法附录 C.7），所以这里**永远只产出一颗**主按钮。
+    //
+    // 🔴 与旧逻辑的唯一实质差别，也是这次要修的那个缺陷：
+    //   待审批（analyzed/pending）时，**不再因为"缺邮箱"就把「批准」藏起来**。
+    //   批准的闸是 approveGateReason，而它**故意不检查邮箱**（Joe 的规矩："缺数据=信息不全，
+    //   不是不合格"）——批准 = 这家值得碰；能不能走邮件那条路是**发送那一刻**的事。
+    //   缺邮箱时「补邮箱」降为次动作跟在旁边，两个动作都在，Joe 自己选先做哪个。
+    function primaryActionOf(lead, a, ctx){
+      const { scored, belowLine, gateReason } = ctx;
+      const id = lead.id;
+      const st = lead.status;
+      const noMail = !lead.email;
+      const mailBtn = `<button class="btn-ghost" onclick="findMail(${id},false)">✉️ 补邮箱</button>`
+        + ` <button class="btn-ghost" onclick="findMail(${id},true)" title="Hunter 按域名查，每家 1 积分">Hunter 找(1积分)</button>`;
+
+      // 待分析（还没打分）→ 先让 AI 看一眼官网。分析本身会顺带抓邮箱，所以它先于补邮箱。
+      if (st === 'new') return { label: "🔍 AI 分析", onclick: `analyzeOne(${id})`,
+        hint: "还没打分，先让 AI 看一眼官网（机器也在自动啃这个队列）", extras: "" };
+
+      // 待审批：主动作恒为「批准」。<60 的那批走 human-approve（只豁免分数线，别的闸一个不豁免）。
+      if (['analyzed','pending'].includes(st)) {
+        if (belowLine) return {
+          label: "✉️ 手动发这家", onclick: `detailHumanApprove(${id})`,
+          disabled: !!lead.human_approved, disabledWhy: "已经人工放行过了",
+          hint: lead.human_approved ? "已人工放行，等下一轮自动发送"
+              : `${a.match_score} 分低于 ${SCORE_LINE} 分线 —— 机器不会发它。你判断杀错了就放行`,
+          extras: noMail ? " " + mailBtn : "" };
+        // ⚠️ 这里**不看 noMail**。gateReason 里"缺邮箱"那一条不该拦批准 —— 见上面的红字。
+        const blockedBy = (a.match_score == null) ? "未打分，不能批准（先 AI 分析）"
+          : (a.match_score < 60 ? `${a.match_score} 分 < 60 分门槛，不能批准` : "");
+        return { label: "✅ 批准", onclick: `approveAndReview(${id})`,
+          disabled: !!blockedBy, disabledWhy: blockedBy,
+          hint: noMail ? "还没有邮箱：批准后它进「待联系」，你可以走社媒，或先补邮箱" : "",
+          extras: noMail ? " " + mailBtn : "" };
+      }
+
+      // 待联系：有邮箱才谈发送；没邮箱的主动作就是**补邮箱**，
+      // ⚠️ 而不是一颗灰着点不动的「发送」——那是死胡同（生产实证 Johnstonesupply id=323）。
+      if (['approved','queued'].includes(st)) {
+        if (noMail) return { label: "✉️ 补邮箱", onclick: `findMail(${id},false)`,
+          hint: "这家还没有邮箱，发不出信；也可以直接走右侧社媒渠道",
+          extras: ` <button class="btn-ghost" onclick="findMail(${id},true)" title="Hunter 按域名查，每家 1 积分">Hunter 找(1积分)</button>` };
+        return { label: "📤 发送", onclick: `confirmSend(${id})`,
+          disabled: !!gateReason, disabledWhy: gateReason, extras: "" };
+      }
+
+      if (st === 'sent' && lead.has_click) return { label: "🔥 趁热跟进", onclick: `draftWarm(${id})`, extras: "" };
+      if (st === 'sent') return { label: "📅 安排跟进", onclick: "focusNextAction()", extras: "" };
+      // 已回复：主动作是"起草回复"——Joe 的下一步动作是回信，不是给它贴标签。
+      if (st === 'replied') return { label: "✍️ 起草回复", onclick: `openReplyInbox('pending')`,
+        extras: ` <button class="btn-ghost" onclick="setStatus(${id},'won')">🤝 标记成交</button>`
+              + ` <button class="btn-danger-text" onclick="setStatus(${id},'ignored')">婉拒归档</button>` };
+      // 终态（成交/已忽略/黑名单/退订/退信）：没有主动作。
+      // ⚠️ 返回一个**说明为什么没得点**的禁用按钮，而不是什么都不渲染 ——
+      //   空白会让人以为界面坏了；说出来才是诚实。
+      return { label: "已到终点", onclick: "void 0", disabled: true,
+        disabledWhy: "这条线索已经是终态（成交/已忽略/黑名单/退订/退信），没有下一步动作", extras: "" };
+    }
+
     // 手动填联系邮箱（用户自己在官网找到的邮箱 → leads.email，缺邮箱标记消失、变可发送）
     function contactEmailFormHtml(id, cur){
       return `<input id="contact-email-input" class="inlinput" placeholder="粘贴你找到的邮箱" value="${esc(cur)||''}" style="max-width:240px">`
@@ -2791,8 +2855,11 @@
     }
     function contactEmailCtl(id, email){
       return email
-        ? `<span class="tag">✉ ${esc(email)}</span> <button class="btn-ghost" style="padding:2px 8px;font-size:12px" onclick="editContactEmail(${id})" title="修改邮箱">✏️ 改</button>`
-        : `<span class="miss">缺邮箱</span> ` + contactEmailFormHtml(id, "");
+        // C5-24 第 8 条：值里那个 ✉ 删掉 —— 行首已经有类型图标了，**同一件事说两遍**。
+        ? `<span class="tag">${esc(email)}</span> <button class="btn-ghost" style="padding:2px 8px" onclick="editContactEmail(${id})" title="修改邮箱">改</button>`
+        // C5-24 第 3 条：缺邮箱**默认收起**。原来一进详情页就摊开输入框+保存+取消三件套，
+        //   而绝大多数时候 Joe 并不打算手填 —— 那三件套只是噪音。点「填邮箱」才展开。
+        : `<span class="dp-c-val muted">—</span> <button class="btn-ghost" style="padding:2px 8px" onclick="editContactEmail(${id})">填邮箱</button>`;
     }
     window.editContactEmail = (id) => {
       const box = document.getElementById('email-ctl'); if(!box) return;
@@ -2993,11 +3060,35 @@
       if (!res.error) loadList();
     };
     // 加载线索时间线
+    // C5-24：时间线加载。原实现有**两个**毛病，其中第二个比第一个更糟：
+    //   ① 请求挂住时永远显示「加载中…」——"卡住了"和"在加载"长得一模一样（C5-26 同一种病）。
+    //   ② `.catch(()=>({events:[]}))` 把**加载失败渲染成「暂无事件」** ——
+    //      那是在断言"这条线索没有事件"，而事实是**我们不知道**。
+    //      「空结果和真结果长得一样」是这仓反复栽的那一条，这里是它的 UI 版。
+    // ⇒ 三种结局必须在屏幕上长得不一样：有事件 / 确实没有 / **读不到（带重试）**。
     async function loadTimeline(id){
-      const { events } = await fetch(`/api/leads/${id}/timeline`).then(r=>r.json()).catch(()=>({events:[]}));
       const el = document.getElementById("timeline"); if (!el) return;
-      el.innerHTML = (events && events.length)
-        ? events.map(e=>`<div class="tl-row"><span class="tl-time">${esc(fmtDate(e.time))}</span><span style="font-size:13px">${esc(e.label)}</span></div>`).join("")
+      el.innerHTML = '<span class="muted">加载中…</span>';
+      const ctl = new AbortController();
+      const to = setTimeout(() => ctl.abort(), 12000);   // 挂住也要有个结局
+      let events = null, why = "";
+      try {
+        const r = await fetch(`/api/leads/${id}/timeline`, { signal: ctl.signal });
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        const d = await r.json();
+        events = Array.isArray(d.events) ? d.events : [];
+      } catch (e) {
+        why = (e && e.name === "AbortError") ? "超时" : String(e && e.message || e).slice(0, 60);
+      } finally { clearTimeout(to); }
+      const cur = document.getElementById("timeline");
+      if (!cur || cur !== el) return;   // 期间切走了别的线索 → 别把旧结果画到新页面上
+      if (events === null) {
+        el.innerHTML = `<span style="color:var(--red)">加载失败（${esc(why)}）</span> `
+          + `<a class="bk-lnk" onclick="loadTimeline(${id})">重试</a>`;
+        return;
+      }
+      el.innerHTML = events.length
+        ? events.map(e=>`<div class="tl-row"><span class="tl-time">${esc(fmtDate(e.time))}</span><span class="tl-text">${esc(e.label)}</span></div>`).join("")
         : '<span class="muted">暂无事件</span>';
     }
     window.setStatus = async (id, status) => {
@@ -3792,18 +3883,46 @@
         if (!r2.ok) throw new Error("HTTP " + r2.status);
         fu = await r2.json();
       } catch (e) {
+        showCfgLoadFailure(retried);
+        return;
+      }
+      // 🔴 C5-24（生产实证 Joe 截图）：**"加载失败"原本有两个入口，只有一个会渲染带「重试」的横幅。**
+      //   · 入口A：fetch 抛错 → catch → 横幅 + 禁用保存 ✅
+      //   · 入口B：fetch 成功、但下面这几十行填充里**任何一行抛错** →
+      //     按钮在上一行刚被重新启用、`_cfgLoaded` 还是 false、横幅从没渲染
+      //     ⇒ Joe 点保存看到"请先点上方「重试」"，而上方**根本没有那个按钮**。
+      //   ⇒ 修法不是补一个按钮，是让**失败分支从每条失败路径都到得了**。
+      try {
+        await fillSettingsFields(c, fu);
+      } catch (e) {
+        console.error("settings-fill:", e);
+        showCfgLoadFailure(retried, "页面填充出错：" + String(e && e.message || e).slice(0, 80));
+        return;
+      }
+      return;
+    }
+
+    /** 加载失败的**唯一**呈现处：整片置灰 + 横幅（含重试）+ 禁用保存。三样一起，不许只做一样。 */
+    function showCfgLoadFailure(retried, extra){
+      const errBox = $("#cfg-loaderr");
+      {
         _cfgLoaded = false;                                    // 闸落下：保存被挡住
         // 整片置灰：让"这些空白不是你的数据"在**他正在看的地方**就说清楚，而不是只在页顶挂一条。
         { const sp = document.querySelector('#v-settings .set-page'); if (sp) sp.classList.add('cfg-unloaded'); }
         if (errBox) {
           errBox.style.display = '';
           errBox.innerHTML = loadErrorHtml('cfg-retry', retried)
+            + (extra ? `<div class="hint" style="margin-top:4px;color:var(--red)">${esc(extra)}</div>` : "")
             + `<div class="hint" style="margin-top:6px">⚠️ 表单里的空白**不是你的数据**，只是没加载上来 —— 已暂时禁用「保存」，防止空值覆盖真设置。</div>`;
+          errBox.scrollIntoView({ block: "nearest" });   // 提示说"点上方重试"，那就得**真的把它带到眼前**
           const b = $("#cfg-retry"); if (b) b.onclick = () => openSettings(true);
         }
         const sv = $("#save-sendcfg"); if (sv) { sv.disabled = true; sv.title = "配置没加载成功，保存已禁用（防止空值覆盖）"; }
-        return;
       }
+    }
+
+    /** 把读回来的配置填进控件。⚠️ 抽出来是为了让**填充失败也能走失败分支**（见上面的红字）。 */
+    async function fillSettingsFields(c, fu){
       { const sv = $("#save-sendcfg"); if (sv) { sv.disabled = false; sv.title = ""; } }
       { const sp = document.querySelector('#v-settings .set-page'); if (sp) sp.classList.remove('cfg-unloaded'); }
       $("#cfg-limit").value = c.daily_send_limit;
@@ -3943,7 +4062,13 @@
       { const v = c.auto_approve_min;
         const ok = Number.isFinite(Number(v));
         const hi = ok ? Number(v) : null;
-        $("#cfg-auto-min").textContent = ok ? String(hi) : "读不到";
+        // 🔴 C5-24：这里原来是 `$("#cfg-auto-min").textContent = …` —— **全函数唯一一处没守卫的写入**，
+        //   而 `#cfg-auto-min` 已在 C5-25 重写设置页时删掉了（分数改由下面的 rb-hi 显示，同一个真值同一来源）。
+        //   ⇒ 它抛 TypeError，**整个 fillSettingsFields 中断**：字段填一半、_cfgLoaded 停在 false、
+        //     而按钮在此之前已被重新启用 ⇒ Joe 看到"配置没加载成功，已阻止保存"却找不到重试按钮。
+        //   ⚠️ 更该记的是：我在那次重写的注释里明写着「cfg-auto-min 必须留着」，然后**在同一次编辑里删了它**。
+        //     注释说了、代码没做 —— 今天我刚在别处批评过这个模式。注释挡不住这种事，**守卫才挡得住**。
+        //   ⇒ 删掉这次多余写入（值由 rb-hi 显示），并且下面三行本来就用的是带守卫的 set()。
         // C5-6：分层说明的三个数**全部派生**——上限来自这同一个真值，
         //   中段与下限由 REVIEW_LO_MAX 推出（与 reviewBandOf 单源）。读不到就说读不到。
         const set = (id, txt) => { const e=$("#"+id); if(e) e.textContent = txt; };
@@ -3976,7 +4101,10 @@
       // ⛔ 没成功加载过就不许保存 —— 空表单一存就是把公司名/地址/卖点抹成空串。
       //   （按钮已 disabled，这里是第二道：防止有人用键盘/脚本绕过 disabled。闸不能只有一层。）
       if (!_cfgLoaded) {
-        $("#sendcfg-result").textContent = "配置没加载成功，已阻止保存（否则会用空值覆盖真设置）——请先点上方「重试」。";
+        // ⚠️ 走到这里说明**横幅可能压根没渲染过**（见 openSettings 里那段红字）。
+        //   所以这里主动把失败态呈现出来 —— 一句指向不存在按钮的提示，比不提示更糟。
+        showCfgLoadFailure(false);
+        $("#sendcfg-result").textContent = "配置没加载成功，已阻止保存（否则会用空值覆盖真设置）——请点上方「点此重试」。";
         return;
       }
       $("#sendcfg-result").textContent = "保存中…"; $("#ntf-result").textContent = "";
