@@ -2649,6 +2649,24 @@ app.delete("/api/keywords/:id", async (c) => {
     .bind(Number(c.req.param("id"))).run();
   return c.json({ ok: true, archived: r.meta.changes || 0 });
 });
+/**
+ * 🔴 已归档关键词列表（2026-09-02 补）。
+ *
+ * ⚠️ 缺陷来历：软删（C5-17）做了 `DELETE`（标 archived）和 `restore` 两个口，
+ *   注释还写着"Joe 手滑时不至于没救" —— **但恢复口从来没有前端入口，而且
+ *   `GET /api/keywords` 只返回未归档的，前端连"有哪些被归档了"都拿不到。**
+ *   ⇒ 数据一直在，界面上没有任何一条路能走回去。**"能救"和"救得到"是两件事。**
+ * ⚠️ 这个缺陷不是改坏的，是**从来没接通过** —— 只有把每个能力挨个问一遍"它现在还通不通"
+ *   才查得出来（改动反扫查不出：没人改过它）。
+ */
+app.get("/api/keywords/archived", async (c) => {
+  await ensureKeywordArchivedColumn(c.env);
+  const rows = await c.env.DB.prepare(
+    "SELECT id, keyword, sent_count, reply_count FROM keywords WHERE COALESCE(archived,0)=1 ORDER BY id DESC"
+  ).all();
+  return c.json({ items: rows.results || [] });
+});
+
 /** 下架的恢复口（Joe 手滑时不至于没救）。 */
 app.post("/api/keywords/:id/restore", async (c) => {
   await ensureKeywordArchivedColumn(c.env);

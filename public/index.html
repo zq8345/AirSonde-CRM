@@ -16,10 +16,21 @@
   <style>
     :root { /* W3 浅色系（Joe 拍板纯浅色唯一主题，2026-08-12） */
             --bg:#ffffff; --panel:#f4f5f7; --surface-2:#f4f5f7; --border:#e6e9ed; --text:#101418; --muted:#4d5762;
-            --green:#1e7a4f; --red:#c0392b; --amber:#8a5a00; --blue:#2f6fd6;
+            --green:#1e7a4f; --red:#c0392b; --amber:#8a5a00;
+            /* 🔴 品牌色（2026-09-02，Joe：⛔ 禁止蓝色杂色，全站走 logo 绿）。
+               #0c7a6b **不是我挑的，是从 logo PNG 像素里数出来的**：
+               解 IDAT → 反滤波 → 统计非透明像素，173453 个像素是这个值，压倒性主色。
+               ⚠️ 取色不许肉眼看图 —— 屏幕/截图/JPEG 都会偏，只有像素值是真源。 */
+            --brand:#0c7a6b; --brand-tint:#e6f2f0;
+            /* ⚠️ `--blue` **整体重定向到品牌绿**，而不是逐处把 var(--blue) 换成 var(--brand)。
+               理由：全站 73 处引用（57 个 --blue + 16 个 --tint-blue），**逐处替换必漏**，
+               而漏掉的那几处会变成"大部分绿、个别蓝"，比全蓝更难看也更难查。
+               改一处、全站生效；变量名留着是历史包袱，但**行为正确优先于命名好看**。
+               （真要改名是另一个单：73 处 rename 的风险不该混进配色单里。） */
+            --blue:#0c7a6b;
   /* C5-4v 附录 C.3：状态底色收成 token —— 它们原来以 10+ 个字面量散落在各处，
      同一种"浅蓝提示条"在三个页面是三个色值。tint 只做背景，不做前景。 */
-  --border-strong:#c8d0da; --tint-blue:#eaf1fb; --tint-green:#e8f4ee; --tint-red:#fbecea; --tint-amber:#f9f1e2; }
+  --border-strong:#c8d0da; --tint-blue:#e6f2f0;   /* ← 同上，重定向到 --brand-tint 的值 */ --tint-green:#e8f4ee; --tint-red:#fbecea; --tint-amber:#f9f1e2; }
     * { box-sizing: border-box; }
     body { margin:0; font:14px/1.5 -apple-system,Segoe UI,Roboto,"Microsoft YaHei",sans-serif;
            background:var(--bg); color:var(--text); }
@@ -75,6 +86,9 @@
     .mr-big-l .hint { margin:0; }
     /* 板块二 行内实时表现：旋钮说"你设了多少"，它说"这个设定此刻的实际表现"。
        ⚠️ 它**永远只读**，不随两态切换 —— 事实不是配置，不该跟着编辑态变样子。 */
+    .kw-arch > summary { cursor:pointer; font-size:12px; color:var(--muted); padding:4px 0; }
+    .kw-arch-row { display:flex; align-items:center; gap:8px; font-size:13px; padding:4px 0; }
+    .kw-arch-row > span { color:var(--muted); }
     .mr-live { font-size:12px; color:var(--muted); margin-left:10px; }
     .mr-live b { color:var(--text); font-weight:600; }
     /* 板块三 折叠 */
@@ -304,6 +318,9 @@
     .chan { display:inline-flex; align-items:center; gap:5px; padding:5px 10px; border-radius:6px; font-size:12px;
             text-decoration:none; border:1px solid var(--border); background:var(--bg); color:var(--text); }
     .chan:hover { border-color:var(--border-strong); }
+    /* ⚠️ 社媒图标色**故意保留原品牌色**（WhatsApp 绿 / LinkedIn 蓝 / Telegram 蓝 / Facebook 蓝）——
+       它们是**别人的品牌识别**，不是我们的杂色。把 LinkedIn 图标染成 airsonde 绿，
+       Joe 一眼认不出那是什么渠道，那是为了配色统一牺牲了辨识度。⇒ 零蓝审计要**排除这一族**。 */
     .chan-whatsapp { color:#25d366; } .chan-linkedin { color:#4a9fe0; } .chan-telegram { color:#3aa9e0; }
     .chan-facebook { color:#3a5fa8; } .chan-instagram { color:#a5527d; } .chan-youtube { color:var(--red); }
     /* 时间线 */
@@ -370,7 +387,7 @@
       background:var(--bg); font-size:13px; line-height:1.7; }
     .rescan-bar.rescan-err { border-color:var(--red); background:var(--tint-red); color:var(--red); }
     .rescan-track { height:6px; background:var(--panel); border-radius:3px; overflow:hidden; margin:6px 0 4px; }
-    .rescan-fill { height:100%; background:linear-gradient(90deg,#9dbfe4,#17724a); transition:width .3s; }
+    .rescan-fill { height:100%; background:linear-gradient(90deg,#b9d8d3,var(--brand)); transition:width .3s; }
     /* 批⑤B 翻牌堆：组名要能一眼扫，证据摘要要能一行看懂 */
     .fp-intro { font-size:13px; color:var(--text); margin:8px 0 12px; line-height:1.7; }
     .fp-intro .hint { display:block; margin-top:2px; }
@@ -668,7 +685,7 @@
     .act-btn { flex-shrink:0; background:var(--blue); border:none; color:var(--bg); font-size:12px; padding:5px 12px; border-radius:6px; cursor:pointer; white-space:nowrap; transition:filter .15s ease; }
     .act-btn:hover { filter:brightness(1.12); }
     /* 批④ 看板：样本量门槛 + 收件箱切片（.sd-* 状态分布已随该块删除） */
-    .db-note { background:var(--tint-blue); border:1px solid #c3d7ee; border-left:3px solid var(--blue); color:var(--muted);
+    .db-note { background:var(--tint-blue); border:1px solid var(--brand-tint); border-left:3px solid var(--brand); color:var(--muted);
                border-radius:10px; padding:11px 14px; margin-bottom:14px; font-size:12px; line-height:1.7; }
     .db-note b { color:var(--blue); }
     .kpi-muted { opacity:.92; }
@@ -772,7 +789,7 @@
     .ccitem.on, .kwitem.on { background:var(--tint-blue); border-color:var(--blue); }
     .ccitem i, .kwitem i { cursor:pointer; color:var(--muted); font-style:normal; font-size:15px; line-height:1; margin-left:2px; }
     .ccitem i:hover, .kwitem i:hover { color:var(--red); }
-    .transparency { background:var(--tint-blue); border:1px solid #c3d7ee; border-radius:6px; padding:9px 11px; font-size:13px; margin:12px 0; }
+    .transparency { background:var(--brand-tint); border:1px solid var(--brand-tint); border-radius:6px; padding:9px 11px; font-size:13px; margin:12px 0; }
     .prog { margin-top:14px; display:none; }
     .prog-track { height:8px; background:var(--bg); border-radius:5px; overflow:hidden; border:1px solid var(--border); }
     .prog-bar { height:100%; width:0; background:var(--blue); transition:width .35s; }
@@ -1050,6 +1067,13 @@
             按钮说的是"能做什么"，标题说的是"现在是什么状态"。两句都要有。 -->
     <div class="mr-sec-head">机器怎么干</div>
     <div class="cfg-form preview" style="max-width:820px">
+      <!-- 🔴 加载失败横幅（2026-09-02 补回）：C5-42a 我写了"控制区读不到配置就出横幅"，
+           **而这个元素在我重构板块二时被自己删掉了** —— `$("#mr-cfg-loaderr")` 拿不到，
+           `if (eb)` 把它静默吞掉 ⇒ 配置读不到时是一片空框，Joe 会以为那就是他的设置。
+           ⚠️ 和 fc-serper-save、关键词恢复完全同源：**删元素没跟着删/改绑定，
+              而防御式的 `if (el)` 把"元素不见了"伪装成"什么都没发生"。**
+              三个洞、三个不同的人写的时间，同一个形状 —— 这不是巧合，是这种写法的必然产物。 -->
+      <div class="load-error" id="mr-cfg-loaderr" style="display:none;margin-bottom:12px"></div>
       <div class="sec-row" style="margin:0 0 12px">
         <span></span>
         <span class="sec-tools">
@@ -1161,6 +1185,7 @@
                ⛔ 这个标记只能挂在"作者是 Joe"的内容上；挂到解释文案上就是把豁免变成漏洞
                   （guard-design 里配了反向自检：页面自话超预算必须仍然报红）。 -->
           <div id="dp-kwlist" data-user-content style="margin:6px 0"></div>
+          <div id="kw-archived"></div>
           <div id="fc-kw-editrow" style="display:none;gap:8px;margin-top:6px">
             <input id="dp-kwnew" class="inlinput" placeholder="新增关键词，如 HVAC controls integrator">
             <button id="dp-kwadd" class="primary">添加</button>
@@ -3824,6 +3849,7 @@
       _fcKwRows = data.keywords||[];
       _fcKwChecked = new Set(_fcKwRows.map(k=>k.keyword).filter(kw=>prev.has(kw)));
       renderKwInline();
+      refreshArchived();        // 每次重载关键词时同步刷新「已归档」区
     }
 
     // ⭐⭐ 批⑲b 追加：整页入口"fetch 完再填"的失败**必须可见 + 可重试**。
@@ -3920,7 +3946,13 @@
       //   （按钮 C2-A 就撤了，函数壳留到本批）。将来接 IAQ 行业目录源时，
       //   从 discover.ts 的 ENABLED_DIRECTORY_SOURCES 注册表加起。
       if (cfg.serper) { const u=$("#fc-serper-used"); if(u) u.textContent = cfg.serper.usedToday; const b=$("#fc-serper-budget"); if(b) b.value = cfg.serper.budget; }   // P0-c Serper 用量/预算回显
-      { const sb=$("#fc-serper-save"); if(sb) sb.onclick = async () => { const v=Number($("#fc-serper-budget").value)||1000; await fetch("/api/settings/search",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({serperBudget:v})}); $("#dp-msg").textContent="Serper 预算已保存"; }; }
+      // 🔴 2026-09-02 删：这里原本给 `#fc-serper-save` 绑 onclick —— **而那个按钮的元素早已被删**
+      //   （C5-29④ 撤底部动作条时删了元素、留了绑定），`if (sb)` 把它安静地吞掉了。
+      //   后果：`fc-serper-budget`（搜索预算）**既不在主保存的控件集里、也没有自己的保存路径**
+      //   ⇒ Joe 改了等于没改，而且零提示。
+      //   ⚠️ 成因和「关键词恢复」那个缺陷完全一样：**删 UI 时只删元素、没跟着删/改绑定**，
+      //      而 `if (el)` 这种防御式写法把"元素不见了"伪装成了"什么都没发生"。
+      //   ⇒ 绑定删掉，预算改由主保存提交（见保存 handler 里那段）。
       const per = cfg.perKeyword || 10;
       $("#dp-perkw").value = per; $("#fc-perkw-val").textContent = per;
       $("#dp-perkw").oninput = () => { $("#fc-perkw-val").textContent = $("#dp-perkw").value; updateTransparency(); };
@@ -4035,6 +4067,14 @@
             body:JSON.stringify({ serperBudget: Number(b.value) })}).catch(()=>{});
         } }
       const prof = $("#fc-profile"); if (prof) await fetch("/api/settings/profile", {method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({profile:prof.value})}).catch(()=>{});
+      // 🔴 搜索预算并进主保存（2026-09-02 修缺陷 b）：它原来靠一个**已被删除的按钮**提交，
+      //   改了存不进去且零提示。⚠️ 这里是**唯一**能存它的地方了，别再给它开第二条路。
+      { const sb = $("#fc-serper-budget");
+        if (sb && sb.value !== "") {
+          const v = Number(sb.value) || 1000;
+          await fetch("/api/settings/search", { method:"POST", headers:{"content-type":"application/json"},
+            body: JSON.stringify({ serperBudget: v }) });
+        } }
       return true;
     }
     // C5-29④：「保存方向盘」按钮已删，改由页头那颗「保存」统一提交（见 save-sendcfg）。
@@ -4616,8 +4656,8 @@
 
     // ===== 数据看板 =====
     const FUNNEL_STAGES = [
-      ["new","新导入","#d5dae1"], ["analyzed","已分析","#9dbfe4"], ["pending","待审核","#9dbfe4"],
-      ["approved","已批准","#1e7a4f"], ["queued","待发","#1e7a4f"], ["sent","已发送","#2f6fd6"],
+      ["new","新导入","#d5dae1"], ["analyzed","已分析","#b9d8d3"], ["pending","待审核","#b9d8d3"],
+      ["approved","已批准","#1e7a4f"], ["queued","待发","#1e7a4f"], ["sent","已发送","var(--brand)"],
       ["replied","已回复","#1e7a4f"], ["no_reply","无回复","#7a6a3a"],
       ["unsubscribed","已退订","#ecc4be"], ["bounced","退信","#ecc4be"], ["blacklisted","黑名单","#c0392b"],
       ["ignored","已忽略","#6b7480"],
@@ -4648,7 +4688,7 @@
         const cx = padL + groupW*i + groupW/2;
         const md = d.date.slice(5);
         const sx = cx - bw - 1, rx = cx + 1;
-        if (d.sent>0)    bars += `<rect x="${sx.toFixed(1)}" y="${yOf(d.sent).toFixed(1)}" width="${bw.toFixed(1)}" height="${(y0-yOf(d.sent)).toFixed(1)}" fill="#2f6fd6" rx="1"><title>${md} 发送 ${d.sent}</title></rect>`;
+        if (d.sent>0)    bars += `<rect x="${sx.toFixed(1)}" y="${yOf(d.sent).toFixed(1)}" width="${bw.toFixed(1)}" height="${(y0-yOf(d.sent)).toFixed(1)}" fill="var(--brand)" rx="1"><title>${md} 发送 ${d.sent}</title></rect>`;
         if (d.replied>0) bars += `<rect x="${rx.toFixed(1)}" y="${yOf(d.replied).toFixed(1)}" width="${bw.toFixed(1)}" height="${(y0-yOf(d.replied)).toFixed(1)}" fill="#1e7a4f" rx="1"><title>${md} 回复 ${d.replied}</title></rect>`;
         if (i%3===0 || i===n-1) bars += `<text x="${cx.toFixed(1)}" y="${H-7}" font-size="9" fill="#4d5762" text-anchor="middle">${md}</text>`;
       });
