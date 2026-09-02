@@ -3812,6 +3812,9 @@
       if(!collapsed) t.focus();
     };
     // 批⑳ 层3 末 · 维护折叠（全量重扫降位）
+    // ⚠️ 维护区已改成原生 <details>（板块三），不再需要 JS 切换。
+    //   这个函数的两个元素都不存在了 ⇒ **恒 return**。⛔ 不删：window.toggleMaint 可能仍被 onclick 引用，
+    //   删它会把"点了没反应"变成"点了报错"，后者更糟。
     window.toggleMaint = () => { const b=$("#fc-maint-body"), c=$("#fc-maint-caret"); if(!b) return; const h=(b.hidden=!b.hidden); if(c) c.textContent=h?'▸':'▾'; };
     // 批⑳ 层1 · 进货机器状态卡（只读）。全部字段来自 openDiscover 的 cfg（/api/settings/search）。
     //   ⚠️ 轮转分母 = keywords × allCountries（后台轮转恒用全量国家），与 discover.ts runDiscovery 的
@@ -3945,6 +3948,8 @@
       // C5-3：NMEA / rvwithtito 两个免费目录源按钮的绑定已随死代码一并删除
       //   （按钮 C2-A 就撤了，函数壳留到本批）。将来接 IAQ 行业目录源时，
       //   从 discover.ts 的 ENABLED_DIRECTORY_SOURCES 注册表加起。
+      // ⚠️ `#fc-serper-used` 元素已不存在（今日用量现在由板块一的大数字和 mr-live-search 报）。
+      //   下面这句是死码，留着不害人但会误导读代码的人以为那里还有个显示位。
       if (cfg.serper) { const u=$("#fc-serper-used"); if(u) u.textContent = cfg.serper.usedToday; const b=$("#fc-serper-budget"); if(b) b.value = cfg.serper.budget; }   // P0-c Serper 用量/预算回显
       // 🔴 2026-09-02 删：这里原本给 `#fc-serper-save` 绑 onclick —— **而那个按钮的元素早已被删**
       //   （C5-29④ 撤底部动作条时删了元素、留了绑定），`if (sb)` 把它安静地吞掉了。
@@ -4428,7 +4433,10 @@
     function renderCapacity(){
       // C5-2：这块的**展示位已移到机器房**（设置页只留旋钮）。函数保留供机器房调用；
       // 它自带 `if (!el)` 守卫，但我没靠这层守卫过日子 —— 设置页里对它的调用已一并摘掉，守卫只是第二层。
-      const el = $("#cfg-capacity"); if (!el || !_capacity) return;
+      // ⚠️ `#cfg-capacity` 元素早已不存在（产能显示已移进「平时不碰的」折叠区）。
+      //   这一行的 `if (!el)` 让整段静默空转 —— 保留 return，但标明它现在**永远走这条路**。
+      //   ⛔ 不删函数：它有调用点，删函数要连着改调用，那是另一件事的风险。
+      const el = $("#cfg-capacity"); if (!el || !_capacity) return;   // ← 恒 return（元素已移除）
       // 自动闸"跟随"时按**系统闸的生效值**判产能（拿 0 去比会得出"你填的 0 封能发到 ✓"这种废话）
       const raw = Number(($("#cfg-auto-limit") || {}).value) || 0;
       const want = raw > 0 ? raw : (_sysEffective || 0);
