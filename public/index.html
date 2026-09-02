@@ -4916,17 +4916,31 @@ ${esc(d.ours.body||'')}</div></details>`
       //   2. **没命中就说"机器按计划运行"**，⛔ 不硬凑卡。凑出来的发现会训练他忽略这一整块。
       //   3. **未激活的卡显示"成长进度"而不是"样本不足"** —— 让他看到的是"仪表在长大"，
       //      不是"功能没做好"。这是总调度定的形态，也适用于看板其它样本地板处。
+      //   4. ⭐⭐ **一张 Joe 无法行动的发现卡 = 噪音，不配占头条。**
+      //      发现卡的全部价值在"看完就知道该干嘛"。如果一张卡说的事他此刻做不了任何动作，
+      //      天天亮的结果不是他去做，而是**他学会忽略这一整块** —— 那会毁掉整个引擎的信任，
+      //      连带把那些真正需要他动手的卡一起埋掉。**代价是整块的，不是这一张的。**
+      //      ⇒ 所以每条规则除了"事实成立吗"，还要问"**成立的时候他动得了吗**"。
+      //      ⚠️ 抑制 ≠ 隐瞒：被抑制的事实改到机器房出一行状态，照说，只是不占头条。
       const G = d.discover || {};
       const gLimit = Number(G.dailyLimit || 0);
       const gFail = Number(G.sendFailedToday || 0);
       const wkUnsub = (G.weeklyUnsub || []).map(x => Number(x.n) || 0);   // 已按周倒序
       const findings = [], growing = [];
-      // 全局回信率（分母 = 去重后已发送的公司数），作为各维度的比较基准
-      const globalReply = denom >= DB_RATE_MIN_N ? totalReplied / denom : null;
+      // 全局回信率（分母 = 去重后已发送的公司数），作为各维度的比较基准。
+      // 🔴 2026-09-02 Joe 当场抓到：真数据态出现「DE 的回信率是全局的 **NaN** 倍·发24家回0家」。
+      //   根因：原来只挡了分母（`denom >= DB_RATE_MIN_N`），**没挡分子**。
+      //   全局回信 0 封时 globalReply = 0 ⇒ `x >= 0 * 2` 对任何维度恒真 ⇒ 卡照出，
+      //   而倍数 `0/0` = NaN。⚠️ 更糟的不是那个 NaN，是**它给出了一个错的动作**：
+      //   Joe 会照着去"补一轮 DE"，而 DE 一封回信都没有 —— 这正是我们刚立的
+      //   「不可行动的发现卡 = 噪音」的活案例，只不过它比噪音更坏：它在指错方向。
+      // ⇒ **0 是一个合法的比率，但不是一个能当分母的比率。** 没有正的基准，就没有"几倍"可言。
+      const globalReply = (denom >= DB_RATE_MIN_N && totalReplied > 0) ? totalReplied / denom : null;
 
       // (a) 某关键词发得够多、回信率却不到全局一半 → 建议停用
       if (globalReply == null) {
-        growing.push({ t: '关键词表现对比', need: [['累计发信公司数', denom, DB_RATE_MIN_N], ['真人回信', totalReplied, 1]] });
+        growing.push({ t: '关键词/国家表现对比',
+          need: [['累计发信公司数', denom, DB_RATE_MIN_N], ['真人回信', totalReplied, 1]] });
       } else {
         const bad = (d.byKeyword || []).filter(k => (k.sentLeads || 0) >= 10 &&
           ((k.repliedLeads || 0) / (k.sentLeads || 1)) < globalReply / 2);
@@ -4941,7 +4955,11 @@ ${esc(d.ours.body||'')}</div></details>`
       // (b) 某国家/分类回信率是全局 2 倍以上且样本够 → 建议加码
       if (globalReply != null) {
         const strong = [...(d.byCountry||[]).map(x=>({...x,kind:'国家'})), ...(d.byCategory||[]).map(x=>({...x,kind:'客户类型'}))]
-          .filter(x => (x.sentLeads||0) >= 15 && ((x.repliedLeads||0)/(x.sentLeads||1)) >= globalReply * 2);
+          // ⚠️ 三条守卫缺一不可：样本够（15）· **这一维自己真有回信（≥1）** · 高于全局两倍。
+          //    中间那条是这次 NaN 的直接堵口：**0 回信的维度没有"回信率高"可言**，
+          //    它既算不出倍数，也不该被建议加码。
+          .filter(x => (x.sentLeads||0) >= 15 && (x.repliedLeads||0) >= 1
+                    && ((x.repliedLeads||0)/(x.sentLeads||1)) >= globalReply * 2);
         if (strong.length) {
           const b = strong[0];
           findings.push({ sev: 'green',
@@ -4969,14 +4987,29 @@ ${esc(d.ours.body||'')}</div></details>`
           cta: act('去机器房看原因', "openMachineRoom()") });
       }
       // (e) 管道断流：待联系存量撑不过明天
-      if (gLimit > 0 && (d.readyCount || 0) < gLimit) {
+      //   ⚠️ 抑制（2026-09-02）：当**已知原因**存在时不出这张卡 —— 见上方纪律 4。
+      //     两个已知原因：① 一批线索卡在"抓不到官网"（等 C5-41 分拣器）② 全库重刷还没跑完。
+      //     这两件事 Joe 都动不了，而它们正是待联系偏低的成因。
+      //     ⛔ 阈值不新立：用 DB_RATE_MIN_N（10）—— 卡住的比"能算比率的最小样本"还多，
+      //        就说明存量偏低有结构性成因，不是"该去找客户了"。
+      const knownCause = (G.stuckNoSite || 0) > DB_RATE_MIN_N || (G.rescoreLeft || 0) > 0;
+      if (gLimit > 0 && (d.readyCount || 0) < gLimit && !knownCause) {
         findings.push({ sev: 'amber', t: `待联系只剩 ${d.readyCount||0} 家，明天的额度是 ${gLimit} 封`,
           e: '按这个速度，机器明天会闲着 —— 弹药不足，不是机器不干活',
           cta: act('去找客户', "openRestock()") });
       }
 
+      // 被抑制时**照说事实**，只是降级成一行小字、不占头条（抑制 ≠ 隐瞒）。
+      if (gLimit > 0 && (d.readyCount || 0) < gLimit && knownCause) {
+        const why = [];
+        if ((G.stuckNoSite || 0) > DB_RATE_MIN_N) why.push(`${G.stuckNoSite} 家官网抓不到、还没分拣`);
+        if ((G.rescoreLeft || 0) > 0) why.push(`重刷还剩 ${G.rescoreLeft} 家没跑完`);
+        growing.push({ t: '待联系存量偏低', need: [], note:
+          `已知原因：${why.join(' · ')} —— 这两件在处理中，不用你现在做什么` });
+      }
       const sevCls = { red: 'db-f-red', amber: 'db-f-amber', green: 'db-f-green' };
       const growHtml = growing.map(g => {
+        if (g.note) return `<div class="db-grow"><b>${esc(g.t)}</b>：${esc(g.note)}</div>`;
         const bits = g.need.map(([what, have, need]) =>
           `${esc(what)} ${have}/${need}${have >= need ? ' ✓' : ''}`).join(' · ');
         return `<div class="db-grow"><b>${esc(g.t)}</b>：满足 ${bits} 后开始工作</div>`;
@@ -4992,12 +5025,18 @@ ${esc(d.ours.body||'')}</div></details>`
       const MIXLBL = { inquiry:'询价', interested:'有兴趣', not_interested:'拒绝', complaint:'投诉', auto:'自动回执', other:'其他' };
       const mix = (G.replyMix || []).map(x => ({ k: x.k, n: Number(x.n)||0 }));
       const mixTotal = mix.reduce((a,b) => a + b.n, 0);
-      const mixHtml = mixTotal
+      // 🔴 Joe 指认：只有「其他 1 · 自动回执 1」时画一根横条，**信息量为负** ——
+      //   两个 50% 的色块看起来像一个有意义的构成，其实只是两封信。
+      //   ⚠️ 门槛卡在**真人回信**上而不是总封数：自动回执再多也说明不了"客户怎么回应我们"。
+      const MIX_MIN_HUMAN = 3;
+      const humanReplies = mix.filter(m => m.k !== 'auto').reduce((a,b) => a + b.n, 0);
+      const mixHtml = (mixTotal && humanReplies >= MIX_MIN_HUMAN)
         ? `<div class="db-mixbar">` + mix.map(m =>
             `<i class="db-mix-${esc(m.k)}" style="width:${(m.n/mixTotal*100).toFixed(1)}%" title="${esc(MIXLBL[m.k]||m.k)} ${m.n} 封"></i>`).join('') +
           `</div><div class="hint db-legend">` + mix.map(m =>
             `<span>${esc(MIXLBL[m.k]||m.k)} ${m.n}</span>`).join(' · ') + `</div>`
-        : `<div class="db-grow"><b>回信构成</b>：收到第 1 封回信后开始工作（当前 0/1）</div>`;
+        : `<div class="db-grow"><b>回信构成</b>：真人回信满 ${MIX_MIN_HUMAN} 封后开始显示构成` +
+          `（当前 ${humanReplies}/${MIX_MIN_HUMAN}${mixTotal > humanReplies ? `，另有 ${mixTotal - humanReplies} 封自动回执不计入` : ''}）</div>`;
 
       $("#v-page").innerHTML = pageHeader('数据看板','')
         + card('本周发现', findHtml + growHtml)

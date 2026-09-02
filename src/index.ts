@@ -888,6 +888,24 @@ app.get("/api/dashboard", async (c) => {
       ).first<{ n: number }>())?.n || 0,
       // (e) 管道断流：待联系存量 vs 明日额度
       dailyLimit: (await systemDailySendLimit(c.env)).effective,
+      // 🔴 (e) 的**抑制条件**（2026-09-02 总调度批准）：
+      //   待联系偏低此刻的根因是"重刷没跑完 + 一批线索卡在抓不到官网"，
+      //   **Joe 对这两件事做不了任何动作**。天天给他亮一张他动不了的卡，
+      //   结果不是他去找客户，是他学会忽略发现卡 —— 那会毁掉整个引擎的信任。
+      //   ⚠️ 抑制 ≠ 隐瞒：被抑制时改在机器房出一行状态，事实照说，只是不占"本周发现"的头条。
+      stuckNoSite: (await db.prepare(
+        `SELECT COUNT(*) AS n FROM leads l JOIN lead_analysis a ON a.lead_id=l.id
+          WHERE a.match_score IS NULL AND l.status NOT IN ('ignored','blacklisted') AND ${notTestSql("l")}`
+      ).first<{ n: number }>())?.n || 0,
+      rescoreLeft: await (async () => {
+        const at = (await getSetting(c.env, "taxonomy_rescore_started_at", "")).trim();
+        if (!at) return 0;                       // 没在重刷 ⇒ 不构成"已知原因"
+        const marks = RESCORE_SKIP_STATUSES.map(() => "?").join(",");
+        return (await db.prepare(
+          `SELECT COUNT(*) AS n FROM leads l JOIN lead_analysis a ON a.lead_id = l.id
+            WHERE a.analyzed_at < ? AND l.status NOT IN (${marks})`
+        ).bind(at, ...RESCORE_SKIP_STATUSES).first<{ n: number }>())?.n || 0;
+      })(),
       // ④ 回信构成（询价/拒绝/自动回执/其他）。⚠️ 自动回执**要单独显示**，
       //   所以这一处**不能**套 REAL_REPLY_SQL —— 它是"构成"不是"战绩"，
       //   把被排除的那一类藏起来，这张卡就失去意义了。测试线索仍然排除。
