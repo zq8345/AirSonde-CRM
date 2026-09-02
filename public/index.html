@@ -1081,7 +1081,11 @@
 
           <div class="sec-row" style="margin-top:16px"><span class="sec-title" style="margin:0">关键词</span>
             <span class="sec-tools"><button class="mini" type="button" onclick="fcKwAll(true)">全选</button><button class="mini" type="button" onclick="fcKwAll(false)">全不选</button><button class="mini" type="button" id="fc-kw-manage" onclick="fcToggleManage('kw')">管理</button></span></div>
-          <div id="dp-kwlist" style="margin:6px 0"></div>
+          <!-- data-user-content：⚠️ 这里面是 **Joe 自己填的关键词**，不是页面对他说的话。
+               闸的冻结口径原话「预算管的是页面自己说的话，不是客户名字」——26 个词与客户名字同类。
+               ⛔ 这个标记只能挂在"作者是 Joe"的内容上；挂到解释文案上就是把豁免变成漏洞
+                  （guard-design 里配了反向自检：页面自话超预算必须仍然报红）。 -->
+          <div id="dp-kwlist" data-user-content style="margin:6px 0"></div>
           <div id="fc-kw-editrow" style="display:none;gap:8px;margin-top:6px">
             <input id="dp-kwnew" class="inlinput" placeholder="新增关键词，如 HVAC controls integrator">
             <button id="dp-kwadd" class="primary">添加</button>
@@ -1095,15 +1099,16 @@
                生产真发生过。这条防线迁移时一字不动。 -->
           <label style="display:flex;align-items:center;gap:7px;margin-top:6px;cursor:pointer;font-size:13px">
             <input type="checkbox" id="dp-auto" class="cfg-live"> 开启后台每小时自动搜索新客户
-            <span class="hint" style="margin:0">（默认关；每轮只跑一小批，受下方预算封顶）</span>
+            <span class="gj-help" data-help title="默认关闭。开启后每小时跑一小批，用量受下面那条「搜索预算上限」封顶，不会自己越界。">(?)</span>
           </label>
           <div class="set-numrow" style="margin-top:12px">
             <span style="font-size:13px">搜索预算上限</span>
             <input id="fc-serper-budget" type="number" min="0" max="2500" step="10" class="set-num" style="width:96px">
-            <span class="hint">次/天 · 到上限自动停（含手动+后台）</span>
+            <span class="hint">次/天</span>
+            <span class="gj-help" data-help title="到了这个数当天就自动停，手动搜和后台自动搜共用这一个额度。今日已用多少，在机器房里看。">(?)</span>
             <!-- C5-29④：「保存预算」已删 —— 全页统一由页头那颗「保存」提交。 -->
           </div>
-          <div class="hint" style="margin-top:4px">今日已用 → 机器房。</div>
+
 
           <!-- C5-29④：「保存方向盘」已删 —— 页头那颗「保存」统一提交全页（含画像/关键词/预算）。
                ⚠️ `dp-save-msg` 这个 span 保留：saveSearchCfg 的结果提示仍写它（删了会抛空引用）。 -->

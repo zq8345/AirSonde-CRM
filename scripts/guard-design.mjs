@@ -56,7 +56,21 @@ export function measure(doc, selector = "#v-page") {
     const s = d.querySelector("summary");
     d.replaceChildren(s ? s.cloneNode(true) : doc.createTextNode(""));
   });
-  clone.querySelectorAll("[data-help], .help-pop, [hidden]").forEach((n) => n.remove());
+  // ⭐⭐ 冻结口径：从字数里剔除什么、为什么剔除。**这段就是"字数"的定义，改它等于改判据。**
+  //
+  //   · [data-help] / .help-pop  —— 悬浮解释。它不占版面、Joe 不主动看就不存在。
+  //   · [hidden]                 —— 没渲染的东西不算"页面说的话"。
+  //   · [data-user-content]      —— **Joe 自己配置的数据**（2026-09-02 加）。
+  //
+  // 🔴 第三条的依据是本文件开头那句原话：「预算管的是"页面自己说的话"，不是客户名字」。
+  //   26 个关键词 chip 上的文字是 **Joe 填进去的内容**，与客户名字同类 —— 页面只是把它显示出来。
+  //   预算存在的理由是"别让机器对 Joe 唠叨"，而他自己填的词不是唠叨。
+  //
+  // ⛔⛔ 这是一个**豁免**，而豁免天然是漏洞的入口：任何人只要给一坨解释文案挂上
+  //   `data-user-content`，就能让它凭空从预算里消失。所以下面的自检里配了**反向样本**：
+  //   「页面自己的话超预算时必须仍然报红」。那条自检红不了，这个豁免就已经变成漏洞了。
+  //   ⇒ 加 `data-user-content` 的判据只有一条：**这段文字的作者是 Joe，不是我们。**
+  clone.querySelectorAll("[data-help], .help-pop, [hidden], [data-user-content]").forEach((n) => n.remove());
   const text = (clone.innerText || clone.textContent || "").replace(/\s+/g, " ").trim();
   return { chars: text.length, banned: BANNED.filter((w) => text.includes(w)), text };
 }
@@ -102,7 +116,53 @@ if (typeof process !== "undefined" && String(process.argv?.[1] || "").replace(/\
   ];
   // 反向自证：measure 报错时也必须红（不能只在 chars=0 这一种形态上红）
   cases.push(["🔴 真实缺陷③变体：选择器找不到元素", "settings", null, false]);
+
+  // ══ data-user-content 豁免的自检（2026-09-02 加）══
+  //
+  // ⚠️ 上面那些用例走的是 `fake()`，**根本不经过 measure()** —— 它们只在数字上做算术，
+  //    测不到"剔除哪些节点"这段逻辑。而豁免的风险恰恰全在那一行选择器上。
+  //    ⇒ 这里搭一个**最小 DOM 替身**，让判据真的走一遍 measure()。
+  //    替身只实现 measure 用到的那几个方法；它故意**照着 measure 里那行选择器字符串**解析，
+  //    所以谁把 `[data-user-content]` 从那行里删掉/写错，下面第一条就会红。
+  const stubDoc = (nodes) => {
+    const mk = () => ({
+      _nodes: nodes.map((n) => ({ ...n, gone: false })),
+      cloneNode() { return mk(); },
+      querySelectorAll(sel) {
+        const toks = sel.split(",").map((t) => t.trim().replace(/^\[|\]$/g, "").replace(/^\./, ""));
+        const self = this;
+        return self._nodes.filter((n) => !n.gone && n.attrs.some((a) => toks.includes(a)))
+          .map((n) => ({ remove() { n.gone = true; }, querySelector: () => null, replaceChildren() {} }));
+      },
+      get textContent() { return this._nodes.filter((n) => !n.gone).map((n) => n.text).join(" "); },
+      get innerText() { return this.textContent; },
+    });
+    const root = mk();
+    return { querySelector: () => root, defaultView: { getComputedStyle: () => ({ display: "block" }) },
+             createTextNode: (t) => ({ text: t, attrs: [] }) };
+  };
+  const own = (n) => ({ attrs: [], text: "字".repeat(n) });          // 页面自己说的话
+  const user = (n) => ({ attrs: ["data-user-content"], text: "词".repeat(n) });  // Joe 配置的数据
+  const help = (n) => ({ attrs: ["data-help"], text: "悬".repeat(n) });          // 悬浮解释
+
   let pass = 0, fail = 0;
+  const pass2Inc = () => pass++, fail2Inc = () => fail++;
+  const domCases = [
+    // ✅ 正对照：页面自话 500 + Joe 的数据 800 + 悬浮 300 ⇒ 只算 500，合宪
+    ["✅ 豁免生效：Joe 配的关键词不进预算", [own(500), user(800), help(300)], true],
+    // 🔴🔴 **反向自证（这条最要紧）**：页面自话本身就超预算时，豁免绝不能把它救回来。
+    //     这一条绿了 = 豁免已经变成漏洞，等于谁想超预算只要挂个 data-user-content。
+    ["🔴 豁免不得成为漏洞：页面自话 1200 字仍必须报红", [own(1200), user(800)], false],
+    // 🔴 边界：只有页面自话、没有任何豁免节点时，行为与从前完全一致
+    ["🔴 无豁免节点时行为不变：1200 字报红", [own(1200)], false],
+  ];
+  for (const [name, nodes, wantOk] of domCases) {
+    const m = measure(stubDoc(nodes), "#v-settings");
+    const r = judge("settings", m);
+    const ok = r.ok === wantOk;
+    ok ? pass2Inc() : fail2Inc();
+    console.log(`  ${ok ? "✅" : "🔴"} ${name} —— 量到 ${m.chars} 字，判定 ${r.ok ? "合宪" : "不合宪"}`);
+  }
   for (const [name, page, text, wantOk] of cases) {
     const r = judge(page, fake(text));
     const ok = r.ok === wantOk;
