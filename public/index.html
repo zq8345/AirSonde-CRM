@@ -677,7 +677,13 @@
        ⚠️ **纯样式**：元素 id、保存语义、勾选即存、_cfgLoaded 闸一律没动。
        ⚠️ 全部选择器压在 `#v-settings` / `.set-page` 里 —— textarea 的等宽字体是**全局规则**，
           找客户页的画像/关键词框也在用它，不能为了这一页把它掀了。 */
-    #v-settings .set-page { background:var(--panel); padding:16px; border-radius:12px; }
+    /* 🔴 2026-09-02 Joe 指认版式不一致 —— 实测根因（1440 视口，CDP 量的几何）：
+       其他页面 .page-card 左缘 = 222；设置卡左缘 = 238。差值正好是这里的 padding:16px。
+       ⚠️ 而且那层灰底 panel 只裹住了当时在 .set-page 里的 ①②，③④⑤ 裸在外面 ——
+          "有一半卡片被灰框包着"本身就是不一致的来源之一。
+       ⇒ 改成**纯布局容器**：不再有底色和内边距，左缘与其他页面同一条线；
+          max-width 保留（那是控行长，与对齐无关，见附录 C 的全站容器规则）。 */
+    #v-settings .set-page { padding:0; }
     .set-card { background:var(--bg); border:1px solid var(--border); border-radius:12px;
                 padding:24px; margin:0 0 16px; max-width:760px; }
     .set-card:last-of-type { margin-bottom:0; }
@@ -734,7 +740,7 @@
                    display:flex; gap:10px; flex-wrap:wrap; align-items:center; max-width:760px; }
     .btn-secondary { background:var(--bg); border:1px solid var(--border); color:var(--text); }
     @media (max-width:820px) {
-      #v-settings .set-page { padding:10px; }
+      #v-settings .set-page { padding:0; }   /* 窄屏同理：内边距由 .set-card 自己出 */
       .set-card { padding:18px 16px; }
       .set-grid { grid-template-columns:1fr; gap:6px 0; }      /* 窄屏改上下排，标签仍在控件之上 */
       .set-grid > .k { padding-top:10px; }
@@ -1029,7 +1035,12 @@
               <span class="gj-help" data-help title="自动发出的开发信里退订占比超过阈值就自动停发（只停自动发信，分析/批准/手动发送不受影响），停了不会自动恢复，要你在这里手动重开。样本不足时不熔断——5 封里 2 封退订说明不了任何事。">(?)</span></div></div>
         </div>
       </div>
-      </div>
+      <!-- 🔴 2026-09-02：`.set-page` 的闭合原来在这里 —— 于是 ③④⑤ 三张卡**在它外面**。
+           后果不只是左缘差 16px（那层灰底 panel 的 padding），更严重的是：
+           **预览/编辑两态的 CSS 全部写在 `.set-page.preview` 后代选择器上** ⇒
+           实测预览态下 ①② 的输入框是 border:none+透明（正确的只读样子），
+           而 ③④ 仍是 border:solid+白底（还长得像可编辑的表单框）。
+           ⇒ 两态只对 5 张卡里的 2 张生效。闭合下移到全部卡片之后。 -->
 
       <!-- ── ③ 无回复自动跟进 ── -->
       <div class="set-card">
@@ -1047,15 +1058,18 @@
 
       <!-- ══ C5-3 ②「🧭 方向盘」——机器按什么找客户 ══
            找客户页解散后，那些**持久配置**（不是单次动作）搬到这里。
-           ⚠️ 默认收起：Joe 一个月改不了一次，但要改时它必须在。
-           ⚠️ 宪法口径：折叠收起时不计字数，只有折叠行的摘要计入 900 预算。
+           ⚠️ 2026-09-02 Joe 指认：**取消折叠，与其他板块一样平铺常开。**
+              原因不只是版式不一致——折叠态还引发过"读不到配置"的显示混淆
+              （收起时看不见内容，加载失败和"还没展开"长得一模一样）。
+           ⚠️ 随之而来的口径变化（必须说出来）：原来"折叠收起时不计字数"，
+              现在整块都计入设置页 900 预算。改完已用闸实测，见交付说明。
            ⚠️ 里面的 id / 勾选即存 / 二次确认 / 保存逻辑**全部原样迁移**，一行没改。 -->
       <div class="set-card">
-        <div class="sec-title" style="cursor:pointer;user-select:none" onclick="toggleWheel()">
-          <span id="wheel-caret">▸</span> ④ 方向盘 <span class="hint" style="margin:0">（机器按什么找客户）</span>
+        <div class="sec-title">
+          ④ 方向盘 <span class="hint" style="margin:0">（机器按什么找客户）</span>
         </div>
-        <div class="sec-sub" id="wheel-summary" style="cursor:pointer;margin-bottom:0" onclick="toggleWheel()">（加载中…）</div>
-        <div id="wheel-body" hidden style="margin-top:16px">
+        <div class="sec-sub" id="wheel-summary" style="margin-bottom:0">（加载中…）</div>
+        <div id="wheel-body" style="margin-top:16px">
           <!-- 加载失败横幅：没有它，一次登录过期就让方向盘停在空壳态，看着像"配置全丢了" -->
           <div class="load-error" id="fc-loaderr" style="display:none;margin-bottom:12px"></div>
 
@@ -1115,6 +1129,7 @@
            「发送测试卡片」是**动作**不是设置 → 降为描边次级钮，实心只留给保存。 -->
       <!-- C5-4v①：底部动作条撤销 —— 保存已上移进吸顶页头；
            「发送测试卡片」移进 ④通知与账号 卡（它测的就是那一块，语义归位）。 -->
+      </div><!-- /.set-page -->
     </div>
   </div>
       <!-- ══ C5-3：整页「🔍 找客户」已解散（Joe：四页架构收口）══
@@ -3777,14 +3792,8 @@
 
     // ══ C5-3：设置页「🧭 方向盘」折叠 ══
     //   ⚠️ 展开时才去读配置：这一卡默认收起，进设置页就把关键词/画像全拉一遍是白花的往返。
-    window.toggleWheel = async () => {
-      const b = $("#wheel-body"), c = $("#wheel-caret");
-      if (!b) return;
-      const opening = b.hidden;
-      b.hidden = !b.hidden;
-      if (c) c.textContent = b.hidden ? "▸" : "▾";
-      if (opening) await loadSearchCfg();
-    };
+    // toggleWheel 已随「方向盘取消折叠」删除（2026-09-02）。
+    // ⚠️ 一并删掉而不是留着不调用：留一个没人调的开关，下一个人会以为折叠还在、还去维护它。
     // 折叠行摘要 = **真值派生**（宪法铁律三：状态由真实配置派生，禁止写死）。
     // 收起时它是这一卡唯一计入 900 字预算的东西，所以要短、且每一项都是他真会看的。
     function renderWheelSummary(cfg, prof){
@@ -4152,8 +4161,7 @@
       // C5-3：方向盘**收起时**只露一行摘要，而那一行是计入 900 字预算的唯一内容 ——
       //   它必须是真值派生（铁律三），所以进设置页就得把配置读一次。
       //   ⚠️ 不 await：方向盘读不到不该拖住整页设置（它自己会写「读不到」，不会假装是"默认"）。
-      { const wb=$("#wheel-body"), wc=$("#wheel-caret");
-        if (wb && !wb.hidden) { wb.hidden = true; if (wc) wc.textContent = "▸"; } }
+      // 方向盘现在常开，进设置页直接取配置（不再有"收起时不加载"这一态）。
       loadSearchCfg().catch(()=>renderWheelSummary(null, null));
     };
     { const gb=$("#btn-settings");
