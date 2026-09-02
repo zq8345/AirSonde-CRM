@@ -91,7 +91,15 @@ export function previewOf(raw: string, n = 140): string {
 export function isNoiseReply(r: { raw_headers?: string | null; content?: string | null; from_email?: string | null }): boolean {
   const h = normalizeText(r.raw_headers || "");
   // RFC 3834 / 群发头：自动回执、假期自动回复、邮件列表
-  if (/^Auto-Submitted:\s*(?!no\b)/im.test(h)) return true;
+  // ⚠️ 原写法 `/^Auto-Submitted:\s*(?!no\b)/im` 是错的：`\s*` 会**回溯到零宽**，
+  //   于是否定前瞻在冒号正后方那个空格上求值（空格不是 "no"）⇒ 前瞻恒成立，
+  //   `Auto-Submitted: no`（RFC 3834 里这恰恰表示**是真人信**）被误判成机器。
+  //   改成把值取出来**正面比较**：只有一个正确答案，不靠"认得几种错法"。
+  //   🔴 这个洞以前只影响收件箱分组（外观）；自 2026-09-02 起 isNoiseReply 还决定
+  //      **要不要推进 lead stage** ⇒ 误判 = 真人回信不推进、Joe 看不到。
+  //      是我这次接线把它的严重度升上来的，所以必须一起修。
+  const autoSub = h.match(/^Auto-Submitted:[^\S\n]*(\S+)/im);
+  if (autoSub && autoSub[1].toLowerCase() !== "no") return true;
   if (/^X-Auto(?:reply|-Response-Suppress|respond)\b/im.test(h)) return true;
   if (/^Precedence:\s*(bulk|auto_reply|junk)\b/im.test(h)) return true;
   if (/^List-(?:Id|Unsubscribe):/im.test(h)) return true;

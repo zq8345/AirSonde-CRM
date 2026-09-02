@@ -5,6 +5,7 @@ import { fetchNewMessages, IMAP_BATCH } from "./imap";
 import { getSetting, setSetting, addSuppressedEmail, brandForLead } from "./send";
 import { larkConfigured, larkSend, replyCard } from "./notify";
 import { sendAppCard, actionReplyCard, replyWorkbenchCard } from "./lark-app";
+import { isNoiseReply } from "./reply-inbox";
 import { getProfile } from "./service";
 import { scoreModel, writeReplyDraft, chat, TOK_CLASSIFY } from "./openrouter";
 // （OR_URL 已删：本文件不再自己打 OpenRouter，统一走 openrouter.ts 的 chat()。）
@@ -228,11 +229,25 @@ async function ingestAccount(env: Env, acct: ImapAccount, opts: { timeoutMs?: nu
         const replyRowId = Number(insRes.meta?.last_row_id) || 0;
         ingested++;
 
+        // 🔴 2026-09-02：自动回执**不推进 stage**（北极星污染源）。
+        //   实例 #547 Conditionedair：「Thank You for Contacting… we'll get back within 24 hours」
+        //   —— 分类器判 other、收件箱也正确归进了"噪音"页签，**但推进 stage 这条路从来没问过它**。
+        //   ⚠️ 所以这不是"判别规则不够"，是**漏接线**：isNoiseReply() 早就返回 true，
+        //      只被 tabOf() 和展示字段用了。判别特征本来就在 reply-inbox.ts 里当可维护常量维护着，
+        //      **不在这里另写第二套**（写第二套 = 两处规则迟早分叉）。
+        //   一封机器发的"我们收到了"不代表这家公司回应了你 —— 对方真人回信来时会正常推进。
+        const isAuto = isNoiseReply({ raw_headers: rawHeaders, content: body, from_email: fromEmail });
         if (lead) {
           matched++;
-          // 更新线索状态：投诉→黑名单，其余→已回复
-          const newStatus = category === "complaint" ? "blacklisted" : "replied";
-          await env.DB.prepare("UPDATE leads SET status=?, updated_at=datetime('now') WHERE id=?").bind(newStatus, lead.id).run();
+          if (category === "complaint") {
+            // ⚠️ 投诉照旧转黑，**不受噪音判定豁免**：合规红线宁可误伤，不可漏放。
+            await env.DB.prepare("UPDATE leads SET status='blacklisted', updated_at=datetime('now') WHERE id=?").bind(lead.id).run();
+          } else if (isAuto) {
+            // 落库保留 + 时间线保留（上面的 INSERT 已经做了），只是**不动 stage**。
+            console.log(`reply: #${lead.id} 是自动回执 → 保留记录但不推进 stage（避免虚增已回复）`);
+          } else {
+            await env.DB.prepare("UPDATE leads SET status='replied', updated_at=datetime('now') WHERE id=?").bind(lead.id).run();
+          }
         }
         // 投诉：无论是否匹配到 lead，都把发件邮箱记入持久压制名单（合规红线）
         if (category === "complaint") await addSuppressedEmail(env, fromEmail, "complaint");
@@ -243,7 +258,10 @@ async function ingestAccount(env: Env, acct: ImapAccount, opts: { timeoutMs?: nu
         // 热线索实时推飞书（批㉙ 双卡去重）：工作台卡**先行**;推成后 webhook 通道降级为一行轻提示
         // （互备语义保留:工作台失败→webhook 全量卡+旧动作卡照发,现有回退一条不动）。
         // ⚠️ 轻提示文案含 AIRSONDE——飞书 webhook 机器人「自定义关键词」（Joe 建 AirSonde 新群时需把 AIRSONDE 加进关键词，webhook 绝不复用 Wanew 的）。
-        if (notifyOn && HOT.has(category)) {
+        // ⚠️ 自动回执也不推卡：现在 other 不在 HOT 里所以本来就不会推，
+        //   但**别依赖"它碰巧不在热类里"** —— 哪天分类器把一封自动回执判成 inquiry，
+        //   这个 && 就是唯一挡住半夜误报的东西。
+        if (notifyOn && !isAuto && HOT.has(category)) {
           let workbenchSent = false;
           if (lead && replyRowId && (category === "interested" || category === "inquiry")) {
             // L2 回复工作台：起草**只在推卡时**（回调 3 秒窗绝不容 LLM）;投诉不走工作台（已自动转黑）。
