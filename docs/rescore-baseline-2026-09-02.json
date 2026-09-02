@@ -1,0 +1,3944 @@
+﻿[
+  {
+    "results": [
+      {
+        "id": 263,
+        "status": "ignored",
+        "company_name": "AirSonde Send Test",
+        "website": "https://airsonde.com",
+        "score": 10,
+        "cat": "其他"
+      },
+      {
+        "id": 264,
+        "status": "analyzed",
+        "company_name": "HOLDEKS GROUP B.V.",
+        "website": "https://holdeks.com",
+        "score": 10,
+        "cat": "其他"
+      },
+      {
+        "id": 265,
+        "status": "analyzed",
+        "company_name": "Airgradient",
+        "website": "https://airgradient.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 267,
+        "status": "analyzed",
+        "company_name": "Palas",
+        "website": "https://palas.de",
+        "score": 10,
+        "cat": "其他"
+      },
+      {
+        "id": 268,
+        "status": "analyzed",
+        "company_name": "Wiley",
+        "website": "https://rmets.onlinelibrary.wiley.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 269,
+        "status": "analyzed",
+        "company_name": "Justdial",
+        "website": "https://justdial.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 270,
+        "status": "analyzed",
+        "company_name": "Labmate",
+        "website": "https://labmate.com",
+        "score": 15,
+        "cat": "其他"
+      },
+      {
+        "id": 271,
+        "status": "analyzed",
+        "company_name": "Iqair",
+        "website": "https://iqair.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 272,
+        "status": "analyzed",
+        "company_name": "Indiamart",
+        "website": "https://dir.indiamart.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 273,
+        "status": "analyzed",
+        "company_name": "Elitecheu",
+        "website": "https://elitecheu.com",
+        "score": 20,
+        "cat": "其他"
+      },
+      {
+        "id": 274,
+        "status": "analyzed",
+        "company_name": "Iaqtongdy",
+        "website": "https://iaqtongdy.com",
+        "score": 20,
+        "cat": "其他"
+      },
+      {
+        "id": 275,
+        "status": "analyzed",
+        "company_name": "Hnfosensor",
+        "website": "https://hnfosensor.com",
+        "score": 10,
+        "cat": "其他"
+      },
+      {
+        "id": 276,
+        "status": "analyzed",
+        "company_name": "Atmotube",
+        "website": "https://atmotube.com",
+        "score": 10,
+        "cat": "其他"
+      },
+      {
+        "id": 277,
+        "status": "analyzed",
+        "company_name": "Metoree",
+        "website": "https://us.metoree.com",
+        "score": 15,
+        "cat": "其他"
+      },
+      {
+        "id": 278,
+        "status": "analyzed",
+        "company_name": "Graywolfsensing",
+        "website": "https://graywolfsensing.com",
+        "score": 15,
+        "cat": "其他"
+      },
+      {
+        "id": 279,
+        "status": "analyzed",
+        "company_name": "Kaiterra",
+        "website": "https://kaiterra.com",
+        "score": 25,
+        "cat": "其他"
+      },
+      {
+        "id": 280,
+        "status": "analyzed",
+        "company_name": "Temtopus",
+        "website": "https://temtopus.com",
+        "score": 20,
+        "cat": "经销/零售"
+      },
+      {
+        "id": 281,
+        "status": "analyzed",
+        "company_name": "Metone",
+        "website": "https://metone.com",
+        "score": 10,
+        "cat": "其他"
+      },
+      {
+        "id": 282,
+        "status": "analyzed",
+        "company_name": "Linovision",
+        "website": "https://linovision.com",
+        "score": 10,
+        "cat": "经销/零售"
+      },
+      {
+        "id": 283,
+        "status": "ignored",
+        "company_name": "Epa",
+        "website": "https://epa.gov",
+        "score": 10,
+        "cat": "其他"
+      },
+      {
+        "id": 284,
+        "status": "approved",
+        "company_name": "Aircycler",
+        "website": "https://aircycler.com",
+        "score": 75,
+        "cat": "其他"
+      },
+      {
+        "id": 285,
+        "status": "analyzed",
+        "company_name": "Halodetect",
+        "website": "https://halodetect.com",
+        "score": 25,
+        "cat": "其他"
+      },
+      {
+        "id": 288,
+        "status": "analyzed",
+        "company_name": "Hw Group",
+        "website": "https://hw-group.com",
+        "score": 20,
+        "cat": "其他"
+      },
+      {
+        "id": 289,
+        "status": "analyzed",
+        "company_name": "Blynk",
+        "website": "https://blynk.io",
+        "score": 20,
+        "cat": "其他"
+      },
+      {
+        "id": 290,
+        "status": "analyzed",
+        "company_name": "Cubic Controls",
+        "website": "https://cubic-controls.com",
+        "score": 10,
+        "cat": "其他"
+      },
+      {
+        "id": 291,
+        "status": "analyzed",
+        "company_name": "Safewillgasdetector",
+        "website": "https://safewillgasdetector.com",
+        "score": 20,
+        "cat": "其他"
+      },
+      {
+        "id": 294,
+        "status": "approved",
+        "company_name": "Coolautomation",
+        "website": "https://coolautomation.com",
+        "score": 45,
+        "cat": "其他"
+      },
+      {
+        "id": 296,
+        "status": "analyzed",
+        "company_name": "Tu Bs",
+        "website": "https://ibr.cs.tu-bs.de",
+        "score": 10,
+        "cat": "其他"
+      },
+      {
+        "id": 299,
+        "status": "analyzed",
+        "company_name": "Oxmaint",
+        "website": "https://oxmaint.com",
+        "score": 20,
+        "cat": "其他"
+      },
+      {
+        "id": 300,
+        "status": "analyzed",
+        "company_name": "Azbil",
+        "website": "https://azbil.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 301,
+        "status": "analyzed",
+        "company_name": "Phoenixcontact",
+        "website": "https://phoenixcontact.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 302,
+        "status": "analyzed",
+        "company_name": "Gira",
+        "website": "https://partner.gira.com",
+        "score": 10,
+        "cat": "安装/集成"
+      },
+      {
+        "id": 303,
+        "status": "analyzed",
+        "company_name": "Fellowes",
+        "website": "https://fellowes.com",
+        "score": 20,
+        "cat": "其他"
+      },
+      {
+        "id": 304,
+        "status": "analyzed",
+        "company_name": "Dataintelo",
+        "website": "https://dataintelo.com",
+        "score": 10,
+        "cat": "其他"
+      },
+      {
+        "id": 307,
+        "status": "analyzed",
+        "company_name": "Milesight",
+        "website": "https://milesight.com",
+        "score": 20,
+        "cat": "其他"
+      },
+      {
+        "id": 308,
+        "status": "analyzed",
+        "company_name": "Stroma",
+        "website": "https://stroma.com",
+        "score": 20,
+        "cat": "企业/IT"
+      },
+      {
+        "id": 309,
+        "status": "analyzed",
+        "company_name": "Ebmpapst",
+        "website": "https://ebmpapst.com",
+        "score": 10,
+        "cat": "其他"
+      },
+      {
+        "id": 310,
+        "status": "analyzed",
+        "company_name": "Sgs Institut Fresenius",
+        "website": "https://sgs-institut-fresenius.de",
+        "score": 0,
+        "cat": "其他"
+      },
+      {
+        "id": 311,
+        "status": "analyzed",
+        "company_name": "Aiha",
+        "website": "https://aiha.org",
+        "score": 10,
+        "cat": "其他"
+      },
+      {
+        "id": 312,
+        "status": "analyzed",
+        "company_name": "Evergreenairquality",
+        "website": "https://evergreenairquality.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 313,
+        "status": "analyzed",
+        "company_name": "Fraunhofer",
+        "website": "https://ibp.fraunhofer.de",
+        "score": 15,
+        "cat": "企业/IT"
+      },
+      {
+        "id": 314,
+        "status": "ignored",
+        "company_name": "Nist",
+        "website": "https://nist.gov",
+        "score": 10,
+        "cat": "其他"
+      },
+      {
+        "id": 315,
+        "status": "analyzed",
+        "company_name": "Stiebel Eltron",
+        "website": "https://stiebel-eltron.com",
+        "score": 20,
+        "cat": "其他"
+      },
+      {
+        "id": 317,
+        "status": "analyzed",
+        "company_name": "A4ord",
+        "website": "https://a4ord.de",
+        "score": 10,
+        "cat": "其他"
+      },
+      {
+        "id": 319,
+        "status": "analyzed",
+        "company_name": "Smart Building Solution",
+        "website": "https://smart-building-solution.com",
+        "score": 0,
+        "cat": "其他"
+      },
+      {
+        "id": 320,
+        "status": "analyzed",
+        "company_name": "Rwth Aachen",
+        "website": "https://fir.rwth-aachen.de",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 321,
+        "status": "ignored",
+        "company_name": "Service",
+        "website": "https://find-and-update.company-information.service.gov.uk",
+        "score": 45,
+        "cat": "其他"
+      },
+      {
+        "id": 322,
+        "status": "analyzed",
+        "company_name": "Technology Research Hub",
+        "website": "https://technology-research-hub.de",
+        "score": 20,
+        "cat": "其他"
+      },
+      {
+        "id": 323,
+        "status": "approved",
+        "company_name": "Johnstonesupply",
+        "website": "https://johnstonesupply.com",
+        "score": 88,
+        "cat": "经销/零售"
+      },
+      {
+        "id": 324,
+        "status": "approved",
+        "company_name": "Hvacdist",
+        "website": "https://hvacdist.com",
+        "score": 75,
+        "cat": "其他"
+      },
+      {
+        "id": 325,
+        "status": "approved",
+        "company_name": "Marhy",
+        "website": "https://marhy.com",
+        "score": 72,
+        "cat": "经销/零售"
+      },
+      {
+        "id": 326,
+        "status": "analyzed",
+        "company_name": "Tadiran International",
+        "website": "https://tadiran-international.com",
+        "score": 10,
+        "cat": "其他"
+      },
+      {
+        "id": 329,
+        "status": "analyzed",
+        "company_name": "Farnell",
+        "website": "https://de.farnell.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 330,
+        "status": "analyzed",
+        "company_name": "Benning",
+        "website": "https://benning.de",
+        "score": 30,
+        "cat": "其他"
+      },
+      {
+        "id": 331,
+        "status": "analyzed",
+        "company_name": "Rohde Schwarz",
+        "website": "https://rohde-schwarz.com",
+        "score": 10,
+        "cat": "其他"
+      },
+      {
+        "id": 332,
+        "status": "analyzed",
+        "company_name": "Gossenmetrawatt",
+        "website": "https://gossenmetrawatt.de",
+        "score": 20,
+        "cat": "其他"
+      },
+      {
+        "id": 333,
+        "status": "analyzed",
+        "company_name": "Spreitzer",
+        "website": "https://spreitzer.de",
+        "score": 10,
+        "cat": "其他"
+      },
+      {
+        "id": 334,
+        "status": "analyzed",
+        "company_name": "Laborance",
+        "website": "https://laborance.de",
+        "score": 0,
+        "cat": "其他"
+      },
+      {
+        "id": 335,
+        "status": "analyzed",
+        "company_name": "E Tech",
+        "website": "https://e-tech.show",
+        "score": 10,
+        "cat": "其他"
+      },
+      {
+        "id": 336,
+        "status": "analyzed",
+        "company_name": "Metrel",
+        "website": "https://metrel.si",
+        "score": 20,
+        "cat": "其他"
+      },
+      {
+        "id": 337,
+        "status": "analyzed",
+        "company_name": "Breathalysers",
+        "website": "https://breathalysers.co.za",
+        "score": 25,
+        "cat": "经销/零售"
+      },
+      {
+        "id": 338,
+        "status": "analyzed",
+        "company_name": "Todapharma",
+        "website": "https://todapharma.com",
+        "score": 15,
+        "cat": "其他"
+      },
+      {
+        "id": 339,
+        "status": "ignored",
+        "company_name": "Lifeloc",
+        "website": "https://lifeloc.com",
+        "score": 45,
+        "cat": "unclear"
+      },
+      {
+        "id": 340,
+        "status": "approved",
+        "company_name": "Adtecso",
+        "website": "https://adtecso.com",
+        "score": 80,
+        "cat": "企业/IT"
+      },
+      {
+        "id": 341,
+        "status": "ignored",
+        "company_name": "Transportation",
+        "website": "https://transportation.gov",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 342,
+        "status": "analyzed",
+        "company_name": "Cannabixtechnologies",
+        "website": "https://cannabixtechnologies.com",
+        "score": 10,
+        "cat": "其他"
+      },
+      {
+        "id": 343,
+        "status": "analyzed",
+        "company_name": "Alcosense",
+        "website": "https://alcosense.co.uk",
+        "score": 15,
+        "cat": "经销/零售"
+      },
+      {
+        "id": 344,
+        "status": "analyzed",
+        "company_name": "Gosupps",
+        "website": "https://gosupps.com",
+        "score": 10,
+        "cat": "经销/零售"
+      },
+      {
+        "id": 345,
+        "status": "analyzed",
+        "company_name": "Noon",
+        "website": "https://noon.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 346,
+        "status": "analyzed",
+        "company_name": "Szeek",
+        "website": "https://szeek.net",
+        "score": 10,
+        "cat": "其他"
+      },
+      {
+        "id": 347,
+        "status": "analyzed",
+        "company_name": "Levenhukb2b",
+        "website": "https://levenhukb2b.com",
+        "score": 25,
+        "cat": "其他"
+      },
+      {
+        "id": 348,
+        "status": "analyzed",
+        "company_name": "Ravelfire",
+        "website": "https://ravelfire.com",
+        "score": 10,
+        "cat": "其他"
+      },
+      {
+        "id": 349,
+        "status": "analyzed",
+        "company_name": "Elro",
+        "website": "https://elro.eu",
+        "score": 45,
+        "cat": "unclear"
+      },
+      {
+        "id": 350,
+        "status": "approved",
+        "company_name": "Zetaalarmsystems",
+        "website": "https://zetaalarmsystems.com",
+        "score": 62,
+        "cat": "其他"
+      },
+      {
+        "id": 351,
+        "status": "analyzed",
+        "company_name": "Energy Uk",
+        "website": "https://energy-uk.org.uk",
+        "score": 10,
+        "cat": "其他"
+      },
+      {
+        "id": 352,
+        "status": "analyzed",
+        "company_name": "Hetas",
+        "website": "https://hetas.co.uk",
+        "score": 10,
+        "cat": "其他"
+      },
+      {
+        "id": 353,
+        "status": "analyzed",
+        "company_name": "Honeywell",
+        "website": "https://automation.honeywell.com",
+        "score": 15,
+        "cat": "安装/集成"
+      },
+      {
+        "id": 354,
+        "status": "analyzed",
+        "company_name": "Gfgsafety",
+        "website": "https://gfgsafety.com",
+        "score": 0,
+        "cat": "其他"
+      },
+      {
+        "id": 355,
+        "status": "analyzed",
+        "company_name": "Watchgas",
+        "website": "https://watchgas.com",
+        "score": 0,
+        "cat": "其他"
+      },
+      {
+        "id": 356,
+        "status": "analyzed",
+        "company_name": "Teledynegasandflamedetection",
+        "website": "https://teledynegasandflamedetection.com",
+        "score": 10,
+        "cat": "其他"
+      },
+      {
+        "id": 358,
+        "status": "analyzed",
+        "company_name": "Bieler Lang",
+        "website": "https://bieler-lang.de",
+        "score": 20,
+        "cat": "其他"
+      },
+      {
+        "id": 359,
+        "status": "analyzed",
+        "company_name": "Marketresearchfuture",
+        "website": "https://marketresearchfuture.com",
+        "score": 20,
+        "cat": "其他"
+      },
+      {
+        "id": 360,
+        "status": "analyzed",
+        "company_name": "Vwr",
+        "website": "https://vwr.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 362,
+        "status": "analyzed",
+        "company_name": "Ibisworld",
+        "website": "https://ibisworld.com",
+        "score": 10,
+        "cat": "其他"
+      },
+      {
+        "id": 363,
+        "status": "analyzed",
+        "company_name": "Hfs Safety",
+        "website": "https://hfs-safety.com",
+        "score": 0,
+        "cat": "其他"
+      },
+      {
+        "id": 366,
+        "status": "analyzed",
+        "company_name": "Safetyequipment",
+        "website": "https://safetyequipment.org",
+        "score": 10,
+        "cat": "其他"
+      },
+      {
+        "id": 367,
+        "status": "analyzed",
+        "company_name": "Wuerth Industrie",
+        "website": "https://wuerth-industrie.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 368,
+        "status": "analyzed",
+        "company_name": "Wero",
+        "website": "https://wero.de",
+        "score": 20,
+        "cat": "经销/零售"
+      },
+      {
+        "id": 369,
+        "status": "analyzed",
+        "company_name": "Ilo",
+        "website": "https://ilo.org",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 370,
+        "status": "analyzed",
+        "company_name": "Seton",
+        "website": "https://seton.co.uk",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 371,
+        "status": "ignored",
+        "company_name": "Govt",
+        "website": "https://worksafe.govt.nz",
+        "score": 10,
+        "cat": "其他"
+      },
+      {
+        "id": 372,
+        "status": "analyzed",
+        "company_name": "Workplacecompliance",
+        "website": "https://workplacecompliance.net",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 373,
+        "status": "analyzed",
+        "company_name": "Ohscompliancesolutions",
+        "website": "https://ohscompliancesolutions.com.au",
+        "score": 20,
+        "cat": "其他"
+      },
+      {
+        "id": 374,
+        "status": "analyzed",
+        "company_name": "Scsafetycompliance",
+        "website": "https://scsafetycompliance.com",
+        "score": 20,
+        "cat": "其他"
+      },
+      {
+        "id": 375,
+        "status": "analyzed",
+        "company_name": "Mgssafetymanagement",
+        "website": "https://mgssafetymanagement.com",
+        "score": 20,
+        "cat": "其他"
+      },
+      {
+        "id": 376,
+        "status": "analyzed",
+        "company_name": "Brumbreathes",
+        "website": "https://brumbreathes.co.uk",
+        "score": 10,
+        "cat": "企业/IT"
+      },
+      {
+        "id": 377,
+        "status": "analyzed",
+        "company_name": "Samhe",
+        "website": "https://samhe.org.uk",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 378,
+        "status": "ignored",
+        "company_name": "Pima",
+        "website": "https://pima.gov",
+        "score": 10,
+        "cat": "其他"
+      },
+      {
+        "id": 380,
+        "status": "analyzed",
+        "company_name": "Facilitycompliancehub",
+        "website": "https://facilitycompliancehub.org",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 382,
+        "status": "analyzed",
+        "company_name": "Chartindustries",
+        "website": "https://chartindustries.com",
+        "score": 10,
+        "cat": "其他"
+      },
+      {
+        "id": 384,
+        "status": "analyzed",
+        "company_name": "Cksupply",
+        "website": "https://cksupply.com",
+        "score": 0,
+        "cat": "其他"
+      },
+      {
+        "id": 385,
+        "status": "ignored",
+        "company_name": "Bocgases",
+        "website": "https://bocgases.co.uk",
+        "score": 45,
+        "cat": "其他"
+      },
+      {
+        "id": 386,
+        "status": "analyzed",
+        "company_name": "Geergas",
+        "website": "https://geergas.com",
+        "score": 35,
+        "cat": "其他"
+      },
+      {
+        "id": 387,
+        "status": "analyzed",
+        "company_name": "Bulkreefsupply",
+        "website": "https://bulkreefsupply.com",
+        "score": 10,
+        "cat": "经销/零售"
+      },
+      {
+        "id": 388,
+        "status": "analyzed",
+        "company_name": "Koaedi",
+        "website": "https://koaedi.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 390,
+        "status": "analyzed",
+        "company_name": "Airbnb",
+        "website": "https://airbnb.com",
+        "score": 0,
+        "cat": "其他"
+      },
+      {
+        "id": 391,
+        "status": "analyzed",
+        "company_name": "Imdb",
+        "website": "https://m.imdb.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 392,
+        "status": "analyzed",
+        "company_name": "Britannica",
+        "website": "https://britannica.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 393,
+        "status": "analyzed",
+        "company_name": "Smartairfilters",
+        "website": "https://smartairfilters.com",
+        "score": 25,
+        "cat": "企业/IT"
+      },
+      {
+        "id": 394,
+        "status": "analyzed",
+        "company_name": "Acoem",
+        "website": "https://acoem.com",
+        "score": 0,
+        "cat": "其他"
+      },
+      {
+        "id": 396,
+        "status": "analyzed",
+        "company_name": "Accio",
+        "website": "https://accio.ai",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 397,
+        "status": "analyzed",
+        "company_name": "Thomasnet",
+        "website": "https://thomasnet.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 398,
+        "status": "approved",
+        "company_name": "Ecomesure",
+        "website": "https://ecomesure.com",
+        "score": 85,
+        "cat": "安装/集成"
+      },
+      {
+        "id": 399,
+        "status": "analyzed",
+        "company_name": "Microchip",
+        "website": "https://microchip.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 400,
+        "status": "analyzed",
+        "company_name": "Cleanairmonitoringsolutions",
+        "website": "https://cleanairmonitoringsolutions.com",
+        "score": 0,
+        "cat": "excluded"
+      },
+      {
+        "id": 401,
+        "status": "analyzed",
+        "company_name": "Horiba",
+        "website": "https://horiba.com",
+        "score": 15,
+        "cat": "excluded"
+      },
+      {
+        "id": 402,
+        "status": "analyzed",
+        "company_name": "Kunakair",
+        "website": "https://kunakair.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 403,
+        "status": "analyzed",
+        "company_name": "Kenvitech",
+        "website": "https://eng.kenvitech.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 404,
+        "status": "analyzed",
+        "company_name": "Aqicn",
+        "website": "https://aqicn.org",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 405,
+        "status": "analyzed",
+        "company_name": "Jnrelec",
+        "website": "https://jnrelec.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 406,
+        "status": "analyzed",
+        "company_name": "Directindustry",
+        "website": "https://directindustry.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 409,
+        "status": "ignored",
+        "company_name": "Airnow",
+        "website": "https://airnow.gov",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 411,
+        "status": "ignored",
+        "company_name": "Osha",
+        "website": "https://osha.gov",
+        "score": 5,
+        "cat": "excluded"
+      },
+      {
+        "id": 412,
+        "status": "ignored",
+        "company_name": "In",
+        "website": "https://in.gov",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 413,
+        "status": "analyzed",
+        "company_name": "Theconcept",
+        "website": "https://theconcept.global",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 415,
+        "status": "analyzed",
+        "company_name": "Getawair",
+        "website": "https://getawair.com",
+        "score": 0,
+        "cat": "unclear"
+      },
+      {
+        "id": 416,
+        "status": "analyzed",
+        "company_name": "Tsi",
+        "website": "https://tsi.com",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 417,
+        "status": "analyzed",
+        "company_name": "Iaqdetectors",
+        "website": "https://iaqdetectors.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 418,
+        "status": "ignored",
+        "company_name": "Nih",
+        "website": "https://pubmed.ncbi.nlm.nih.gov",
+        "score": 5,
+        "cat": "excluded"
+      },
+      {
+        "id": 419,
+        "status": "ignored",
+        "company_name": "Gem",
+        "website": "https://mkp.gem.gov.in",
+        "score": 15,
+        "cat": "excluded"
+      },
+      {
+        "id": 420,
+        "status": "analyzed",
+        "company_name": "Zryqsw",
+        "website": "https://zryqsw.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 421,
+        "status": "analyzed",
+        "company_name": "Kvartech",
+        "website": "https://kvartech.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 422,
+        "status": "analyzed",
+        "company_name": "Lascarelectronics",
+        "website": "https://lascarelectronics.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 423,
+        "status": "analyzed",
+        "company_name": "Breathesafeair",
+        "website": "https://breathesafeair.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 424,
+        "status": "analyzed",
+        "company_name": "Saswell",
+        "website": "https://saswell.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 425,
+        "status": "analyzed",
+        "company_name": "Innovationnewsnetwork",
+        "website": "https://innovationnewsnetwork.com",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 426,
+        "status": "analyzed",
+        "company_name": "Softdb",
+        "website": "https://softdb.com",
+        "score": 0,
+        "cat": "unclear"
+      },
+      {
+        "id": 428,
+        "status": "analyzed",
+        "company_name": "Macview",
+        "website": "https://macview.eu",
+        "score": 30,
+        "cat": "excluded"
+      },
+      {
+        "id": 429,
+        "status": "analyzed",
+        "company_name": "Orcaa",
+        "website": "https://orcaa.org",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 430,
+        "status": "analyzed",
+        "company_name": "Mdpi",
+        "website": "https://mdpi.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 431,
+        "status": "analyzed",
+        "company_name": "Hisoair",
+        "website": "https://hisoair.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 432,
+        "status": "analyzed",
+        "company_name": "Particlesplus",
+        "website": "https://particlesplus.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 433,
+        "status": "analyzed",
+        "company_name": "Jbhifi",
+        "website": "https://jbhifi.com.au",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 434,
+        "status": "analyzed",
+        "company_name": "Home Assistant",
+        "website": "https://home-assistant.io",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 435,
+        "status": "analyzed",
+        "company_name": "Lab Science",
+        "website": "https://lab-science.eu",
+        "score": 0,
+        "cat": "integrator"
+      },
+      {
+        "id": 436,
+        "status": "analyzed",
+        "company_name": "Johnsoncontrols",
+        "website": "https://johnsoncontrols.hr",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 437,
+        "status": "approved",
+        "company_name": "Bsiddc",
+        "website": "https://bsiddc.com",
+        "score": 78,
+        "cat": "integrator"
+      },
+      {
+        "id": 438,
+        "status": "analyzed",
+        "company_name": "Irecruit",
+        "website": "https://irecruit.co",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 439,
+        "status": "analyzed",
+        "company_name": "Hvacinsider",
+        "website": "https://hvacinsider.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 440,
+        "status": "approved",
+        "company_name": "E Nergys",
+        "website": "https://e-nergys.com",
+        "score": 80,
+        "cat": "integrator"
+      },
+      {
+        "id": 441,
+        "status": "analyzed",
+        "company_name": "Researchgate",
+        "website": "https://researchgate.net",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 443,
+        "status": "analyzed",
+        "company_name": "Mn",
+        "website": "https://health.state.mn.us",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 445,
+        "status": "analyzed",
+        "company_name": "Vertexeng",
+        "website": "https://vertexeng.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 446,
+        "status": "analyzed",
+        "company_name": "Envirovent",
+        "website": "https://envirovent.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 447,
+        "status": "approved",
+        "company_name": "Hrv Group",
+        "website": "https://hrv-group.com",
+        "score": 72,
+        "cat": "integrator"
+      },
+      {
+        "id": 450,
+        "status": "analyzed",
+        "company_name": "Linguee",
+        "website": "https://linguee.fr",
+        "score": 5,
+        "cat": "excluded"
+      },
+      {
+        "id": 452,
+        "status": "approved",
+        "company_name": "Spie",
+        "website": "https://spie.com",
+        "score": 75,
+        "cat": "integrator"
+      },
+      {
+        "id": 453,
+        "status": "analyzed",
+        "company_name": "Iconics",
+        "website": "https://iconics.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 454,
+        "status": "analyzed",
+        "company_name": "Ifma",
+        "website": "https://knowledgelibrary.ifma.org",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 457,
+        "status": "approved",
+        "company_name": "Hvacwholesaledirect",
+        "website": "https://hvacwholesaledirect.com",
+        "score": 85,
+        "cat": "unclear"
+      },
+      {
+        "id": 459,
+        "status": "approved",
+        "company_name": "2jsupply",
+        "website": "https://2jsupply.com",
+        "score": 75,
+        "cat": "distributor"
+      },
+      {
+        "id": 460,
+        "status": "analyzed",
+        "company_name": "Ferguson",
+        "website": "https://ferguson.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 461,
+        "status": "analyzed",
+        "company_name": "Supplyhouse",
+        "website": "https://supplyhouse.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 463,
+        "status": "approved",
+        "company_name": "Partshnc",
+        "website": "https://partshnc.com",
+        "score": 70,
+        "cat": "distributor"
+      },
+      {
+        "id": 464,
+        "status": "analyzed",
+        "company_name": "Hvacparts Direct",
+        "website": "https://hvacparts-direct.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 465,
+        "status": "analyzed",
+        "company_name": "Nwsnext",
+        "website": "https://nwsnext.com",
+        "score": 15,
+        "cat": "excluded"
+      },
+      {
+        "id": 466,
+        "status": "analyzed",
+        "company_name": "Tek",
+        "website": "https://tek.com",
+        "score": 15,
+        "cat": "excluded"
+      },
+      {
+        "id": 468,
+        "status": "ignored",
+        "company_name": "Business",
+        "website": "https://business.gov.lv",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 471,
+        "status": "analyzed",
+        "company_name": "Marketsandmarkets",
+        "website": "https://marketsandmarkets.com",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 472,
+        "status": "analyzed",
+        "company_name": "Industrialphysics",
+        "website": "https://industrialphysics.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 473,
+        "status": "analyzed",
+        "company_name": "Medisur",
+        "website": "https://medisur.fr",
+        "score": 15,
+        "cat": "unclear"
+      },
+      {
+        "id": 474,
+        "status": "analyzed",
+        "company_name": "Supersafetyservices",
+        "website": "https://supersafetyservices.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 475,
+        "status": "analyzed",
+        "company_name": "Isweek",
+        "website": "https://isweek.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 476,
+        "status": "analyzed",
+        "company_name": "Ankorstore",
+        "website": "https://ankorstore.com",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 477,
+        "status": "analyzed",
+        "company_name": "Hktdc",
+        "website": "https://sourcing.hktdc.com",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 478,
+        "status": "analyzed",
+        "company_name": "Oohinord",
+        "website": "https://oohinord.no",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 479,
+        "status": "analyzed",
+        "company_name": "Ncttrac",
+        "website": "https://ncttrac.org",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 480,
+        "status": "analyzed",
+        "company_name": "Sensor Control",
+        "website": "https://sensor-control.ae",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 481,
+        "status": "analyzed",
+        "company_name": "Safelincs",
+        "website": "https://safelincs.co.uk",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 484,
+        "status": "analyzed",
+        "company_name": "Connexion Emploi",
+        "website": "https://connexion-emploi.com",
+        "score": 15,
+        "cat": "excluded"
+      },
+      {
+        "id": 485,
+        "status": "analyzed",
+        "company_name": "Fcsafety",
+        "website": "https://fcsafety.com",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 486,
+        "status": "analyzed",
+        "company_name": "Nationalsafetyinc",
+        "website": "https://nationalsafetyinc.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 487,
+        "status": "analyzed",
+        "company_name": "Spc",
+        "website": "https://spc.int",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 489,
+        "status": "analyzed",
+        "company_name": "Mitti",
+        "website": "https://mitti.com",
+        "score": 25,
+        "cat": "excluded"
+      },
+      {
+        "id": 490,
+        "status": "analyzed",
+        "company_name": "3m",
+        "website": "https://3m.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 491,
+        "status": "analyzed",
+        "company_name": "Sei",
+        "website": "https://sei.org",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 492,
+        "status": "ignored",
+        "company_name": "Richmond",
+        "website": "https://richmond.gov.uk",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 493,
+        "status": "approved",
+        "company_name": "Nexelec",
+        "website": "https://actualites.nexelec.fr",
+        "score": 85,
+        "cat": "brand"
+      },
+      {
+        "id": 494,
+        "status": "analyzed",
+        "company_name": "Cleancitiescampaign",
+        "website": "https://cleancitiescampaign.org",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 495,
+        "status": "ignored",
+        "company_name": "Veolia",
+        "website": "https://ofis.veolia.com",
+        "score": 45,
+        "cat": "unclear"
+      },
+      {
+        "id": 496,
+        "status": "analyzed",
+        "company_name": "Trccompanies",
+        "website": "https://trccompanies.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 497,
+        "status": "analyzed",
+        "company_name": "Keninstitute",
+        "website": "https://keninstitute.com",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 498,
+        "status": "analyzed",
+        "company_name": "Forcetechnology",
+        "website": "https://forcetechnology.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 499,
+        "status": "ignored",
+        "company_name": "Colorado",
+        "website": "https://cdphe.colorado.gov",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 500,
+        "status": "analyzed",
+        "company_name": "Hse",
+        "website": "https://healthservice.hse.ie",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 501,
+        "status": "analyzed",
+        "company_name": "Highergov",
+        "website": "https://highergov.com",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 502,
+        "status": "analyzed",
+        "company_name": "Robotics",
+        "website": "https://robotics.org.za",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 503,
+        "status": "analyzed",
+        "company_name": "Brewersassociation",
+        "website": "https://brewersassociation.org",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 504,
+        "status": "analyzed",
+        "company_name": "Gasdog",
+        "website": "https://gasdog.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 505,
+        "status": "analyzed",
+        "company_name": "Fyind",
+        "website": "https://fyind.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 511,
+        "status": "analyzed",
+        "company_name": "Acez",
+        "website": "https://acez.com.sg",
+        "score": 0,
+        "cat": "unclear"
+      },
+      {
+        "id": 512,
+        "status": "analyzed",
+        "company_name": "Testmeter",
+        "website": "https://testmeter.sg",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 515,
+        "status": "analyzed",
+        "company_name": "Aqmesh",
+        "website": "https://aqmesh.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 516,
+        "status": "analyzed",
+        "company_name": "Tera Sensor",
+        "website": "https://tera-sensor.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 517,
+        "status": "analyzed",
+        "company_name": "Senseair",
+        "website": "https://senseair.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 518,
+        "status": "analyzed",
+        "company_name": "Industrystock",
+        "website": "https://industrystock.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 519,
+        "status": "analyzed",
+        "company_name": "Scentroid",
+        "website": "https://scentroid.com",
+        "score": 25,
+        "cat": "excluded"
+      },
+      {
+        "id": 520,
+        "status": "analyzed",
+        "company_name": "Mouser",
+        "website": "https://mouser.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 521,
+        "status": "approved",
+        "company_name": "Pine Environmental",
+        "website": "https://pine-environmental.com",
+        "score": 85,
+        "cat": "distributor"
+      },
+      {
+        "id": 522,
+        "status": "analyzed",
+        "company_name": "Nelsonlabs",
+        "website": "https://nelsonlabs.com",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 523,
+        "status": "analyzed",
+        "company_name": "Chatsworth",
+        "website": "https://chatsworth.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 525,
+        "status": "analyzed",
+        "company_name": "Dicksondata",
+        "website": "https://dicksondata.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 526,
+        "status": "approved",
+        "company_name": "Grisk",
+        "website": "https://grisk.com",
+        "score": 62,
+        "cat": "manufacturer-2nd-source"
+      },
+      {
+        "id": 529,
+        "status": "analyzed",
+        "company_name": "Tellusensors",
+        "website": "https://tellusensors.com",
+        "score": 25,
+        "cat": "excluded"
+      },
+      {
+        "id": 530,
+        "status": "analyzed",
+        "company_name": "Mydevices",
+        "website": "https://mydevices.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 531,
+        "status": "analyzed",
+        "company_name": "Airveda",
+        "website": "https://airveda.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 532,
+        "status": "analyzed",
+        "company_name": "Pranaair",
+        "website": "https://pranaair.com",
+        "score": 20,
+        "cat": "unclear"
+      },
+      {
+        "id": 533,
+        "status": "analyzed",
+        "company_name": "Inven",
+        "website": "https://inven.ai",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 534,
+        "status": "analyzed",
+        "company_name": "Controlsys",
+        "website": "https://controlsys.org",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 539,
+        "status": "approved",
+        "company_name": "Controltechinc",
+        "website": "https://controltechinc.com",
+        "score": 85,
+        "cat": "integrator"
+      },
+      {
+        "id": 540,
+        "status": "approved",
+        "company_name": "C Cgroup",
+        "website": "https://c-cgroup.com",
+        "score": 85,
+        "cat": "unclear"
+      },
+      {
+        "id": 542,
+        "status": "analyzed",
+        "company_name": "Johnsoncontrols",
+        "website": "https://docs.johnsoncontrols.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 543,
+        "status": "analyzed",
+        "company_name": "Iaqcorp",
+        "website": "https://iaqcorp.com",
+        "score": 25,
+        "cat": "excluded"
+      },
+      {
+        "id": 544,
+        "status": "analyzed",
+        "company_name": "Floridapuremaintenance",
+        "website": "https://floridapuremaintenance.com",
+        "score": 0,
+        "cat": "monitoring-service"
+      },
+      {
+        "id": 545,
+        "status": "analyzed",
+        "company_name": "Pacelabs",
+        "website": "https://pacelabs.com",
+        "score": 25,
+        "cat": "excluded"
+      },
+      {
+        "id": 546,
+        "status": "ignored",
+        "company_name": "Aireserv",
+        "website": "https://aireserv.com",
+        "score": 45,
+        "cat": "integrator"
+      },
+      {
+        "id": 548,
+        "status": "analyzed",
+        "company_name": "Greenhomesolutions",
+        "website": "https://greenhomesolutions.com",
+        "score": 0,
+        "cat": "monitoring-service"
+      },
+      {
+        "id": 549,
+        "status": "analyzed",
+        "company_name": "Eliteelectricandair",
+        "website": "https://eliteelectricandair.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 550,
+        "status": "analyzed",
+        "company_name": "Accenv",
+        "website": "https://accenv.com",
+        "score": 30,
+        "cat": "monitoring-service"
+      },
+      {
+        "id": 551,
+        "status": "analyzed",
+        "company_name": "Iac2",
+        "website": "https://iac2.org",
+        "score": 15,
+        "cat": "excluded"
+      },
+      {
+        "id": 552,
+        "status": "analyzed",
+        "company_name": "Hseblog",
+        "website": "https://hseblog.com",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 553,
+        "status": "analyzed",
+        "company_name": "Merriam Webster",
+        "website": "https://merriam-webster.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 554,
+        "status": "ignored",
+        "company_name": "Cdc",
+        "website": "https://cdc.gov",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 555,
+        "status": "analyzed",
+        "company_name": "Lung",
+        "website": "https://lung.org",
+        "score": 15,
+        "cat": "excluded"
+      },
+      {
+        "id": 556,
+        "status": "analyzed",
+        "company_name": "Proptechoutlook",
+        "website": "https://smart-building.proptechoutlook.com",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 557,
+        "status": "analyzed",
+        "company_name": "Ensun",
+        "website": "https://ensun.io",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 560,
+        "status": "approved",
+        "company_name": "Fsg",
+        "website": "https://fsg.com",
+        "score": 72,
+        "cat": "integrator"
+      },
+      {
+        "id": 562,
+        "status": "approved",
+        "company_name": "Bakerdist",
+        "website": "https://bakerdist.com",
+        "score": 90,
+        "cat": "unclear"
+      },
+      {
+        "id": 565,
+        "status": "analyzed",
+        "company_name": "Arrow",
+        "website": "https://arrow.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 566,
+        "status": "analyzed",
+        "company_name": "Tevet",
+        "website": "https://tevet.com",
+        "score": 30,
+        "cat": "excluded"
+      },
+      {
+        "id": 567,
+        "status": "analyzed",
+        "company_name": "Market",
+        "website": "https://scoop.market.us",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 568,
+        "status": "analyzed",
+        "company_name": "Yokogawa",
+        "website": "https://tmi.yokogawa.com",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 569,
+        "status": "analyzed",
+        "company_name": "Akglobaltech",
+        "website": "https://akglobaltech.com",
+        "score": 15,
+        "cat": "excluded"
+      },
+      {
+        "id": 570,
+        "status": "analyzed",
+        "company_name": "Alcomate",
+        "website": "https://alcomate.net",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 571,
+        "status": "analyzed",
+        "company_name": "Bactrack",
+        "website": "https://bactrack.com",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 572,
+        "status": "analyzed",
+        "company_name": "Ec21",
+        "website": "https://ec21.com",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 573,
+        "status": "analyzed",
+        "company_name": "Szbanuo",
+        "website": "https://szbanuo.com",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 574,
+        "status": "analyzed",
+        "company_name": "Tradewheel",
+        "website": "https://tradewheel.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 575,
+        "status": "analyzed",
+        "company_name": "Globaltradeplaza",
+        "website": "https://globaltradeplaza.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 576,
+        "status": "analyzed",
+        "company_name": "Adt",
+        "website": "https://adt.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 578,
+        "status": "analyzed",
+        "company_name": "Kidde",
+        "website": "https://kidde.com",
+        "score": 15,
+        "cat": "excluded"
+      },
+      {
+        "id": 579,
+        "status": "analyzed",
+        "company_name": "Consumerreports",
+        "website": "https://consumerreports.org",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 580,
+        "status": "analyzed",
+        "company_name": "Honeywell",
+        "website": "https://buildings.honeywell.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 581,
+        "status": "analyzed",
+        "company_name": "Brkelectronics",
+        "website": "https://brkelectronics.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 582,
+        "status": "analyzed",
+        "company_name": "Redcross",
+        "website": "https://redcross.org",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 583,
+        "status": "analyzed",
+        "company_name": "Msasafety",
+        "website": "https://us.msasafety.com",
+        "score": 15,
+        "cat": "excluded"
+      },
+      {
+        "id": 584,
+        "status": "approved",
+        "company_name": "Buygasmonitors",
+        "website": "https://buygasmonitors.com",
+        "score": 76,
+        "cat": "distributor"
+      },
+      {
+        "id": 585,
+        "status": "analyzed",
+        "company_name": "Macurco",
+        "website": "https://macurco.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 587,
+        "status": "approved",
+        "company_name": "Pksafety",
+        "website": "https://pksafety.com",
+        "score": 75,
+        "cat": "distributor"
+      },
+      {
+        "id": 588,
+        "status": "analyzed",
+        "company_name": "Ronixtools",
+        "website": "https://ronixtools.com",
+        "score": 15,
+        "cat": "excluded"
+      },
+      {
+        "id": 589,
+        "status": "approved",
+        "company_name": "Aoe",
+        "website": "https://aoe.net",
+        "score": 72,
+        "cat": "distributor"
+      },
+      {
+        "id": 590,
+        "status": "analyzed",
+        "company_name": "Mallory",
+        "website": "https://mallory.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 591,
+        "status": "analyzed",
+        "company_name": "Asiongs",
+        "website": "https://asiongs.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 593,
+        "status": "analyzed",
+        "company_name": "Baymrosafety",
+        "website": "https://baymrosafety.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 594,
+        "status": "analyzed",
+        "company_name": "Cambridge",
+        "website": "https://dictionary.cambridge.org",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 595,
+        "status": "ignored",
+        "company_name": "Bls",
+        "website": "https://bls.gov",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 596,
+        "status": "analyzed",
+        "company_name": "Thefreedictionary",
+        "website": "https://thefreedictionary.com",
+        "score": 5,
+        "cat": "excluded"
+      },
+      {
+        "id": 597,
+        "status": "analyzed",
+        "company_name": "Dictionary",
+        "website": "https://dictionary.com",
+        "score": 5,
+        "cat": "excluded"
+      },
+      {
+        "id": 598,
+        "status": "analyzed",
+        "company_name": "Clevelandclinic",
+        "website": "https://my.clevelandclinic.org",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 599,
+        "status": "analyzed",
+        "company_name": "Onetonline",
+        "website": "https://onetonline.org",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 600,
+        "status": "analyzed",
+        "company_name": "Vocabulary",
+        "website": "https://vocabulary.com",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 601,
+        "status": "analyzed",
+        "company_name": "Zoominfo",
+        "website": "https://zoominfo.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 602,
+        "status": "analyzed",
+        "company_name": "Csregs",
+        "website": "https://csregs.com",
+        "score": 15,
+        "cat": "excluded"
+      },
+      {
+        "id": 603,
+        "status": "analyzed",
+        "company_name": "Clicksafety",
+        "website": "https://clicksafety.com",
+        "score": 15,
+        "cat": "excluded"
+      },
+      {
+        "id": 604,
+        "status": "analyzed",
+        "company_name": "Hsi",
+        "website": "https://hsi.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 605,
+        "status": "analyzed",
+        "company_name": "American Safetyllc",
+        "website": "https://american-safetyllc.com",
+        "score": 25,
+        "cat": "excluded"
+      },
+      {
+        "id": 606,
+        "status": "analyzed",
+        "company_name": "Alvordschools",
+        "website": "https://alvordschools.org",
+        "score": 15,
+        "cat": "excluded"
+      },
+      {
+        "id": 607,
+        "status": "analyzed",
+        "company_name": "Nj",
+        "website": "https://riverside.k12.nj.us",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 608,
+        "status": "analyzed",
+        "company_name": "Greatschools",
+        "website": "https://greatschools.org",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 609,
+        "status": "analyzed",
+        "company_name": "Schooldigger",
+        "website": "https://schooldigger.com",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 610,
+        "status": "analyzed",
+        "company_name": "Niche",
+        "website": "https://niche.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 611,
+        "status": "analyzed",
+        "company_name": "Sharpschool",
+        "website": "https://riversidees.sharpschool.net",
+        "score": 5,
+        "cat": "excluded"
+      },
+      {
+        "id": 614,
+        "status": "analyzed",
+        "company_name": "Airflow",
+        "website": "https://airflow.com",
+        "score": 0,
+        "cat": "manufacturer-2nd-source"
+      },
+      {
+        "id": 615,
+        "status": "analyzed",
+        "company_name": "Atlascopco",
+        "website": "https://atlascopco.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 616,
+        "status": "analyzed",
+        "company_name": "Nexelec",
+        "website": "https://nexelec.eu",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 617,
+        "status": "analyzed",
+        "company_name": "Gov",
+        "website": "https://gov.uk",
+        "score": 0,
+        "cat": "excluded"
+      },
+      {
+        "id": 619,
+        "status": "approved",
+        "company_name": "Rs Online",
+        "website": "https://uk.rs-online.com",
+        "score": 75,
+        "cat": "distributor"
+      },
+      {
+        "id": 620,
+        "status": "approved",
+        "company_name": "Weathershop",
+        "website": "https://weathershop.co.uk",
+        "score": 76,
+        "cat": "distributor"
+      },
+      {
+        "id": 621,
+        "status": "analyzed",
+        "company_name": "Matterdevices",
+        "website": "https://matterdevices.io",
+        "score": 15,
+        "cat": "excluded"
+      },
+      {
+        "id": 622,
+        "status": "approved",
+        "company_name": "Scientificlabs",
+        "website": "https://scientificlabs.co.uk",
+        "score": 65,
+        "cat": "distributor"
+      },
+      {
+        "id": 627,
+        "status": "ignored",
+        "company_name": "Aspect",
+        "website": "https://aspect.co.uk",
+        "score": 45,
+        "cat": "unclear"
+      },
+      {
+        "id": 628,
+        "status": "analyzed",
+        "company_name": "Bpec",
+        "website": "https://bpec.org.uk",
+        "score": 35,
+        "cat": "excluded"
+      },
+      {
+        "id": 629,
+        "status": "analyzed",
+        "company_name": "Trtest",
+        "website": "https://trtest.com",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 630,
+        "status": "approved",
+        "company_name": "Pass",
+        "website": "https://pass.co.uk",
+        "score": 50,
+        "cat": "unclear"
+      },
+      {
+        "id": 631,
+        "status": "analyzed",
+        "company_name": "Gambica",
+        "website": "https://gambica.org.uk",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 632,
+        "status": "approved",
+        "company_name": "Test Meter",
+        "website": "https://test-meter.co.uk",
+        "score": 75,
+        "cat": "distributor"
+      },
+      {
+        "id": 633,
+        "status": "analyzed",
+        "company_name": "Valuemed",
+        "website": "https://valuemed.co.uk",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 634,
+        "status": "analyzed",
+        "company_name": "Breathalyzer",
+        "website": "https://breathalyzer.co.uk",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 635,
+        "status": "analyzed",
+        "company_name": "Ukdrugtesting",
+        "website": "https://ukdrugtesting.co.uk",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 636,
+        "status": "analyzed",
+        "company_name": "Biospace",
+        "website": "https://biospace.com",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 637,
+        "status": "analyzed",
+        "company_name": "Breathalyserdirect",
+        "website": "https://breathalyserdirect.co.uk",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 638,
+        "status": "analyzed",
+        "company_name": "Narcocheck",
+        "website": "https://narcocheck.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 639,
+        "status": "analyzed",
+        "company_name": "Onbuy",
+        "website": "https://onbuy.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 640,
+        "status": "analyzed",
+        "company_name": "Qogita",
+        "website": "https://qogita.com",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 641,
+        "status": "analyzed",
+        "company_name": "Fireprotectiononline",
+        "website": "https://fireprotectiononline.co.uk",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 643,
+        "status": "analyzed",
+        "company_name": "Aico",
+        "website": "https://aico.co.uk",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 644,
+        "status": "analyzed",
+        "company_name": "Gassaferegister",
+        "website": "https://gassaferegister.co.uk",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 645,
+        "status": "analyzed",
+        "company_name": "3m",
+        "website": "https://3m.co.uk",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 646,
+        "status": "analyzed",
+        "company_name": "Denios",
+        "website": "https://denios.co.uk",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 647,
+        "status": "analyzed",
+        "company_name": "Direct365",
+        "website": "https://direct365.co.uk",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 648,
+        "status": "analyzed",
+        "company_name": "Ericsson",
+        "website": "https://ericsson.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 649,
+        "status": "ignored",
+        "company_name": "Hse",
+        "website": "https://hse.gov.uk",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 650,
+        "status": "analyzed",
+        "company_name": "Protectivewearuk",
+        "website": "https://protectivewearuk.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 651,
+        "status": "analyzed",
+        "company_name": "Cscks",
+        "website": "https://cscks.net",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 652,
+        "status": "analyzed",
+        "company_name": "Kutakrock",
+        "website": "https://kutakrock.com",
+        "score": 5,
+        "cat": "excluded"
+      },
+      {
+        "id": 653,
+        "status": "analyzed",
+        "company_name": "Bureauveritas",
+        "website": "https://bureauveritas.co.uk",
+        "score": 25,
+        "cat": "excluded"
+      },
+      {
+        "id": 654,
+        "status": "analyzed",
+        "company_name": "Parliament",
+        "website": "https://commonslibrary.parliament.uk",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 655,
+        "status": "analyzed",
+        "company_name": "Tandfonline",
+        "website": "https://tandfonline.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 656,
+        "status": "ignored",
+        "company_name": "Veolia",
+        "website": "https://veolia.com",
+        "score": 45,
+        "cat": "unclear"
+      },
+      {
+        "id": 657,
+        "status": "analyzed",
+        "company_name": "Som",
+        "website": "https://som.org.uk",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 658,
+        "status": "analyzed",
+        "company_name": "Tempcon",
+        "website": "https://tempcon.co.uk",
+        "score": 0,
+        "cat": "unclear"
+      },
+      {
+        "id": 662,
+        "status": "analyzed",
+        "company_name": "Currys",
+        "website": "https://currys.co.uk",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 663,
+        "status": "analyzed",
+        "company_name": "Tapo",
+        "website": "https://uk.store.tapo.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 664,
+        "status": "analyzed",
+        "company_name": "Box",
+        "website": "https://box.co.uk",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 665,
+        "status": "analyzed",
+        "company_name": "Iaqservices",
+        "website": "https://iaqservices.co.uk",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 666,
+        "status": "analyzed",
+        "company_name": "Assurityconsulting",
+        "website": "https://assurityconsulting.co.uk",
+        "score": 30,
+        "cat": "unclear"
+      },
+      {
+        "id": 670,
+        "status": "ignored",
+        "company_name": "Sweco",
+        "website": "https://sweco.co.uk",
+        "score": 45,
+        "cat": "unclear"
+      },
+      {
+        "id": 671,
+        "status": "analyzed",
+        "company_name": "Aqconsultants",
+        "website": "https://aqconsultants.co.uk",
+        "score": 25,
+        "cat": "excluded"
+      },
+      {
+        "id": 672,
+        "status": "analyzed",
+        "company_name": "Checkatrade",
+        "website": "https://checkatrade.com",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 674,
+        "status": "analyzed",
+        "company_name": "Bmigroup",
+        "website": "https://bmigroup.com",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 675,
+        "status": "analyzed",
+        "company_name": "Priva",
+        "website": "https://priva.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 677,
+        "status": "analyzed",
+        "company_name": "Serverroomenvironments",
+        "website": "https://serverroomenvironments.co.uk",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 679,
+        "status": "analyzed",
+        "company_name": "Whitehorsescientific",
+        "website": "https://whitehorsescientific.co.uk",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 681,
+        "status": "analyzed",
+        "company_name": "Ashtead Technology",
+        "website": "https://ashtead-technology.com",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 682,
+        "status": "analyzed",
+        "company_name": "Nhbs",
+        "website": "https://nhbs.com",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 683,
+        "status": "analyzed",
+        "company_name": "Canada",
+        "website": "https://canada.ca",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 687,
+        "status": "analyzed",
+        "company_name": "Toshiba Hvacspares",
+        "website": "https://toshiba-hvacspares.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 689,
+        "status": "analyzed",
+        "company_name": "Rocketreach",
+        "website": "https://rocketreach.co",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 690,
+        "status": "analyzed",
+        "company_name": "Internationalgasdetectors",
+        "website": "https://internationalgasdetectors.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 691,
+        "status": "analyzed",
+        "company_name": "Gds Technologies",
+        "website": "https://gds-technologies.co.uk",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 693,
+        "status": "analyzed",
+        "company_name": "Alphasense",
+        "website": "https://alphasense.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 694,
+        "status": "analyzed",
+        "company_name": "Telenco",
+        "website": "https://telenco.uk",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 695,
+        "status": "analyzed",
+        "company_name": "Speedyservices",
+        "website": "https://speedyservices.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 696,
+        "status": "analyzed",
+        "company_name": "Avtech",
+        "website": "https://avtech.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 698,
+        "status": "ignored",
+        "company_name": "Data",
+        "website": "https://data.gov.uk",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 699,
+        "status": "analyzed",
+        "company_name": "Phoenixcontrol",
+        "website": "https://phoenixcontrol.co.uk",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 700,
+        "status": "ignored",
+        "company_name": "Villanova",
+        "website": "https://connections.villanova.edu",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 701,
+        "status": "analyzed",
+        "company_name": "Longworth",
+        "website": "https://longworth.co.uk",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 702,
+        "status": "analyzed",
+        "company_name": "Brake",
+        "website": "https://brake.co.uk",
+        "score": 0,
+        "cat": "unclear"
+      },
+      {
+        "id": 703,
+        "status": "analyzed",
+        "company_name": "Keesafety",
+        "website": "https://keesafety.co.uk",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 704,
+        "status": "analyzed",
+        "company_name": "Ltd",
+        "website": "https://eurosafe.ltd.uk",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 705,
+        "status": "analyzed",
+        "company_name": "Businesscompanion",
+        "website": "https://businesscompanion.info",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 706,
+        "status": "analyzed",
+        "company_name": "Twwholesale",
+        "website": "https://twwholesale.co.uk",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 708,
+        "status": "analyzed",
+        "company_name": "Ventusa",
+        "website": "https://ventusa.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 710,
+        "status": "approved",
+        "company_name": "Ventilation Installers",
+        "website": "https://ventilation-installers.co.uk",
+        "score": 82,
+        "cat": "integrator"
+      },
+      {
+        "id": 711,
+        "status": "analyzed",
+        "company_name": "Trustatrader",
+        "website": "https://trustatrader.com",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 712,
+        "status": "analyzed",
+        "company_name": "Moffittcorp",
+        "website": "https://moffittcorp.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 713,
+        "status": "approved",
+        "company_name": "Adiglobaldistribution",
+        "website": "https://en.adiglobaldistribution.ca",
+        "score": 72,
+        "cat": "distributor"
+      },
+      {
+        "id": 714,
+        "status": "analyzed",
+        "company_name": "Ktld",
+        "website": "https://ktld.ca",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 716,
+        "status": "analyzed",
+        "company_name": "Nubicom",
+        "website": "https://nubicom.co.kr",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 717,
+        "status": "analyzed",
+        "company_name": "Connectorsupplier",
+        "website": "https://connectorsupplier.com",
+        "score": 15,
+        "cat": "excluded"
+      },
+      {
+        "id": 718,
+        "status": "analyzed",
+        "company_name": "Draeger",
+        "website": "https://draeger.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 719,
+        "status": "analyzed",
+        "company_name": "Tvcmall",
+        "website": "https://tvcmall.com",
+        "score": 25,
+        "cat": "excluded"
+      },
+      {
+        "id": 720,
+        "status": "approved",
+        "company_name": "Firstalertstore",
+        "website": "https://firstalertstore.com",
+        "score": 68,
+        "cat": "distributor"
+      },
+      {
+        "id": 721,
+        "status": "analyzed",
+        "company_name": "Ctigas",
+        "website": "https://ctigas.com",
+        "score": 25,
+        "cat": "excluded"
+      },
+      {
+        "id": 722,
+        "status": "analyzed",
+        "company_name": "Grainger",
+        "website": "https://grainger.com",
+        "score": 0,
+        "cat": "unclear"
+      },
+      {
+        "id": 723,
+        "status": "analyzed",
+        "company_name": "Sourceready",
+        "website": "https://sourceready.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 724,
+        "status": "analyzed",
+        "company_name": "Anbusafety",
+        "website": "https://anbusafety.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 725,
+        "status": "analyzed",
+        "company_name": "Gonowsafety",
+        "website": "https://gonowsafety.com",
+        "score": 15,
+        "cat": "excluded"
+      },
+      {
+        "id": 726,
+        "status": "analyzed",
+        "company_name": "Ohsonline",
+        "website": "https://buyersguide.ohsonline.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 727,
+        "status": "analyzed",
+        "company_name": "Maxonsupplies",
+        "website": "https://maxonsupplies.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 728,
+        "status": "analyzed",
+        "company_name": "Statista",
+        "website": "https://statista.com",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 729,
+        "status": "analyzed",
+        "company_name": "Rhprisk",
+        "website": "https://rhprisk.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 730,
+        "status": "analyzed",
+        "company_name": "Sgsgalson",
+        "website": "https://sgsgalson.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 731,
+        "status": "approved",
+        "company_name": "Indoordoctor",
+        "website": "https://indoordoctor.com",
+        "score": 75,
+        "cat": "monitoring-service"
+      },
+      {
+        "id": 732,
+        "status": "analyzed",
+        "company_name": "Indoorscience",
+        "website": "https://indoorscience.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 733,
+        "status": "analyzed",
+        "company_name": "Gleassociates",
+        "website": "https://gleassociates.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 734,
+        "status": "analyzed",
+        "company_name": "Indoorairservicesllc",
+        "website": "https://indoorairservicesllc.com",
+        "score": 25,
+        "cat": "excluded"
+      },
+      {
+        "id": 735,
+        "status": "analyzed",
+        "company_name": "Nv5",
+        "website": "https://nv5.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 736,
+        "status": "analyzed",
+        "company_name": "Insideeducation",
+        "website": "https://insideeducation.ca",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 737,
+        "status": "analyzed",
+        "company_name": "Interiorhealth",
+        "website": "https://interiorhealth.ca",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 738,
+        "status": "analyzed",
+        "company_name": "Dallascityhall",
+        "website": "https://dallascityhall.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 739,
+        "status": "ignored",
+        "company_name": "Texas",
+        "website": "https://tceq.texas.gov",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 740,
+        "status": "analyzed",
+        "company_name": "Cactusenviro",
+        "website": "https://cactusenviro.com",
+        "score": 15,
+        "cat": "excluded"
+      },
+      {
+        "id": 741,
+        "status": "analyzed",
+        "company_name": "Dallasclimateaction",
+        "website": "https://dallasclimateaction.com",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 742,
+        "status": "analyzed",
+        "company_name": "Ehcd",
+        "website": "https://ehcd.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 743,
+        "status": "analyzed",
+        "company_name": "Greensourcetexas",
+        "website": "https://greensourcetexas.org",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 744,
+        "status": "analyzed",
+        "company_name": "Honeywell",
+        "website": "https://honeywell.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 745,
+        "status": "analyzed",
+        "company_name": "Prweb",
+        "website": "https://prweb.com",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 746,
+        "status": "analyzed",
+        "company_name": "Detectioninstruments",
+        "website": "https://detectioninstruments.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 747,
+        "status": "approved",
+        "company_name": "Instrumentdepot",
+        "website": "https://instrumentdepot.com",
+        "score": 75,
+        "cat": "distributor"
+      },
+      {
+        "id": 748,
+        "status": "analyzed",
+        "company_name": "Sensidyne",
+        "website": "https://sensidyne.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 751,
+        "status": "analyzed",
+        "company_name": "Reliantgases",
+        "website": "https://reliantgases.com",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 752,
+        "status": "analyzed",
+        "company_name": "Nuco2",
+        "website": "https://nuco2.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 753,
+        "status": "analyzed",
+        "company_name": "Airgas",
+        "website": "https://airgas.com",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 754,
+        "status": "analyzed",
+        "company_name": "Axiomcontrol",
+        "website": "https://axiomcontrol.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 755,
+        "status": "analyzed",
+        "company_name": "Guardianssi",
+        "website": "https://guardianssi.com",
+        "score": 15,
+        "cat": "excluded"
+      },
+      {
+        "id": 756,
+        "status": "analyzed",
+        "company_name": "Oizom",
+        "website": "https://oizom.com",
+        "score": 0,
+        "cat": "unclear"
+      },
+      {
+        "id": 757,
+        "status": "ignored",
+        "company_name": "Nsw",
+        "website": "https://environment.nsw.gov.au",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 758,
+        "status": "analyzed",
+        "company_name": "Instrumentchoice",
+        "website": "https://instrumentchoice.com.au",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 759,
+        "status": "approved",
+        "company_name": "Rs Online",
+        "website": "https://au.rs-online.com",
+        "score": 65,
+        "cat": "distributor"
+      },
+      {
+        "id": 760,
+        "status": "analyzed",
+        "company_name": "Hvacrsearch",
+        "website": "https://hvacrsearch.com.au",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 761,
+        "status": "analyzed",
+        "company_name": "Se",
+        "website": "https://se.com",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 762,
+        "status": "analyzed",
+        "company_name": "Automatedsolutions",
+        "website": "https://automatedsolutions.com.au",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 763,
+        "status": "approved",
+        "company_name": "Accuvent",
+        "website": "https://accuvent.com",
+        "score": 65,
+        "cat": "integrator"
+      },
+      {
+        "id": 764,
+        "status": "ignored",
+        "company_name": "Idminstruments",
+        "website": "https://idminstruments.com.au",
+        "score": 45,
+        "cat": "unclear"
+      },
+      {
+        "id": 765,
+        "status": "ignored",
+        "company_name": "Training",
+        "website": "https://training.gov.au",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 766,
+        "status": "analyzed",
+        "company_name": "Industryupdate",
+        "website": "https://industryupdate.com.au",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 767,
+        "status": "analyzed",
+        "company_name": "Breathalyzersusa",
+        "website": "https://breathalyzersusa.com",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 768,
+        "status": "analyzed",
+        "company_name": "Adiglobaldistribution",
+        "website": "https://adiglobaldistribution.us",
+        "score": 0,
+        "cat": "unclear"
+      },
+      {
+        "id": 769,
+        "status": "analyzed",
+        "company_name": "Industrynet",
+        "website": "https://industrynet.com",
+        "score": 15,
+        "cat": "unclear"
+      },
+      {
+        "id": 770,
+        "status": "analyzed",
+        "company_name": "Endeavorhealth",
+        "website": "https://endeavorhealth.org",
+        "score": 0,
+        "cat": "unclear"
+      },
+      {
+        "id": 771,
+        "status": "analyzed",
+        "company_name": "Dulyhealthandcare",
+        "website": "https://dulyhealthandcare.com",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 772,
+        "status": "analyzed",
+        "company_name": "Providerwire",
+        "website": "https://providerwire.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 773,
+        "status": "analyzed",
+        "company_name": "Athletico",
+        "website": "https://athletico.com",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 774,
+        "status": "analyzed",
+        "company_name": "Urgentcarelocations",
+        "website": "https://urgentcarelocations.org",
+        "score": 15,
+        "cat": "excluded"
+      },
+      {
+        "id": 776,
+        "status": "approved",
+        "company_name": "Smartbuildingtec",
+        "website": "https://smartbuildingtec.com",
+        "score": 88,
+        "cat": "integrator"
+      },
+      {
+        "id": 777,
+        "status": "ignored",
+        "company_name": "Nsw",
+        "website": "https://schoolinfrastructure.nsw.gov.au",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 778,
+        "status": "analyzed",
+        "company_name": "Jmbec",
+        "website": "https://jmbec.com.au",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 779,
+        "status": "analyzed",
+        "company_name": "Qedenv",
+        "website": "https://qedenv.com",
+        "score": 25,
+        "cat": "excluded"
+      },
+      {
+        "id": 781,
+        "status": "analyzed",
+        "company_name": "Fondriest",
+        "website": "https://fondriest.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 782,
+        "status": "analyzed",
+        "company_name": "Hi Q",
+        "website": "https://hi-q.net",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 783,
+        "status": "analyzed",
+        "company_name": "Fieldenvironmental",
+        "website": "https://fieldenvironmental.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 784,
+        "status": "analyzed",
+        "company_name": "Picarro",
+        "website": "https://picarro.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 785,
+        "status": "analyzed",
+        "company_name": "Aircondlounge",
+        "website": "https://aircondlounge.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 788,
+        "status": "analyzed",
+        "company_name": "Actrol",
+        "website": "https://actrol.com.au",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 789,
+        "status": "approved",
+        "company_name": "Airwaresales",
+        "website": "https://airwaresales.com.au",
+        "score": 75,
+        "cat": "distributor"
+      },
+      {
+        "id": 791,
+        "status": "approved",
+        "company_name": "Coolchain",
+        "website": "https://coolchain.com.au",
+        "score": 75,
+        "cat": "distributor"
+      },
+      {
+        "id": 792,
+        "status": "approved",
+        "company_name": "Airconditioningwholesale",
+        "website": "https://airconditioningwholesale.com.au",
+        "score": 72,
+        "cat": "distributor"
+      },
+      {
+        "id": 794,
+        "status": "analyzed",
+        "company_name": "Reece",
+        "website": "https://reece.com.au",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 795,
+        "status": "analyzed",
+        "company_name": "Aussieairsupplies",
+        "website": "https://aussieairsupplies.com.au",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 796,
+        "status": "analyzed",
+        "company_name": "Gasdetectionaustralia",
+        "website": "https://gasdetectionaustralia.com.au",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 799,
+        "status": "analyzed",
+        "company_name": "Msasafety",
+        "website": "https://au.msasafety.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 801,
+        "status": "analyzed",
+        "company_name": "Aeroqual",
+        "website": "https://aeroqual.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 802,
+        "status": "analyzed",
+        "company_name": "Turnkeyinstruments",
+        "website": "https://turnkeyinstruments.com.au",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 803,
+        "status": "analyzed",
+        "company_name": "Envirosuite",
+        "website": "https://envirosuite.com",
+        "score": 0,
+        "cat": "monitoring-service"
+      },
+      {
+        "id": 804,
+        "status": "analyzed",
+        "company_name": "Industrialsafety",
+        "website": "https://industrialsafety.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 805,
+        "status": "analyzed",
+        "company_name": "Airly",
+        "website": "https://airly.org",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 806,
+        "status": "analyzed",
+        "company_name": "Stovaris",
+        "website": "https://stovaris.pl",
+        "score": 20,
+        "cat": "unclear"
+      },
+      {
+        "id": 808,
+        "status": "analyzed",
+        "company_name": "Raahgroup",
+        "website": "https://projects.raahgroup.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 809,
+        "status": "analyzed",
+        "company_name": "Tecertifiedelectricians",
+        "website": "https://tecertifiedelectricians.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 810,
+        "status": "analyzed",
+        "company_name": "Jeeng",
+        "website": "https://jeeng.net",
+        "score": 45,
+        "cat": "unclear"
+      },
+      {
+        "id": 814,
+        "status": "analyzed",
+        "company_name": "Gdi",
+        "website": "https://gdi.com",
+        "score": 45,
+        "cat": "unclear"
+      },
+      {
+        "id": 815,
+        "status": "analyzed",
+        "company_name": "Maineindoorair",
+        "website": "https://maineindoorair.org",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 816,
+        "status": "analyzed",
+        "company_name": "Hellermanntyton",
+        "website": "https://hellermanntyton.co.za",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 817,
+        "status": "analyzed",
+        "company_name": "Kolba",
+        "website": "https://kolba.pl",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 818,
+        "status": "analyzed",
+        "company_name": "Testanddrive",
+        "website": "https://testanddrive.eu",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 819,
+        "status": "analyzed",
+        "company_name": "Safetymanagementgroup",
+        "website": "https://safetymanagementgroup.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 820,
+        "status": "analyzed",
+        "company_name": "Aqara",
+        "website": "https://aqara.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 821,
+        "status": "analyzed",
+        "company_name": "Wirelesslogic",
+        "website": "https://wirelesslogic.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 822,
+        "status": "approved",
+        "company_name": "Budgetairsupply",
+        "website": "https://budgetairsupply.com",
+        "score": 78,
+        "cat": "distributor"
+      },
+      {
+        "id": 824,
+        "status": "analyzed",
+        "company_name": "Msasafety",
+        "website": "https://pl.msasafety.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 825,
+        "status": "analyzed",
+        "company_name": "Chemeurope",
+        "website": "https://chemeurope.com",
+        "score": 15,
+        "cat": "excluded"
+      },
+      {
+        "id": 826,
+        "status": "analyzed",
+        "company_name": "Satel",
+        "website": "https://satel.pl",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 828,
+        "status": "analyzed",
+        "company_name": "Advancedco2systems",
+        "website": "https://advancedco2systems.com",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 829,
+        "status": "approved",
+        "company_name": "Dciusa",
+        "website": "https://dciusa.com",
+        "score": 85,
+        "cat": "integrator"
+      },
+      {
+        "id": 830,
+        "status": "analyzed",
+        "company_name": "Workplace",
+        "website": "https://work.workplace.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 831,
+        "status": "analyzed",
+        "company_name": "Meta",
+        "website": "https://meta.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 832,
+        "status": "analyzed",
+        "company_name": "Datto",
+        "website": "https://us.workplace.datto.com",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 833,
+        "status": "analyzed",
+        "company_name": "Anses",
+        "website": "https://anses.fr",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 834,
+        "status": "analyzed",
+        "company_name": "Robovent",
+        "website": "https://robovent.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 835,
+        "status": "analyzed",
+        "company_name": "Akcp",
+        "website": "https://akcp.com",
+        "score": 55,
+        "cat": "unclear"
+      },
+      {
+        "id": 836,
+        "status": "analyzed",
+        "company_name": "Sensirion",
+        "website": "https://sensirion.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 837,
+        "status": "analyzed",
+        "company_name": "Precedenceresearch",
+        "website": "https://precedenceresearch.com",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 838,
+        "status": "approved",
+        "company_name": "Aabtools",
+        "website": "https://aabtools.com",
+        "score": 72,
+        "cat": "distributor"
+      },
+      {
+        "id": 841,
+        "status": "analyzed",
+        "company_name": "Tue",
+        "website": "https://research.tue.nl",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 842,
+        "status": "analyzed",
+        "company_name": "Air Label",
+        "website": "https://air-label.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 843,
+        "status": "analyzed",
+        "company_name": "Nytimes",
+        "website": "https://nytimes.com",
+        "score": 5,
+        "cat": "excluded"
+      },
+      {
+        "id": 844,
+        "status": "analyzed",
+        "company_name": "Jingnuoair",
+        "website": "https://jingnuoair.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 845,
+        "status": "analyzed",
+        "company_name": "Verkkokauppa",
+        "website": "https://verkkokauppa.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 846,
+        "status": "analyzed",
+        "company_name": "Ruuvi",
+        "website": "https://ruuvi.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 847,
+        "status": "analyzed",
+        "company_name": "Tradetested",
+        "website": "https://tradetested.co.nz",
+        "score": 25,
+        "cat": "excluded"
+      },
+      {
+        "id": 848,
+        "status": "analyzed",
+        "company_name": "Globalspec",
+        "website": "https://globalspec.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 849,
+        "status": "approved",
+        "company_name": "Aethair",
+        "website": "https://aethair.io",
+        "score": 75,
+        "cat": "brand"
+      },
+      {
+        "id": 853,
+        "status": "analyzed",
+        "company_name": "Adairquality",
+        "website": "https://adairquality.ae",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 854,
+        "status": "analyzed",
+        "company_name": "Sciencedirect",
+        "website": "https://sciencedirect.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 855,
+        "status": "analyzed",
+        "company_name": "Now",
+        "website": "https://carbon.now.sh",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 856,
+        "status": "analyzed",
+        "company_name": "Chemistrylearner",
+        "website": "https://chemistrylearner.com",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 857,
+        "status": "analyzed",
+        "company_name": "Ama Science",
+        "website": "https://ama-science.org",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 858,
+        "status": "analyzed",
+        "company_name": "Frient",
+        "website": "https://frient.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 859,
+        "status": "analyzed",
+        "company_name": "Belimo",
+        "website": "https://belimo.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 860,
+        "status": "analyzed",
+        "company_name": "Bosch Sensortec",
+        "website": "https://bosch-sensortec.com",
+        "score": 15,
+        "cat": "excluded"
+      },
+      {
+        "id": 861,
+        "status": "analyzed",
+        "company_name": "Renkeer",
+        "website": "https://renkeer.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 862,
+        "status": "analyzed",
+        "company_name": "Mouser",
+        "website": "https://cz.mouser.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 863,
+        "status": "analyzed",
+        "company_name": "I4wifi",
+        "website": "https://i4wifi.cz",
+        "score": 35,
+        "cat": "distributor"
+      },
+      {
+        "id": 864,
+        "status": "analyzed",
+        "company_name": "Indiamart",
+        "website": "https://indiamart.com",
+        "score": null,
+        "cat": "unclear"
+      },
+      {
+        "id": 865,
+        "status": "analyzed",
+        "company_name": "Tedndt",
+        "website": "https://tedndt.com",
+        "score": 10,
+        "cat": "excluded"
+      },
+      {
+        "id": 866,
+        "status": "analyzed",
+        "company_name": "Amtest",
+        "website": "https://testlab.amtest.eu",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 867,
+        "status": "analyzed",
+        "company_name": "Rosenberger",
+        "website": "https://rosenberger.com",
+        "score": 20,
+        "cat": "excluded"
+      },
+      {
+        "id": 868,
+        "status": "analyzed",
+        "company_name": "Oitec",
+        "website": "https://oitec.fi",
+        "score": 20,
+        "cat": "excluded"
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "EEUR",
+      "served_by_colo": "FRA",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 3.7464
+      },
+      "duration": 3.7464,
+      "changes": 0,
+      "last_row_id": 65,
+      "changed_db": false,
+      "size_after": 1204224,
+      "rows_read": 1702,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  }
+]
