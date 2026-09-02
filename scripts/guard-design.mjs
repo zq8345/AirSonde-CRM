@@ -176,6 +176,21 @@ if (typeof process !== "undefined" && String(process.argv?.[1] || "").replace(/\
     ok ? pass++ : fail++;
     console.log(`  ${ok ? "✅" : "🔴"} ${name} —— 判定 ${r.ok ? "合宪" : "不合宪"}${r.reasons.length ? "（" + r.reasons.join("；") + "）" : ""}`);
   }
+  // ── 🔴 字号闭集守卫（2026-09-02 加）──
+  //   附录 C.1 是**闭集**：12/13/14/15/17/22。但闭集写在文档里挡不住任何东西 ——
+  //   当天全站量出两个野字号（11.5px 看板密度、10px 版本戳），**两个都是我自己写的**，
+  //   而且写的时候注释里还写着"守附录 C tokens"。
+  //   ⇒ **"我会守规矩"和"我守了规矩"之间必须有一把尺子。** 这就是那把尺子。
+  {
+    const { readFileSync } = await import("node:fs");
+    const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
+    const ALLOWED = new Set([12, 13, 14, 15, 17, 22]);
+    const found = [...html.matchAll(/font-size:\s*([0-9.]+)px/g)].map((m) => Number(m[1]));
+    const rogue = [...new Set(found)].filter((v) => !ALLOWED.has(v)).sort((a, b) => a - b);
+    if (!found.length) { console.log("  🔴 字号闸：一个 font-size 都没扫到 —— 选择器坏了，不是页面很干净"); fail++; }
+    else if (rogue.length) { console.log(`  🔴 字号闸：闭集外的野字号 ${rogue.map(v=>v+"px").join(" / ")}（闭集 12/13/14/15/17/22）`); fail++; }
+    else { console.log(`  ✅ 字号闸：${found.length} 处 font-size，去重 ${new Set(found).size} 档，全在闭集内`); pass++; }
+  }
   console.log(`\n通过 ${pass} · 失败 ${fail}`);
   console.log(fail === 0
     ? "✅ 闸自检通过：**在真实发生过的缺陷上会红**（案例①正是 C2-D 那次被它抓住的原句）"

@@ -92,7 +92,11 @@
     #mr-status { margin-bottom:4px; }                           /* 状态区与分区线之间的呼吸 */
     .db-block { padding:16px 18px; margin-bottom:10px; }        /* 卡间距压一档（原 24/16） */
     .db-t { font-size:13px; font-weight:600; letter-spacing:.02em; margin-bottom:10px; }
-    .db-block .hint { font-size:11.5px; }                        /* 次级数字更小更浅 */
+    /* ⚠️ 这里原本是 11.5px —— **我自己引入的野字号**（v3 收视觉密度时写的），
+       而同一段注释里我还写着"守附录 C tokens"。附录 C.1 是**闭集**：12/13/14/15/17/22，
+       11.5 不在里面。⇒ 归到 12。教训：**"我会守规矩"和"我守了规矩"之间要有一把尺子**
+       （枚举 computed font-size 去重，一测就现）。 */
+    .db-block .hint { font-size:12px; }
     .fn-row.fn-good .fn-fill { background:var(--green); }        /* 基准着色：达标 */
     .fn-row.fn-low  .fn-fill { background:var(--amber); }        /* 基准着色：低于行业区间 */
     .db-finding { border-left:4px solid var(--border-strong); background:var(--panel);
@@ -118,7 +122,7 @@
        "没部署" 还是 "缓存"。这行小字把它变成一眼可查的事实。
        ⚠️ 守宪法「不泄漏机器状态」：**做成最轻的灰字，不是徽章** —— 平时几乎看不见，
           只在他主动往角落看的时候才存在。不占布局、不可交互、不抢任何注意力。 */
-    #build-stamp { position:fixed; right:8px; bottom:6px; font-size:10px; color:var(--muted);
+    #build-stamp { position:fixed; right:8px; bottom:6px; font-size:12px; color:var(--muted);   /* ⚠️ 原为 10px，同样是我引入的野字号，归到闭集最小档 12 */
                    opacity:.35; pointer-events:none; user-select:text; z-index:1; letter-spacing:.02em; }
     #build-stamp:hover { opacity:.8; }
     .wrap { display:flex; gap:12px; padding:12px; height:calc(100vh - 64px); box-sizing:border-box; }
@@ -940,7 +944,7 @@
       <!-- ⭐ C5-28 打磨①：状态栏移到顶栏**最右**（Joe 最初圈的就是右上角；第一批落在搜索框旁边不对）。
            `margin-left:auto` 把它顶到最右端 —— 全站每页同位（它住在 header 里，不随视图切换）。 -->
       <button id="status-bar" class="status-bar" style="display:none;margin-left:auto"
-              onclick="openMachineRoom()" title="查看机器房明细">
+              onclick="openMachineRoom()" title="查看自动化明细">
         <span class="sb-dot"></span><span class="sb-badge"></span>
         <span class="sb-sep">·</span><span class="sb-act"></span>
       </button>
@@ -1044,10 +1048,10 @@
          三段之间要**视觉分明** —— 状态区(只读监控) ↔ 控制区(可改) ↔ 维护区(危险操作)。
          ⚠️ 标题里带上"点编辑可改"：这一区默认只读，**光有一个「编辑」按钮不够**，
             按钮说的是"能做什么"，标题说的是"现在是什么状态"。两句都要有。 -->
-    <div class="mr-sec-head">机器怎么干 <span class="hint">· 默认只读，点右边「编辑」才能改</span></div>
+    <div class="mr-sec-head">机器怎么干</div>
     <div class="cfg-form preview" style="max-width:820px">
       <div class="sec-row" style="margin:0 0 12px">
-        <span class="sec-title" style="margin:0">当前配置</span>
+        <span></span>
         <span class="sec-tools">
           <button class="mini" id="mr-cfg-edit" type="button">编辑</button>
           <button class="mini" id="mr-cfg-cancel" type="button" style="display:none">取消</button>
@@ -1071,7 +1075,7 @@
         </div>
         <div class="set-grid" style="margin-top:12px">
           <div class="k">评分分层</div>
-          <div class="v"><div class="hint" style="margin:0">≥<b id="rb-hi">…</b> 批准 · <b id="rb-mid">…</b> 你来看 · ≤<b id="rb-lo">…</b> 建议忽略
+          <div class="v"><div class="hint" style="margin:0">≥<b id="rb-hi">…</b> · <b id="rb-mid">…</b> · ≤<b id="rb-lo">…</b>
             <span class="gj-help" data-help title="≥高分线：建议批准，自动模式开着时机器直接收走。中段：需要你人工看一眼，多为信息不全（AI 没看清 ≠ 不合格）。≤低分线：建议忽略；忽略随时可从「已忽略」退回。三个数都从后端真值来，不是写死的。">(?)</span><span class="mr-live" id="mr-live-review"></span></div></div>
 
           <div class="k">每天最多发</div>
@@ -1121,16 +1125,16 @@
           <input type="checkbox" id="fu-enabled"> <span class="hint" style="margin:0">开启自动跟进</span>
         </label>
         <div class="set-grid">
-          <div class="k">几天后跟进</div><div class="v"><div class="set-numrow"><input id="fu-delay" type="number" min="1" max="60" class="set-num"> <span class="hint">建议 3-5</span></div></div>
-          <div class="k">点过链接的</div><div class="v"><div class="set-numrow"><input id="fu-engaged-delay" type="number" min="1" max="60" class="set-num"> <span class="hint">更快更暖，建议 1-2</span></div></div>
-          <div class="k">最多跟几次</div><div class="v"><div class="set-numrow"><input id="fu-max" type="number" min="1" max="5" class="set-num"> <span class="hint">建议 1-2</span></div></div>
-          <div class="k">多久后放弃</div><div class="v"><div class="set-numrow"><input id="fu-noreply" type="number" min="1" max="90" class="set-num"> <span class="hint">跟满还没回音就归档</span></div></div>
+          <div class="k">几天后跟进</div><div class="v"><div class="set-numrow"><input id="fu-delay" type="number" min="1" max="60" class="set-num"> <span class="gj-help" data-help title="建议 3-5 天。太快像催，太慢对方已经忘了你是谁。">(?)</span></div></div>
+          <div class="k">点过链接的</div><div class="v"><div class="set-numrow"><input id="fu-engaged-delay" type="number" min="1" max="60" class="set-num"> <span class="gj-help" data-help title="点过链接的人此刻正在关注你，建议 1-2 天就跟 —— 比常规更快更暖。">(?)</span></div></div>
+          <div class="k">最多跟几次</div><div class="v"><div class="set-numrow"><input id="fu-max" type="number" min="1" max="5" class="set-num"> <span class="gj-help" data-help title="建议 1-2 次。跟太多次会从「提醒」变成「骚扰」，也拉高退订率。">(?)</span></div></div>
+          <div class="k">多久后放弃</div><div class="v"><div class="set-numrow"><input id="fu-noreply" type="number" min="1" max="90" class="set-num"> <span class="gj-help" data-help title="跟满设定次数还没回音就归档，不再占用你的待办。">(?)</span></div></div>
         </div>
       </div>
 
 <div class="set-card">
         <div class="sec-title">
-          找客户策略 <span class="hint" style="margin:0">（机器按什么找客户）</span>
+          找客户策略<span class="gj-help" data-help title="机器按什么去找客户：客户画像决定打分标准，关键词×国家决定去哪搜，预算决定一天搜多少次。">(?)</span>
         </div>
         <!-- ⚠️ 「wheel-summary」那行折叠摘要**删了**（C5-43 整合）：
              它是折叠时代的产物 —— 收起时用一行字概括里面有什么。现在方向盘常开、
@@ -1145,7 +1149,9 @@
           <div class="sec-row"><span class="sec-title" style="margin:0">客户画像 · 打分标准</span>
             <span class="hint" id="fc-profile-badge" style="margin:0"></span></div>
           <div class="hint" id="fc-profile-summary" style="margin:4px 0;cursor:pointer" onclick="toggleProfile()">（加载中…）</div>
-          <textarea id="fc-profile" placeholder="描述你的理想客户；留空用内置默认画像"></textarea>
+          <!-- ⚠️ 默认收起（Joe：整段 AirSonde 描述占屏）。折叠机制本来就有（toggleProfile），
+               只是没设默认态 —— 加 fc-collapsed 让它一进来就是"一行摘要，点开才看全文"。 -->
+          <textarea id="fc-profile" class="fc-collapsed" placeholder="描述你的理想客户；留空用内置默认画像"></textarea>
           <span id="fc-profile-caret" hidden></span>
 
           <div class="sec-row" style="margin-top:16px"><span class="sec-title" style="margin:0">关键词</span>
@@ -1174,7 +1180,7 @@
             <span style="font-size:13px">搜索预算上限</span>
             <input id="fc-serper-budget" type="number" min="0" max="2500" step="10" class="set-num" style="width:96px">
             <span class="hint">次/天</span>
-            <span class="gj-help" data-help title="到了这个数当天就自动停，手动搜和后台自动搜共用这一个额度。今日已用多少，在机器房里看。">(?)</span>
+            <span class="gj-help" data-help title="到了这个数当天就自动停，手动搜和后台自动搜共用这一个额度。今日已用多少，在自动化里看。">(?)</span>
             <!-- C5-29④：「保存预算」已删 —— 全页统一由页头那颗「保存」提交。 -->
           <span class="mr-live" id="mr-live-search"></span></div>
 
@@ -1190,7 +1196,7 @@
         <div id="notify-status" class="transparency"></div>
         <label style="display:flex;gap:8px;align-items:center;cursor:pointer;margin:0 0 16px"><input type="checkbox" id="ntf-enabled"> <span class="k">有热回复时推飞书</span></label>
         <div class="set-numrow" style="margin-bottom:0">
-          <button class="btn-secondary" id="ntf-test">发送测试卡片</button>
+          <button class="btn-secondary" id="ntf-test">发送测试</button>
           <span class="hint" id="ntf-result" style="margin:0"></span>
         <span class="mr-live" id="mr-live-ntf"></span></div>
       </div>
@@ -1778,7 +1784,7 @@
       //   它不该是一个要你自己想起来去点的第二个入口）。
       //   ⚠️ `openReplyInbox` / `openReplyDetail` 两个函数**保留**：详情视图仍由内嵌列表调用。
       // C2-D：机器房排在最后 —— 它是"需要时才进去"的页，不是每天要看的
-      + `<div class="side-nav" data-nav="machine" onclick="openMachineRoom()">${ICON.machine}<span>机器房</span></div>`
+      + `<div class="side-nav" data-nav="machine" onclick="openMachineRoom()">${ICON.machine}<span>自动化</span></div>`
         + `<div class="side-div"></div>`;
       // C5-4v A：页面级「补货」按钮 —— 只在「全部」页出现（给整个库进货，不属于某一格）
       { const rb=$("#btn-restock");
@@ -2455,7 +2461,7 @@
     window.toolFollowupSel = async (_warm) => {
       const ids=[...selectedIds].map(Number); if(!ids.length) return;
       const cfg = await fetch("/api/settings/followup").then(r=>r.json()).catch(()=>({}));
-      if(cfg.enabled === false){ toolMsg("自动跟进开关当前是关的（机器房 · 控制区里开）。"); return; }
+      if(cfg.enabled === false){ toolMsg("自动跟进开关当前是关的（自动化 · 控制区里开）。"); return; }
       const picked = _loadedLeads.filter(l => selectedIds.has(String(l.id)));
       const hot = picked.filter(l => l.has_click).length;
       if(!(await uiConfirm({ title:`跟进选中 ${ids.length} 条`, body:`将给**选中的 ${ids.length} 条**发跟进信（AI 按原信改写）。\n\n· 其中 **${hot} 条点过链接** → 自动用「🔥 趁热」暖变体，其余用常规变体（系统自己判，你不用分）\n· 冷却期未到 / 已跟够 ${cfg.max||3} 次 / 已回复 的会自动跳过\n· 受每日发信上限约束\n· 发出不可撤`, confirmText:`发跟进` }))) return;
@@ -3579,12 +3585,12 @@
       // 分隔点由 CSS 结构承担，所以小字里不再自己带 ' · '；没有小字时把分隔点一起藏掉
       el.querySelector('.sb-act').textContent = d.action || '';
       { const sep = el.querySelector('.sb-sep'); if (sep) sep.style.display = d.action ? '' : 'none'; }
-      // C5-28 打磨③：悬浮提示统一成「查看机器房明细」——"可点"这件事要说得出来点了会去哪。
+      // C5-28 打磨③：悬浮提示统一成「查看自动化明细」——"可点"这件事要说得出来点了会去哪。
       // 受阻时把**服务器原话**顶在最前面（排查要的是它，不是那句人话）。
       // C5-29：额度类静态信息（今日已发 / 发满 / 明天上限）**只进悬浮**，不占常驻小字 ——
       //   常驻小字只说"正在干什么"。信息没丢，只是换了住处（悬浮 + 机器房）。
       el.title = (d.detail ? d.detail + "\n\n" : "")
-        + (d.quotaNote ? d.quotaNote + "\n" : "") + "查看机器房明细";
+        + (d.quotaNote ? d.quotaNote + "\n" : "") + "查看自动化明细";
     }
     window.paintStatusBar = paintStatusBar;
     /** 常驻轮询。⚠️ 有活在跑时快一点、闲着时慢下来 —— 闲着还每 3 秒打一次是白烧额度。 */
@@ -3752,14 +3758,17 @@
       const leftTxt = (_left !== undefined && _left !== "") ? ` · 今日还剩 <b>${esc(_left)}</b> 次` : ``;
       _tp.innerHTML = (nc && nk)
         ? `<span class="${big?'fc-warn':''}">本轮将执行：<b>${nk}</b> 个关键词 × ${scope} = <b>${nk*nc}</b> 次搜索，每次取 <b>${per}</b> 条 → 预计最多新增 <b>${est}</b> 家（去重后通常少很多）${leftTxt}。${big?' ⚠️ 批量较大，注意搜索/AI 成本与时长。':''}</span>`
-        : `<span class="muted">至少勾选 1 个关键词（在机器房 · 方向盘里选）。</span>`;
+        : `<span class="muted">至少勾选 1 个关键词（在自动化 · 找客户策略里选）。</span>`;
     }
 
     function renderKwInline(){
       $("#dp-kwlist").innerHTML = _fcKwRows.length
         ? _fcKwRows.map(k=>{
             const on = _fcKwChecked.has(k.keyword);
-            const stat = (k.sent_count>0)   // 已有发送数据才显示统计；新词不再显示"新词"标签（#45 Joe 嫌多余）
+            // ⚠️ 2026-09-02 Joe：0 回信阶段这些战绩全是「发N·回0·0%」，**没有信息量**，
+            //   26 个 chip 每个挂一串 0 就是满屏噪音。⇒ **有真回信才显示**。
+            //   ⛔ 判据卡在 reply_count 而不是 sent_count：发出去多少不是战绩，回了才是。
+            const stat = (k.reply_count > 0)
               ? ` <span style="color:var(--muted);font-size:12px">发${k.sent_count}·回${k.reply_count}·${Math.round((k.reply_rate||0)*100)}%</span>`
               : ``;
             return `<span class="kwitem ${on?'on':''}" data-kw="${esc(k.keyword)}" title="权重 ${k.weight!=null?k.weight:1}（按回复率自动加权）"><label><input type="checkbox" ${on?'checked':''} onchange="fcKwToggle(this)"> ${esc(k.keyword)}</label>${stat}${_fcKwManage?`<i onclick="delKeyword(${k.id})" title="删除">×</i>`:''}</span>`;
@@ -4555,7 +4564,10 @@
       //    会把刚配过的人送去再配一遍一模一样的值。
       const _sh = c.urlShape || {};
       $("#notify-status").innerHTML = c.configured
-        ? `✅ 已连接飞书机器人（webhook 已配置在保险柜里${c.hasSecret?"，含签名校验":""}）。可点「发送测试卡片」验证。`
+        // ⚠️ 砍成一句「● 已连接」+ 悬浮（Joe：控制面板每行只留 名字+当前值，解释全进 (?)）。
+        //   ⛔ 但**失败态那两条一个字不砍** —— 它们说的是"出了什么事、你该怎么办"，
+        //     那不是教学，是故障信息（铁律八：错误必须可见）。只砍成功态的自我介绍。
+        ? `● 已连接<span class="gj-help" data-help title="webhook 已配置在保险柜里${c.hasSecret?"，含签名校验":""}。点右边「发送测试」可以验证它真的通。">(?)</span>`
         : (_sh.present
             ? `🔴 <b>webhook 已配置，但值不是可用的 http(s) 地址</b>（${esc(String(_sh.scheme||"?"))}）—— 多半是粘贴时带了空格/引号/换行。请重新 <code>wrangler secret put LARK_WEBHOOK_URL</code>。`
             : `⚠️ 还没配 webhook —— 在飞书群建「自定义机器人」，拿到 Webhook 地址后用 <code>wrangler secret put LARK_WEBHOOK_URL</code> 配进保险柜（值不经过这个界面）。配好前不会推送。`);
@@ -5195,7 +5207,7 @@ ${esc(d.ours.body||'')}</div></details>`
       if (gFail >= 3) {
         findings.push({ sev: 'red', t: `今天有 ${gFail} 封信没发出去`,
           e: '失败的信不会自己重发 —— 这些公司此刻还没被联系到',
-          cta: act('去机器房看原因', "openMachineRoom()") });
+          cta: act('去自动化看原因', "openMachineRoom()") });
       }
       // (e) 管道断流：待联系存量撑不过明天
       //   ⚠️ 抑制（2026-09-02）：当**已知原因**存在时不出这张卡 —— 见上方纪律 4。
@@ -5411,13 +5423,13 @@ ${esc(d.ours.body||'')}</div></details>`
                    const ts = raw.slice(0, 19), why = raw.slice(19).trim();
                    const ago = fmtAgo(ts);
                    return `${ago ? `<b>${esc(ago)}</b> · ` : ''}${esc(why.slice(0, 110))}`; })(),
-          '去机器房', "openMachineRoom()") : '',
+          '去自动化', "openMachineRoom()") : '',
         A.breakerTrippedAt ? row('td-bad', '⚠️',
           `自动发送已停 —— <b>现在没有在自动发信</b>`,
-          esc(A.breakerReason || '退订率过高') + '；确认后到机器房 · 机器开关里手动重开（不会自动恢复）', '去机器房', "openMachineRoom()") : '',
+          esc(A.breakerReason || '退订率过高') + '；确认后到自动化 · 发信闸门里手动重开（不会自动恢复）', '去自动化', "openMachineRoom()") : '',
         overBudget ? row('td-bad', '⚠️',
           `今日搜索预算已用满（${serper.usedToday}/${serper.budget}）`,
-          '自动搜索已停，明天恢复；要继续到机器房 · 方向盘调高预算', '去调预算', "openMachineRoom()") : '',
+          '自动搜索已停，明天恢复；要继续到自动化 · 找客户策略调高预算', '去调预算', "openMachineRoom()") : '',
       ].join('');
 
       // ── 空态：清单上真的没事 ─────────────────────────────────────────
@@ -5431,7 +5443,7 @@ ${esc(d.ours.body||'')}</div></details>`
         // ④ 机器汇报行：**一行小字，不是卡片**。数字为 0 也照实写 ——
         //    "发了 0 · 收了 0 · 新增 0" 和一片空白不是一回事（前者说明它在跑但没产出）。
         + `<div class="td-report">今天机器：发了 <b>${st.cold ?? 0}</b> 封 · 收了 <b>${tw.replies ?? 0}</b> 封 · 新增 <b>${tw.newLeads ?? 0}</b> 家
-             <a href="javascript:void(0)" onclick="openMachineRoom()">机器房 →</a></div>`;
+             <a href="javascript:void(0)" onclick="openMachineRoom()">自动化 →</a></div>`;
     }
     // ================= C2-D「🛠 机器房」=================
     // 首页从这里搬走的东西全部落在这一页：预算/轮转、熔断窗口与阈值、爬坡算式、点火明细、班次。
@@ -5471,7 +5483,7 @@ ${esc(d.ours.body||'')}</div></details>`
         const eb = $("#mr-cfg-loaderr");
         if (eb) { eb.style.display=''; eb.textContent = "控制区填充出错：" + String(e && e.message || e).slice(0,80); }
       }
-      $("#mr-status").innerHTML = pageHeader('机器房','') + `<p class="hint">加载中…</p>`;
+      $("#mr-status").innerHTML = pageHeader('自动化','') + `<p class="hint">加载中…</p>`;
       // ⚠️ C5-3：`scfg` = /api/settings/search，**本批新增的一路**。
       //    机器房原来只读 ignition / sending / today —— 我第一版把「后台自动搜索」「轮转进度」
       //    写成 `cfg.discoveryEnabled` / `cfg.discoveryCursor`，而 `cfg` 是 sending，
@@ -5487,7 +5499,7 @@ ${esc(d.ours.body||'')}</div></details>`
         fetchCfg("/api/today").then(r=>r.ok?r.data:null),
         fetchCfg("/api/settings/search").then(r=>r.ok?r.data:null),
       ]);
-      if (!ign || !cfg) { $("#mr-status").innerHTML = pageHeader('机器房','') + `<div class="load-error">${loadErrorHtml('mr-retry', retried)}</div>`;
+      if (!ign || !cfg) { $("#mr-status").innerHTML = pageHeader('自动化','') + `<div class="load-error">${loadErrorHtml('mr-retry', retried)}</div>`;
         const b=$("#mr-retry"); if(b) b.onclick=()=>openMachineRoom(true); return; }
 
       // C5-9 ①：四列 → 三列。第四列（unlocks 说明）正是把表撑出白卡右侧的那一列，
@@ -5558,7 +5570,7 @@ ${esc(d.ours.body||'')}</div></details>`
            <div style="padding:8px 0"><button class="mini" onclick="startRescan()">🔄 全量重扫</button>
              <span class="hint">重新抓官网并重新打分，很慢</span></div></details>`;
 
-      $("#mr-status").innerHTML = pageHeader('机器房','')
+      $("#mr-status").innerHTML = pageHeader('自动化','')
         + `<div class="mr-sec-head" style="margin-top:0;padding-top:0;border-top:none">机器现在在干什么</div>`
         + `<div class="page-card mr-vitals">${vitals}</div>`;
 
