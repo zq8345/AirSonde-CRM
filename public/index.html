@@ -4805,6 +4805,16 @@ ${esc(d.ours.body||'')}</div></details>`
         //   不标口径就会被读成自相矛盾（Joe 已经这样读过一次）。
         //   邮件封数（含跟进）不进漏斗，另起一行小字。
         const mailLine = `<div class="hint">累计发出邮件 ${d.emailsSent||0} 封（含跟进）· 漏斗按公司数、累计口径，只增不减</div>`;
+        // 🔴 让归零自己解释自己：被谓词排掉的东西必须说出来，否则"数字变小"读起来像"数据丢了"。
+        //   ⚠️ **只在真有排除时才出现** —— 摆一行"已排除 0"是纯噪音，还会让人以为这里随时会出问题。
+        //   ⛔ 措辞不说"过滤/清洗"（听起来像删了东西），说"已排除"并点名是哪两类。
+        const ex = d.excluded || {};
+        const exBits = [];
+        if (ex.autoReplies > 0) exBits.push(`自动回执 ${ex.autoReplies} 封`);
+        if (ex.testLeads   > 0) exBits.push(`测试数据 ${ex.testLeads} 条`);
+        const exLine = exBits.length
+          ? `<div class="hint">已排除：${exBits.join(' · ')}<span class="gj-help" data-help title="这些不算战绩，所以不进上面的数字：自动回执是对方机器发的「我们收到了」，不代表这家公司回应了你；测试数据是我们自己造的点火数据。⚠️ 它们没有被删除——线索列表和收件箱里照常看得见。">(?)</span></div>`
+          : '';
         let leak = '';
         if (worst){
           leak = `<div class="db-judge">掉得最狠的是 <b>${esc(worst.from)}→${esc(worst.to)}</b>（${worstP}%）${leakAct(worst.to)}</div>`;
@@ -4825,7 +4835,7 @@ ${esc(d.ours.body||'')}</div></details>`
             : totalReplied===0
               ? `<div class="hint">本月 AI $${aiM.toFixed(2)} · 搜索 ${sp.usedToday??0} 次 —— 还没有回信，成本还算不出每封多少</div>`
               : `<div class="hint">本月 AI $${aiM.toFixed(2)} · 搜索 ${sp.usedToday??0} 次 ÷ 回信 ${totalReplied} 封 = 每封约 <b>$${(aiM/totalReplied).toFixed(2)}</b></div>`);
-        b3 = fn + mailLine + leak + health + ledger;   // C5-38②：邮件封数另起一行，不混进漏斗
+        b3 = fn + mailLine + exLine + leak + health + ledger;   // C5-38②：邮件封数另起一行；exLine 让归零自己解释自己
       }
 
       $("#v-page").innerHTML = pageHeader('数据看板','')

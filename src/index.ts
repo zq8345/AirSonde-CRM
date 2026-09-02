@@ -839,6 +839,22 @@ app.get("/api/dashboard", async (c) => {
     emailsSent,
     sentLeads,
     counts: { replied, bounced, unsubscribed },
+    // 🔴 让归零自己解释自己（2026-09-02）：两个谓词各吃掉一封回信后，Joe 的回信数从 1 变 0。
+    //   数字自己不会说"我为什么变小了"，而人对**变小的数字**的第一反应是"数据丢了"。
+    //   ⚠️ 只在**真有排除**时才在界面上出现（前端判 >0）—— 摆一行"已排除 0"是纯噪音，
+    //      而且会让人以为这里随时可能出问题。
+    excluded: {
+      autoReplies: (await db.prepare(
+        `SELECT COUNT(*) AS n FROM replies WHERE COALESCE(is_auto,0)=1`
+      ).first<{ n: number }>())?.n || 0,
+      testLeads: (await db.prepare(
+        `SELECT COUNT(*) AS n FROM leads WHERE COALESCE(is_test,0)=1`
+      ).first<{ n: number }>())?.n || 0,
+      testReplies: (await db.prepare(
+        `SELECT COUNT(*) AS n FROM replies r JOIN leads l ON l.id=r.lead_id
+          WHERE COALESCE(r.is_auto,0)=0 AND COALESCE(l.is_test,0)=1`
+      ).first<{ n: number }>())?.n || 0,
+    },
     rates: { reply: rate(replied), bounce: rate(bounced), unsub: rate(unsubscribed) },
     byCountry,
     byCategory,
