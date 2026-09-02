@@ -104,6 +104,23 @@ async function recordFetchFailure(env: Env, lead: any, scraped: ScrapeResult, op
   await env.DB.prepare(
     "UPDATE leads SET status='analyzed', updated_at=datetime('now') WHERE id=? AND status='new'"
   ).bind(lead.id).run();
+  // 🔴🔴 2026-09-02：**重扫把分数作废时，归属必须跟着走** —— 否则就地重造僵尸。
+  //   形状：`rescan` 让上面那句把 match_score 抹成 NULL，而一条 `approved` 的线索状态不动
+  //   ⇒ 「已批准但没有分数」。sendApprovedBatch 的谓词是 `score>=60 OR human_approved=1`，
+  //     NULL 两条都不满足 ⇒ **既不发也不退，永远占着「待联系」的名额** —— 正是 C5-33 那个病。
+  //   ⚠️ 这条路是**提前 return** 的，走不到下面那个（已改成无条件的）归位钩子，所以必须在这里补一次。
+  //     判据不是"钩子写了没有"，是"**这条代码路径上它执行得到吗**"。
+  //   ⚠️ 只在 rescan（分数确实被作废）时做；非 rescan 时旧分数被守卫保住了，没有归位的理由。
+  //   ⚠️ `human_approved=1` 绝不动：Joe 亲手放行的，抓不到官网不是推翻他决定的理由。
+  if (opts.rescan) {
+    const back = await env.DB.prepare(
+      `UPDATE leads SET status='analyzed', updated_at=datetime('now')
+        WHERE id=? AND status='approved' AND COALESCE(human_approved,0)=0`
+    ).bind(lead.id).run();
+    if (back.meta.changes) {
+      console.log(`归位: #${lead.id} 重扫抓不到 → 分数作废，退回待审批（否则会卡成"已批准但没分数"）`);
+    }
+  }
   return { ok: false, id: lead.id, fetchFailed: true, giveUp: true, fetchFailCount: n, error: note };
 }
 

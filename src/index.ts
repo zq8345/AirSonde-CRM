@@ -1184,7 +1184,16 @@ app.post("/api/admin/rescore-taxonomy", async (c) => {
   let ok = 0; const errors: string[] = [];
   for (const lead of leads) {
     try {
-      const r = await analyzeLead(c.env, lead, { scoreOnly: true });
+      // 🔴 2026-09-02：加 `rescan: true`（总调度授权）。原因是**跑批会卡死在收尾**：
+      //   不传 rescan 时，service.ts 的守卫 `WHERE match_score IS NULL` 会挡掉整个 DO UPDATE，
+      //   **连 analyzed_at 都不更新** ⇒ 这条线索永远满足 `analyzed_at < startedAt`
+      //   ⇒ 每一批都被重取，`remaining` 停住不降。生产实测：57 批后停在 330，队首全是
+      //     顽固抓不到的（#285 连续 51 次 JS 空壳、#405 19 次、#419 HTTP 521）。
+      // ⚠️ 这是**行为变更**：抓不到的线索旧分数会被置空、落"资料不足·官网抓不到"。
+      //   在 C5-13 语义下这是对的 —— **所有旧分数本来就已宣布作废**（新 8 类 + 新标准），
+      //   留一个按已被推翻的标准算出来的分数继续冒充有效判断，比置空更坏。
+      //   配套的归位在 service.ts 抓取失败那条路上补了（否则 approved 会卡成"有批准没分数"）。
+      const r = await analyzeLead(c.env, lead, { scoreOnly: true, rescan: true });
       if (r.ok) ok++; else errors.push(`#${lead.id} ${r.error || "未成功"}`);
     } catch (e) { errors.push(`#${lead.id} ${String(e).slice(0, 120)}`); }
   }
