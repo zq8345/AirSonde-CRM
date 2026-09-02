@@ -970,7 +970,157 @@
        ⚠️ 判据（总调度定）：**机器房显示的东西一个字都没变、每个现有交互行为不变。**
           我在改之前抓了一份基线（683 字 · 4 个可交互元素），改完逐字比。 -->
   <div id="v-machine" style="display:none">
+    <!-- 状态区：只读监控，由 openMachineRoom 动态写入（C5-42a 建立） -->
     <div id="mr-status"></div>
+
+    <!-- ══ 控制区（C5-42b 从设置页迁入）══
+         ⚠️ 容器只加 `cfg-form`（状态：两态+加载置灰），**不加 `set-page`**（那是设置页的版式）——
+            这正是 C5-42a 把两个类拆开的目的：谁要两态谁加 cfg-form，与住在哪个页面无关。
+         ⚠️ 迁入的是**原样的静态节点**，59 个 id 一个没改：事件绑定 / 两态 / 统一保存全部照旧生效。
+         🔴 提取方式记一笔：第一版我**按行号切**，切出来的块「<div> 数 == </div> 数」，
+            但那是 `</div>…<div>` 那种平衡 —— **括号数相等不等于结构正确**。
+            结果 tsc 绿、重复 id 扫描绿、node --check 绿，而浏览器解析时提前闭合了容器，
+            ④方向盘整块从 DOM 里消失。改成**按 div 深度走**并断言"任何前缀深度不为负"才抓住。 -->
+    <div class="cfg-form preview" style="max-width:820px">
+      <div class="sec-row" style="margin:18px 0 10px">
+        <span class="sec-title" style="margin:0">🎛 控制</span>
+        <span class="sec-tools">
+          <button class="mini" id="mr-cfg-edit" type="button">编辑</button>
+          <button class="mini" id="mr-cfg-cancel" type="button" style="display:none">取消</button>
+          <button class="primary mini" id="mr-save-cfg" type="button" style="display:none">保存</button>
+        </span>
+      </div>
+<div class="set-card">
+        <div class="sec-title">② 机器开关</div>
+        <!-- ⭐ C5-22（Joe 拍板）：两个勾选框（自动批准/自动发送）合成**一个总开关**。
+             他的原话是"所有环节都动起来""都是立即执行"——那是**一个意图**，不该让他勾两个格子
+             再自己在脑子里做与运算。底层仍是那两个位，总开关是架在其上的与门（见 send.ts）。
+             ⚠️ 关掉时**耳朵不关**：收信/分类/飞书通知照常——错过回信只有损失没有风险。
+             ⚠️ 分数线由下面「评分分层」那行的 `rb-hi` 显示（与 auto_approve_min 同一真值）。
+             ⚠️ C5-25 砍字纪律：解释一律进 (?)（data-help，闸的 measure 会剔除它，不占预算），
+                页面正文只留「这是什么 + 现在是多少」（铁律一）。**删掉的是解释，不是能力。** -->
+        <div class="auto-box">
+          <label class="auto-row"><input type="checkbox" id="cfg-automation" class="cfg-live">
+            <span><b>自动模式</b>
+              <span class="gj-help" data-help title="开：机器连续地找客户、分析、批准（≥分数线）、写信发信、跟进，不等整点。关：这些出站动作全停，但收回信、AI 分类和飞书通知照常在线——错过回信只有损失没有风险。改一下就生效，不用按保存。">(?)</span></span></label>
+          <div class="hint" id="cfg-automation-why" style="margin-left:26px"></div>
+        </div>
+        <div class="set-grid" style="margin-top:12px">
+          <div class="k">评分分层</div>
+          <div class="v"><div class="hint" style="margin:0">≥<b id="rb-hi">…</b> 批准 · <b id="rb-mid">…</b> 你来看 · ≤<b id="rb-lo">…</b> 建议忽略
+            <span class="gj-help" data-help title="≥高分线：建议批准，自动模式开着时机器直接收走。中段：需要你人工看一眼，多为信息不全（AI 没看清 ≠ 不合格）。≤低分线：建议忽略；忽略随时可从「已忽略」退回。三个数都从后端真值来，不是写死的。">(?)</span></div></div>
+
+          <div class="k">每天最多发</div>
+          <div class="v"><div class="set-numrow">
+              <input id="cfg-limit" type="number" min="1" class="set-num"> <span class="hint">封</span>
+              <span id="cfg-limit-badge" class="pill" style="display:none"></span>
+              <span class="gj-help" data-help title="手动 + 自动 + 跟进 共用这一个上限，跨全部发件域计数。">(?)</span></div></div>
+
+          <div class="k">其中自动发</div>
+          <div class="v">
+            <!-- ⭐ 魔法值改明控件：原来"填 0 = 跟随系统闸"是一个要靠记忆才懂的约定。 -->
+            <label style="display:flex;gap:6px;align-items:center;cursor:pointer;margin-bottom:6px"><input type="radio" name="autolim" id="cfg-auto-follow" value="follow"> 不单独限制</label>
+            <label class="set-numrow" style="cursor:pointer"><input type="radio" name="autolim" id="cfg-auto-custom" value="custom"> 限制为
+              <input id="cfg-auto-limit" type="number" min="1" class="set-num"> <span class="hint">封</span></label>
+            <div class="hint" id="cfg-auto-used"></div></div>
+
+          <div class="k">每封间隔</div>
+          <div class="v"><div class="set-numrow">
+              <input id="cfg-send-gap" type="number" min="0" class="set-num"> <span class="hint">秒</span>
+              <span class="pill" id="cfg-gap-src" style="display:none"></span>
+              <span class="gj-help" data-help title="两封开发信之间至少隔这么久。0 = 不限速。留空 = 用系统默认。机器每分钟检查一次是否该发，这个数决定它多久才真发一封。">(?)</span></div></div>
+
+          <div class="k">新域保护</div>
+          <div class="v"><label style="display:flex;gap:8px;align-items:center;cursor:pointer;margin-bottom:6px"><input id="cfg-ramp" type="checkbox">
+              <span class="hint" style="margin:0">开启</span>
+              <span class="gj-help" data-help title="新域名一上来就大量发信会被判垃圾。开启后每天的实际上限 = max(起步值, 昨天发出量 × 倍数)，慢慢爬上你设的「每天最多发」。建议开着。">(?)</span></label>
+            <div class="set-numrow">起步 <input id="cfg-ramp-floor" type="number" min="1" class="set-num"> 封 ·
+              每天最多涨 <input id="cfg-ramp-factor" type="number" min="1" step="0.1" class="set-num"> 倍
+              <span class="pill" id="cfg-ramp-src" style="display:none"></span></div></div>
+
+          <div class="k">退订太多就停</div>
+          <div class="v"><div class="set-numrow">最近 <input id="cfg-brk-win" type="number" min="5" class="set-num"> 封里超过
+              <input id="cfg-brk-th" type="number" min="1" max="90" class="set-num"> % 就停
+              <span class="pill" id="cfg-brk-src" style="display:none"></span>
+              <span class="gj-help" data-help title="自动发出的开发信里退订占比超过阈值就自动停发（只停自动发信，分析/批准/手动发送不受影响），停了不会自动恢复，要你在这里手动重开。样本不足时不熔断——5 封里 2 封退订说明不了任何事。">(?)</span></div></div>
+        </div>
+      </div>
+
+<div class="set-card">
+        <div class="sec-title">③ 无回复自动跟进</div>
+        <label style="display:flex;gap:8px;align-items:center;cursor:pointer;margin:0 0 16px">
+          <input type="checkbox" id="fu-enabled"> <span class="hint" style="margin:0">开启自动跟进</span>
+        </label>
+        <div class="set-grid">
+          <div class="k">几天后跟进</div><div class="v"><div class="set-numrow"><input id="fu-delay" type="number" min="1" max="60" class="set-num"> <span class="hint">建议 3-5</span></div></div>
+          <div class="k">点过链接的</div><div class="v"><div class="set-numrow"><input id="fu-engaged-delay" type="number" min="1" max="60" class="set-num"> <span class="hint">更快更暖，建议 1-2</span></div></div>
+          <div class="k">最多跟几次</div><div class="v"><div class="set-numrow"><input id="fu-max" type="number" min="1" max="5" class="set-num"> <span class="hint">建议 1-2</span></div></div>
+          <div class="k">多久后放弃</div><div class="v"><div class="set-numrow"><input id="fu-noreply" type="number" min="1" max="90" class="set-num"> <span class="hint">跟满还没回音就归档</span></div></div>
+        </div>
+      </div>
+
+<div class="set-card">
+        <div class="sec-title">
+          ④ 方向盘 <span class="hint" style="margin:0">（机器按什么找客户）</span>
+        </div>
+        <div class="sec-sub" id="wheel-summary" style="margin-bottom:0">（加载中…）</div>
+        <div id="wheel-body" style="margin-top:16px">
+          <!-- 加载失败横幅：没有它，一次登录过期就让方向盘停在空壳态，看着像"配置全丢了" -->
+          <div class="load-error" id="fc-loaderr" style="display:none;margin-bottom:12px"></div>
+
+          <div class="sec-row"><span class="sec-title" style="margin:0">客户画像 · 打分标准</span>
+            <span class="hint" id="fc-profile-badge" style="margin:0"></span></div>
+          <div class="hint" id="fc-profile-summary" style="margin:4px 0;cursor:pointer" onclick="toggleProfile()">（加载中…）</div>
+          <textarea id="fc-profile" placeholder="描述你的理想客户；留空用内置默认画像"></textarea>
+          <span id="fc-profile-caret" hidden></span>
+
+          <div class="sec-row" style="margin-top:16px"><span class="sec-title" style="margin:0">关键词</span>
+            <span class="sec-tools"><button class="mini" type="button" onclick="fcKwAll(true)">全选</button><button class="mini" type="button" onclick="fcKwAll(false)">全不选</button><button class="mini" type="button" id="fc-kw-manage" onclick="fcToggleManage('kw')">管理</button></span></div>
+          <!-- data-user-content：⚠️ 这里面是 **Joe 自己填的关键词**，不是页面对他说的话。
+               闸的冻结口径原话「预算管的是页面自己说的话，不是客户名字」——26 个词与客户名字同类。
+               ⛔ 这个标记只能挂在"作者是 Joe"的内容上；挂到解释文案上就是把豁免变成漏洞
+                  （guard-design 里配了反向自检：页面自话超预算必须仍然报红）。 -->
+          <div id="dp-kwlist" data-user-content style="margin:6px 0"></div>
+          <div id="fc-kw-editrow" style="display:none;gap:8px;margin-top:6px">
+            <input id="dp-kwnew" class="inlinput" placeholder="新增关键词，如 HVAC controls integrator">
+            <button id="dp-kwadd" class="primary">添加</button>
+            <button id="dp-kwseed">载入默认</button>
+          </div>
+
+          <div class="sec-row" style="margin-top:16px"><span class="sec-title" style="margin:0">后台自动搜索</span></div>
+          <!-- #S1：**勾选即存**，且**绝不跟着「保存配置」一起提交**。
+               它是引擎开关（运行状态），不是配置。以前被 saveSearchCfg 捎带提交 ——
+               Joe 存一次关键词，只要这个勾当时没打上，整个自动找客户就被静默写成 0，界面零提示。
+               生产真发生过。这条防线迁移时一字不动。 -->
+          <label style="display:flex;align-items:center;gap:7px;margin-top:6px;cursor:pointer;font-size:13px">
+            <input type="checkbox" id="dp-auto" class="cfg-live"> 开启后台每小时自动搜索新客户
+            <span class="gj-help" data-help title="默认关闭。开启后每小时跑一小批，用量受下面那条「搜索预算上限」封顶，不会自己越界。">(?)</span>
+          </label>
+          <div class="set-numrow" style="margin-top:12px">
+            <span style="font-size:13px">搜索预算上限</span>
+            <input id="fc-serper-budget" type="number" min="0" max="2500" step="10" class="set-num" style="width:96px">
+            <span class="hint">次/天</span>
+            <span class="gj-help" data-help title="到了这个数当天就自动停，手动搜和后台自动搜共用这一个额度。今日已用多少，在机器房里看。">(?)</span>
+            <!-- C5-29④：「保存预算」已删 —— 全页统一由页头那颗「保存」提交。 -->
+          </div>
+
+
+          <!-- C5-29④：「保存方向盘」已删 —— 页头那颗「保存」统一提交全页（含画像/关键词/预算）。
+               ⚠️ `dp-save-msg` 这个 span 保留：saveSearchCfg 的结果提示仍写它（删了会抛空引用）。 -->
+          <span class="hint" id="dp-save-msg" style="display:none"></span>
+        </div>
+      </div>
+
+      <div class="set-card">
+        <div class="sec-title">飞书通知</div>
+        <div id="notify-status" class="transparency"></div>
+        <label style="display:flex;gap:8px;align-items:center;cursor:pointer;margin:0 0 16px"><input type="checkbox" id="ntf-enabled"> <span class="k">有热回复时推飞书</span></label>
+        <div class="set-numrow" style="margin-bottom:0">
+          <button class="btn-secondary" id="ntf-test">发送测试卡片</button>
+          <span class="hint" id="ntf-result" style="margin:0"></span>
+        </div>
+      </div>
+    </div>
   </div>
   <div id="v-settings" style="display:none">
     <div class="pg-head">
@@ -1040,62 +1190,17 @@
         </div>
       </div>
 
-      <!-- ── ② 机器开关 —— 它替你做多少 ── -->
+      <!-- ⚠️ C5-42b：原「⑤ 通知与账号」**拆成两半**，不是整卡搬 ——
+           「飞书通知」是机器的旋钮（跟着机器走），「当前账号」是"我以谁的身份在操作"（跟着人走）。
+           绑在一张卡里本来就是历史包袱。 -->
       <div class="set-card">
-        <div class="sec-title">② 机器开关</div>
-        <!-- ⭐ C5-22（Joe 拍板）：两个勾选框（自动批准/自动发送）合成**一个总开关**。
-             他的原话是"所有环节都动起来""都是立即执行"——那是**一个意图**，不该让他勾两个格子
-             再自己在脑子里做与运算。底层仍是那两个位，总开关是架在其上的与门（见 send.ts）。
-             ⚠️ 关掉时**耳朵不关**：收信/分类/飞书通知照常——错过回信只有损失没有风险。
-             ⚠️ 分数线由下面「评分分层」那行的 `rb-hi` 显示（与 auto_approve_min 同一真值）。
-             ⚠️ C5-25 砍字纪律：解释一律进 (?)（data-help，闸的 measure 会剔除它，不占预算），
-                页面正文只留「这是什么 + 现在是多少」（铁律一）。**删掉的是解释，不是能力。** -->
-        <div class="auto-box">
-          <label class="auto-row"><input type="checkbox" id="cfg-automation" class="cfg-live">
-            <span><b>自动模式</b>
-              <span class="gj-help" data-help title="开：机器连续地找客户、分析、批准（≥分数线）、写信发信、跟进，不等整点。关：这些出站动作全停，但收回信、AI 分类和飞书通知照常在线——错过回信只有损失没有风险。改一下就生效，不用按保存。">(?)</span></span></label>
-          <div class="hint" id="cfg-automation-why" style="margin-left:26px"></div>
-        </div>
-        <div class="set-grid" style="margin-top:12px">
-          <div class="k">评分分层</div>
-          <div class="v"><div class="hint" style="margin:0">≥<b id="rb-hi">…</b> 批准 · <b id="rb-mid">…</b> 你来看 · ≤<b id="rb-lo">…</b> 建议忽略
-            <span class="gj-help" data-help title="≥高分线：建议批准，自动模式开着时机器直接收走。中段：需要你人工看一眼，多为信息不全（AI 没看清 ≠ 不合格）。≤低分线：建议忽略；忽略随时可从「已忽略」退回。三个数都从后端真值来，不是写死的。">(?)</span></div></div>
-
-          <div class="k">每天最多发</div>
-          <div class="v"><div class="set-numrow">
-              <input id="cfg-limit" type="number" min="1" class="set-num"> <span class="hint">封</span>
-              <span id="cfg-limit-badge" class="pill" style="display:none"></span>
-              <span class="gj-help" data-help title="手动 + 自动 + 跟进 共用这一个上限，跨全部发件域计数。">(?)</span></div></div>
-
-          <div class="k">其中自动发</div>
-          <div class="v">
-            <!-- ⭐ 魔法值改明控件：原来"填 0 = 跟随系统闸"是一个要靠记忆才懂的约定。 -->
-            <label style="display:flex;gap:6px;align-items:center;cursor:pointer;margin-bottom:6px"><input type="radio" name="autolim" id="cfg-auto-follow" value="follow"> 不单独限制</label>
-            <label class="set-numrow" style="cursor:pointer"><input type="radio" name="autolim" id="cfg-auto-custom" value="custom"> 限制为
-              <input id="cfg-auto-limit" type="number" min="1" class="set-num"> <span class="hint">封</span></label>
-            <div class="hint" id="cfg-auto-used"></div></div>
-
-          <div class="k">每封间隔</div>
-          <div class="v"><div class="set-numrow">
-              <input id="cfg-send-gap" type="number" min="0" class="set-num"> <span class="hint">秒</span>
-              <span class="pill" id="cfg-gap-src" style="display:none"></span>
-              <span class="gj-help" data-help title="两封开发信之间至少隔这么久。0 = 不限速。留空 = 用系统默认。机器每分钟检查一次是否该发，这个数决定它多久才真发一封。">(?)</span></div></div>
-
-          <div class="k">新域保护</div>
-          <div class="v"><label style="display:flex;gap:8px;align-items:center;cursor:pointer;margin-bottom:6px"><input id="cfg-ramp" type="checkbox">
-              <span class="hint" style="margin:0">开启</span>
-              <span class="gj-help" data-help title="新域名一上来就大量发信会被判垃圾。开启后每天的实际上限 = max(起步值, 昨天发出量 × 倍数)，慢慢爬上你设的「每天最多发」。建议开着。">(?)</span></label>
-            <div class="set-numrow">起步 <input id="cfg-ramp-floor" type="number" min="1" class="set-num"> 封 ·
-              每天最多涨 <input id="cfg-ramp-factor" type="number" min="1" step="0.1" class="set-num"> 倍
-              <span class="pill" id="cfg-ramp-src" style="display:none"></span></div></div>
-
-          <div class="k">退订太多就停</div>
-          <div class="v"><div class="set-numrow">最近 <input id="cfg-brk-win" type="number" min="5" class="set-num"> 封里超过
-              <input id="cfg-brk-th" type="number" min="1" max="90" class="set-num"> % 就停
-              <span class="pill" id="cfg-brk-src" style="display:none"></span>
-              <span class="gj-help" data-help title="自动发出的开发信里退订占比超过阈值就自动停发（只停自动发信，分析/批准/手动发送不受影响），停了不会自动恢复，要你在这里手动重开。样本不足时不熔断——5 封里 2 封退订说明不了任何事。">(?)</span></div></div>
-        </div>
+        <div class="sec-title">② 账号</div>
+        <div class="k" style="color:var(--muted);font-size:13px;margin-bottom:6px">当前账号</div>
+        <div class="transparency" id="whoami" style="margin:0"></div>
       </div>
+
+      <!-- ── ② 机器开关 —— 它替你做多少 ── -->
+      
       <!-- 🔴 2026-09-02：`.set-page` 的闭合原来在这里 —— 于是 ③④⑤ 三张卡**在它外面**。
            后果不只是左缘差 16px（那层灰底 panel 的 padding），更严重的是：
            **预览/编辑两态的 CSS 全部写在 `.cfg-form.preview` 后代选择器上** ⇒
@@ -1104,18 +1209,7 @@
            ⇒ 两态只对 5 张卡里的 2 张生效。闭合下移到全部卡片之后。 -->
 
       <!-- ── ③ 无回复自动跟进 ── -->
-      <div class="set-card">
-        <div class="sec-title">③ 无回复自动跟进</div>
-        <label style="display:flex;gap:8px;align-items:center;cursor:pointer;margin:0 0 16px">
-          <input type="checkbox" id="fu-enabled"> <span class="hint" style="margin:0">开启自动跟进</span>
-        </label>
-        <div class="set-grid">
-          <div class="k">几天后跟进</div><div class="v"><div class="set-numrow"><input id="fu-delay" type="number" min="1" max="60" class="set-num"> <span class="hint">建议 3-5</span></div></div>
-          <div class="k">点过链接的</div><div class="v"><div class="set-numrow"><input id="fu-engaged-delay" type="number" min="1" max="60" class="set-num"> <span class="hint">更快更暖，建议 1-2</span></div></div>
-          <div class="k">最多跟几次</div><div class="v"><div class="set-numrow"><input id="fu-max" type="number" min="1" max="5" class="set-num"> <span class="hint">建议 1-2</span></div></div>
-          <div class="k">多久后放弃</div><div class="v"><div class="set-numrow"><input id="fu-noreply" type="number" min="1" max="90" class="set-num"> <span class="hint">跟满还没回音就归档</span></div></div>
-        </div>
-      </div>
+      
 
       <!-- ══ C5-3 ②「🧭 方向盘」——机器按什么找客户 ══
            找客户页解散后，那些**持久配置**（不是单次动作）搬到这里。
@@ -1125,70 +1219,10 @@
            ⚠️ 随之而来的口径变化（必须说出来）：原来"折叠收起时不计字数"，
               现在整块都计入设置页 900 预算。改完已用闸实测，见交付说明。
            ⚠️ 里面的 id / 勾选即存 / 二次确认 / 保存逻辑**全部原样迁移**，一行没改。 -->
-      <div class="set-card">
-        <div class="sec-title">
-          ④ 方向盘 <span class="hint" style="margin:0">（机器按什么找客户）</span>
-        </div>
-        <div class="sec-sub" id="wheel-summary" style="margin-bottom:0">（加载中…）</div>
-        <div id="wheel-body" style="margin-top:16px">
-          <!-- 加载失败横幅：没有它，一次登录过期就让方向盘停在空壳态，看着像"配置全丢了" -->
-          <div class="load-error" id="fc-loaderr" style="display:none;margin-bottom:12px"></div>
-
-          <div class="sec-row"><span class="sec-title" style="margin:0">客户画像 · 打分标准</span>
-            <span class="hint" id="fc-profile-badge" style="margin:0"></span></div>
-          <div class="hint" id="fc-profile-summary" style="margin:4px 0;cursor:pointer" onclick="toggleProfile()">（加载中…）</div>
-          <textarea id="fc-profile" placeholder="描述你的理想客户；留空用内置默认画像"></textarea>
-          <span id="fc-profile-caret" hidden></span>
-
-          <div class="sec-row" style="margin-top:16px"><span class="sec-title" style="margin:0">关键词</span>
-            <span class="sec-tools"><button class="mini" type="button" onclick="fcKwAll(true)">全选</button><button class="mini" type="button" onclick="fcKwAll(false)">全不选</button><button class="mini" type="button" id="fc-kw-manage" onclick="fcToggleManage('kw')">管理</button></span></div>
-          <!-- data-user-content：⚠️ 这里面是 **Joe 自己填的关键词**，不是页面对他说的话。
-               闸的冻结口径原话「预算管的是页面自己说的话，不是客户名字」——26 个词与客户名字同类。
-               ⛔ 这个标记只能挂在"作者是 Joe"的内容上；挂到解释文案上就是把豁免变成漏洞
-                  （guard-design 里配了反向自检：页面自话超预算必须仍然报红）。 -->
-          <div id="dp-kwlist" data-user-content style="margin:6px 0"></div>
-          <div id="fc-kw-editrow" style="display:none;gap:8px;margin-top:6px">
-            <input id="dp-kwnew" class="inlinput" placeholder="新增关键词，如 HVAC controls integrator">
-            <button id="dp-kwadd" class="primary">添加</button>
-            <button id="dp-kwseed">载入默认</button>
-          </div>
-
-          <div class="sec-row" style="margin-top:16px"><span class="sec-title" style="margin:0">后台自动搜索</span></div>
-          <!-- #S1：**勾选即存**，且**绝不跟着「保存配置」一起提交**。
-               它是引擎开关（运行状态），不是配置。以前被 saveSearchCfg 捎带提交 ——
-               Joe 存一次关键词，只要这个勾当时没打上，整个自动找客户就被静默写成 0，界面零提示。
-               生产真发生过。这条防线迁移时一字不动。 -->
-          <label style="display:flex;align-items:center;gap:7px;margin-top:6px;cursor:pointer;font-size:13px">
-            <input type="checkbox" id="dp-auto" class="cfg-live"> 开启后台每小时自动搜索新客户
-            <span class="gj-help" data-help title="默认关闭。开启后每小时跑一小批，用量受下面那条「搜索预算上限」封顶，不会自己越界。">(?)</span>
-          </label>
-          <div class="set-numrow" style="margin-top:12px">
-            <span style="font-size:13px">搜索预算上限</span>
-            <input id="fc-serper-budget" type="number" min="0" max="2500" step="10" class="set-num" style="width:96px">
-            <span class="hint">次/天</span>
-            <span class="gj-help" data-help title="到了这个数当天就自动停，手动搜和后台自动搜共用这一个额度。今日已用多少，在机器房里看。">(?)</span>
-            <!-- C5-29④：「保存预算」已删 —— 全页统一由页头那颗「保存」提交。 -->
-          </div>
-
-
-          <!-- C5-29④：「保存方向盘」已删 —— 页头那颗「保存」统一提交全页（含画像/关键词/预算）。
-               ⚠️ `dp-save-msg` 这个 span 保留：saveSearchCfg 的结果提示仍写它（删了会抛空引用）。 -->
-          <span class="hint" id="dp-save-msg" style="display:none"></span>
-        </div>
-      </div>
+      
 
       <!-- ── ④ 飞书通知 + 当前账号 ── -->
-      <div class="set-card">
-        <div class="sec-title">⑤ 通知与账号</div>
-        <div id="notify-status" class="transparency"></div>
-        <label style="display:flex;gap:8px;align-items:center;cursor:pointer;margin:0 0 16px"><input type="checkbox" id="ntf-enabled"> <span class="hint" style="margin:0">开启飞书通知</span></label>
-        <div class="set-numrow" style="margin-bottom:16px">
-          <button class="btn-secondary" id="ntf-test">发送测试卡片</button>
-          <span class="hint" id="ntf-result" style="margin:0"></span>
-        </div>
-        <div class="k" style="color:var(--muted);font-size:13px;margin-bottom:6px">当前账号</div>
-        <div class="transparency" id="whoami" style="margin:0"></div>
-      </div>
+      
 
       <!-- ⚠️ 保存语义没改：**一个「保存」按钮存全部**（发信设置 + 跟进 + 飞书一起存）。
            两个引擎开关是勾选即存（批㉒），上面卡片里已明说，这里不重复。
@@ -2343,7 +2377,7 @@
     window.toolFollowupSel = async (_warm) => {
       const ids=[...selectedIds].map(Number); if(!ids.length) return;
       const cfg = await fetch("/api/settings/followup").then(r=>r.json()).catch(()=>({}));
-      if(cfg.enabled === false){ toolMsg("自动跟进开关当前是关的（设置页里开）。"); return; }
+      if(cfg.enabled === false){ toolMsg("自动跟进开关当前是关的（机器房 · 控制区里开）。"); return; }
       const picked = _loadedLeads.filter(l => selectedIds.has(String(l.id)));
       const hot = picked.filter(l => l.has_click).length;
       if(!(await uiConfirm({ title:`跟进选中 ${ids.length} 条`, body:`将给**选中的 ${ids.length} 条**发跟进信（AI 按原信改写）。\n\n· 其中 **${hot} 条点过链接** → 自动用「🔥 趁热」暖变体，其余用常规变体（系统自己判，你不用分）\n· 冷却期未到 / 已跟够 ${cfg.max||3} 次 / 已回复 的会自动跳过\n· 受每日发信上限约束\n· 发出不可撤`, confirmText:`发跟进` }))) return;
@@ -3640,7 +3674,7 @@
       const leftTxt = (_left !== undefined && _left !== "") ? ` · 今日还剩 <b>${esc(_left)}</b> 次` : ``;
       _tp.innerHTML = (nc && nk)
         ? `<span class="${big?'fc-warn':''}">本轮将执行：<b>${nk}</b> 个关键词 × ${scope} = <b>${nk*nc}</b> 次搜索，每次取 <b>${per}</b> 条 → 预计最多新增 <b>${est}</b> 家（去重后通常少很多）${leftTxt}。${big?' ⚠️ 批量较大，注意搜索/AI 成本与时长。':''}</span>`
-        : `<span class="muted">至少勾选 1 个关键词（在设置页 · 方向盘里选）。</span>`;
+        : `<span class="muted">至少勾选 1 个关键词（在机器房 · 方向盘里选）。</span>`;
     }
 
     function renderKwInline(){
@@ -4119,8 +4153,13 @@
       if (!forms.length) return;
       const edit = mode === "edit";
       for (const sp of forms) setOneFormMode(sp, edit);
-      const show = (id, on) => { const e = $(id); if (e) e.style.display = on ? '' : 'none'; };
-      show('#cfg-edit', !edit); show('#save-sendcfg', edit); show('#cfg-cancel', edit);
+      // ⚠️ C5-42b：现在有**两套**控制按钮（设置页一套、机器房一套）。
+      //   `$()` 只取第一个 ⇒ 只写 '#cfg-edit' 会让机器房那颗永远不切换、点了没反应，**且不报错**。
+      const show = (sel, on) => document.querySelectorAll(sel)
+        .forEach(e => { e.style.display = on ? '' : 'none'; });
+      show('#cfg-edit,#mr-cfg-edit', !edit);
+      show('#save-sendcfg,#mr-save-cfg', edit);
+      show('#cfg-cancel,#mr-cfg-cancel', edit);
       window._settingsMode = mode;
     }
     function setOneFormMode(sp, edit){
@@ -4360,13 +4399,14 @@
     // ⚠️ 三个请求各自会失败。**每一段失败都必须说出来** —— 原来 followup 那发是 fire-and-forget
     //    （没读返回值），存失败了 Joe 也看不见，正是我们一路在修的那种静默病。
     // C5-30：进编辑态 / 取消（取消 = 丢弃改动、重新拉一次配置回预览态）
-    { const eb = $("#cfg-edit"); if (eb) eb.onclick = () => setSettingsMode("edit"); }
-    { const cb = $("#cfg-cancel"); if (cb) cb.onclick = () => {
+    document.querySelectorAll('#cfg-edit,#mr-cfg-edit').forEach(eb => { eb.onclick = () => setSettingsMode("edit"); });
+    document.querySelectorAll('#cfg-cancel,#mr-cfg-cancel').forEach(cb => { cb.onclick = () => {
         // ⚠️ 「取消」必须**重新加载**，不能只切皮肤 —— 只切皮肤会把他改了一半的值留在框里，
         //   下次点编辑看到的是脏值，而他以为自己取消过了。
         openSettings();
-      }; }
-    $("#save-sendcfg").onclick = async () => {
+      }; });
+    // ⚠️ 保存**仍是一个 handler 存全部** —— 变的只是它有两个入口，⛔ 别为机器房另写一套。
+    document.querySelectorAll('#save-sendcfg,#mr-save-cfg').forEach(btn => { btn.onclick = async () => {
       // ⛔ 没成功加载过就不许保存 —— 空表单一存就是把公司名/地址/卖点抹成空串。
       //   （按钮已 disabled，这里是第二道：防止有人用键盘/脚本绕过 disabled。闸不能只有一层。）
       if (!_cfgLoaded) {
@@ -4418,7 +4458,7 @@
       // C5-30②：保存成功才回预览态。⚠️ **有段没存上就留在编辑态** ——
       //   把他打回只读会让"没存上的那几个字"看起来像已经存好了。
       if (!bad.length) setSettingsMode("preview");
-    };
+    }; });
 
     // 飞书通知设置
     async function loadNotifyCfg(){
@@ -4823,7 +4863,7 @@ ${esc(d.ours.body||'')}</div></details>`
         let j = '';
         if (totalSent < DB_N_MIN) j = `<div class="hint">累计发出 ${totalSent} 封，还不到 ${DB_N_MIN} —— 先看线，暂不下结论</div>`;
         else if (rNow!=null && rPrev!=null && w.sent > prev.sent*(1+DB_TREND_DELTA) && rNow < rPrev*(1-DB_TREND_DELTA))
-          j = `<div class="db-judge">发得更多了，回信率却掉了 —— 该看看信写得怎么样 ${act('去改文案',"openSettings()")}</div>`;
+          j = `<div class="db-judge">发得更多了，回信率却掉了 —— 该看看信写得怎么样 ${act('去改文案',"openMachineRoom()")}</div>`;
         else if (prev.sent > 0 && w.sent < prev.sent*(1-DB_TREND_DELTA))
           j = `<div class="db-judge">这周发得比上周少 —— 多半是没客户可发了 ${act('去找客户',"openRestock()")}</div>`;
         else if (rNow!=null && rPrev!=null && w.sent > prev.sent*(1+DB_TREND_DELTA) && rNow >= rPrev)
@@ -4873,9 +4913,9 @@ ${esc(d.ours.body||'')}</div></details>`
           const hi = ranked[0], lo = ranked[ranked.length-1];
           const rh = hi.repliedLeads/hi.sentLeads, rl = lo.repliedLeads/lo.sentLeads;
           if (rl > 0 && rh/rl >= DB_SPREAD_MIN)
-            j = `<div class="db-judge">「${esc(hi.v)}」的回信率是「${esc(lo.v)}」的 ${(rh/rl).toFixed(1)} 倍 —— 考虑把关键词的力气挪过去 ${act('去方向盘',"openSettings()")}</div>`;
+            j = `<div class="db-judge">「${esc(hi.v)}」的回信率是「${esc(lo.v)}」的 ${(rh/rl).toFixed(1)} 倍 —— 考虑把关键词的力气挪过去 ${act('去方向盘',"openMachineRoom()")}</div>`;
         }
-        b2 = `<div class="db-sub">按关键词</div>${dimRows(topBottom(kwR), i=>esc(i.v), () => act('去方向盘',"openSettings()")) || empty('还没有关键词数据')}<div class="db-sub">按国家</div>${dimRows(topBottom(ccR), i=>esc(countryName(i.v)), it => act('补一轮这国',`openRestockFor('${esc(String(it.v||'').toLowerCase())}')`)) || empty('还没有国家数据')}<div class="db-sub">按分类</div>${dimRows(topBottom(catR), i=>esc(i.v), null) || empty('还没有分类数据')}${j}`;
+        b2 = `<div class="db-sub">按关键词</div>${dimRows(topBottom(kwR), i=>esc(i.v), () => act('去方向盘',"openMachineRoom()")) || empty('还没有关键词数据')}<div class="db-sub">按国家</div>${dimRows(topBottom(ccR), i=>esc(countryName(i.v)), it => act('补一轮这国',`openRestockFor('${esc(String(it.v||'').toLowerCase())}')`)) || empty('还没有国家数据')}<div class="db-sub">按分类</div>${dimRows(topBottom(catR), i=>esc(i.v), null) || empty('还没有分类数据')}${j}`;
       }
 
       // ── 块3 · 哪里在漏水 + 账本 ────────────────────────────────────
@@ -4898,8 +4938,8 @@ ${esc(d.ours.body||'')}</div></details>`
         //   ⚠️ 「回复」保留：回信是真人真事件，不依赖任何追踪像素。
         const leakAct = (to) => /查看|点击/.test(to) ? null
                               : /发送|联系/.test(to) ? act('去补邮箱',"gotoGroup('ready')")
-                              : /回复|回信/.test(to) ? act('去改文案',"openSettings()")
-                              : /批准|审批/.test(to) ? act('去看打分标准',"openSettings()") : null;
+                              : /回复|回信/.test(to) ? act('去改文案',"openMachineRoom()")
+                              : /批准|审批/.test(to) ? act('去看打分标准',"openMachineRoom()") : null;
         let worst=null, worstP=101;
         levels.forEach((lv,i)=>{
           // ⚠️ 只在上一级样本够时才认这个掉点：3 个里掉 2 个 = 33%，那是噪音不是漏水
@@ -5033,7 +5073,7 @@ ${esc(d.ours.body||'')}</div></details>`
           findings.push({ sev: 'amber',
             t: `「${esc(w.v)}」发了 ${w.sentLeads} 家只回了 ${w.repliedLeads || 0} 家`,
             e: `回信率 ${Math.round((w.repliedLeads||0)/w.sentLeads*100)}%，不到全局 ${Math.round(globalReply*100)}% 的一半`,
-            cta: act('去方向盘停用它', "openSettings()") });
+            cta: act('去方向盘停用它', "openMachineRoom()") });
         }
       }
       // (b) 某国家/分类回信率是全局 2 倍以上且样本够 → 建议加码
@@ -5060,7 +5100,7 @@ ${esc(d.ours.body||'')}</div></details>`
       } else if (wkUnsub.length >= 3 && wkUnsub[0] > wkUnsub[1] && wkUnsub[1] > wkUnsub[2]) {
         findings.push({ sev: 'amber', t: `退订连续两周在涨（${wkUnsub[2]} → ${wkUnsub[1]} → ${wkUnsub[0]}）`,
           e: '不是单周波动，是趋势 —— 通常意味着文案或线索来源出了偏差',
-          cta: act('去改文案', "openSettings()") });
+          cta: act('去改文案', "openMachineRoom()") });
       } else if (wkUnsub.length < 3) {
         growing.push({ t: '退订趋势', need: [['有退订记录的周数', wkUnsub.length, 3]] });
       }
@@ -5284,13 +5324,13 @@ ${esc(d.ours.body||'')}</div></details>`
                    const ts = raw.slice(0, 19), why = raw.slice(19).trim();
                    const ago = fmtAgo(ts);
                    return `${ago ? `<b>${esc(ago)}</b> · ` : ''}${esc(why.slice(0, 110))}`; })(),
-          '去设置', "openSettings()") : '',
+          '去机器房', "openMachineRoom()") : '',
         A.breakerTrippedAt ? row('td-bad', '⚠️',
           `自动发送已停 —— <b>现在没有在自动发信</b>`,
-          esc(A.breakerReason || '退订率过高') + '；确认后到设置页手动重开（不会自动恢复）', '去设置', "openSettings()") : '',
+          esc(A.breakerReason || '退订率过高') + '；确认后到机器房 · 机器开关里手动重开（不会自动恢复）', '去机器房', "openMachineRoom()") : '',
         overBudget ? row('td-bad', '⚠️',
           `今日搜索预算已用满（${serper.usedToday}/${serper.budget}）`,
-          '自动搜索已停，明天恢复；要继续到设置页 · 方向盘调高预算', '去调预算', "openSettings()") : '',
+          '自动搜索已停，明天恢复；要继续到机器房 · 方向盘调高预算', '去调预算', "openMachineRoom()") : '',
       ].join('');
 
       // ── 空态：清单上真的没事 ─────────────────────────────────────────
@@ -5385,7 +5425,7 @@ ${esc(d.ours.body||'')}</div></details>`
                 标题改问句：机器房回答的是问题，不是陈列仪表。 -->
            <div class="fc-card" style="margin-top:12px"><div class="sec-title">🔍 机器今天在找客户吗？</div>
              <div class="mr-kv"><span>后台自动搜索</span>${!scfg ? '<span class="hint">读不到</span>' : (scfg.discoveryEnabled ? '<b class="ms-on">● 开启</b>' : '<b class="ms-off">○ 未开启</b>')}
-               <span class="hint">${!scfg ? '这次没问到（不是"关着"）' : '开关在设置页 · 方向盘'}</span></div>
+               <span class="hint">${!scfg ? '这次没问到（不是"关着"）' : '开关在下面的「控制 · 方向盘」'}</span></div>
              <div class="mr-kv"><span>Serper 今日</span><b>${serper.usedToday ?? 0} / ${serper.budget ?? '-'}</b>
                <span class="hint">用满停到明天</span></div>
              <div class="mr-kv"><span>轮转进度</span>${(() => {

@@ -3739,7 +3739,7 @@ async function rescoreLowGate(env: Env): Promise<string | null> {
   if (!on.length) return null;
   return `拒绝启动：${on.join(" 和 ")} 还开着。重打分会让一批线索升到 ≥${APPROVE_MIN_SCORE} 分，` +
     `这两个开关开着的话 cron 下一个整点就会把它们自动批准并发出去 —— 而升上来的**必须停在「待审批」等人工过目**。` +
-    `请先到设置里把这两个开关关掉，再来跑。`;
+    `请先到机器房 · 机器开关里把这两个开关关掉，再来跑。`;
 }
 
 async function rescoreLowRemaining(env: Env, cursor: number): Promise<number> {
