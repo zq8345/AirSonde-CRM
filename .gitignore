@@ -11,3 +11,6 @@ dist/
 .secrets/
 # 通配所有 GitHub PAT 文件（防 git add . 误提交泄密）
 .github-pat-*
+
+# 版本戳：每次部署都变，进 git 只会给每个 diff 加一行噪音（生成器 scripts/stamp-build.js 是提交的）
+public/build.json

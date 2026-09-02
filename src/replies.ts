@@ -222,9 +222,12 @@ async function ingestAccount(env: Env, acct: ImapAccount, opts: { timeoutMs?: nu
 
         const { category, summary, error: classifyError } = await classify(env, subject, body);
 
+        // 入库即打自动回执标记：SQL 聚合调不了 JS，计数口径要靠这一列（见 reply-inbox.ts REAL_REPLY_SQL）。
+        // ⚠️ 这里算一次、下面 stage 判定复用同一个值，**不要算两次** —— 算两次就有两个真源。
+        const isAuto = isNoiseReply({ raw_headers: rawHeaders, content: body, from_email: fromEmail });
         const insRes = await env.DB.prepare(
-          "INSERT INTO replies (lead_id, from_email, subject, content, summary, category, message_id, raw_headers, received_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))"
-        ).bind(lead?.id ?? null, fromEmail, subject, body.slice(0, 4000), summary, category, messageId, rawHeaders).run();
+          "INSERT INTO replies (lead_id, from_email, subject, content, summary, category, message_id, raw_headers, received_at, is_auto) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)"
+        ).bind(lead?.id ?? null, fromEmail, subject, body.slice(0, 4000), summary, category, messageId, rawHeaders, isAuto ? 1 : 0).run();
         // L2：拿回本条 reply 的行 id——回复工作台卡的回调要靠它取 from_email/subject
         const replyRowId = Number(insRes.meta?.last_row_id) || 0;
         ingested++;
@@ -236,7 +239,6 @@ async function ingestAccount(env: Env, acct: ImapAccount, opts: { timeoutMs?: nu
         //      只被 tabOf() 和展示字段用了。判别特征本来就在 reply-inbox.ts 里当可维护常量维护着，
         //      **不在这里另写第二套**（写第二套 = 两处规则迟早分叉）。
         //   一封机器发的"我们收到了"不代表这家公司回应了你 —— 对方真人回信来时会正常推进。
-        const isAuto = isNoiseReply({ raw_headers: rawHeaders, content: body, from_email: fromEmail });
         if (lead) {
           matched++;
           if (category === "complaint") {

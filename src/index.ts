@@ -16,7 +16,7 @@ const LIMIT_MAX = 2000;
 import { runDiscovery, getKeywords, seedDefaultKeywords, getSearchConfig, COUNTRIES, DEFAULT_COUNTRIES, recomputeKeywordStats, inferCountryFromWebsite, getSerperUsage, runNmeaDiscovery, runLinkHarvest, runDirectoryRefresh, RVWITHTITO_URL, RVWITHTITO_BLACKLIST, SERPER_DAILY_BUDGET_DEFAULT, findDuplicateLead } from "./discover";
 import { findLeadEmail, diagnoseSite, type PageProbe } from "./findemail";
 import { ingestReplies, matchReplyToLead } from "./replies";
-import { ensureReplyColumns, stripQuoted, previewOf, isNoiseReply, tabOf, type InboxTab } from "./reply-inbox";
+import { ensureReplyColumns, stripQuoted, previewOf, isNoiseReply, tabOf, REAL_REPLY_SQL, realReplySql, type InboxTab } from "./reply-inbox";
 import { installFetchMeter, meteredDB, mark as subMark, reset as subReset, summary as subSummary } from "./subreq";
 import { normalizeCustomerType, customerTypeLabel, classifyKillReason, KILL_REASONS } from "./taxonomy";
 import { normalizePhone, formatPhoneDisplay } from "./scrape";   // C5-31：号码清洗与展示切分，单源
@@ -586,10 +586,10 @@ app.get("/api/health/sending", async (c) => {
 
   // 回复：按**线索**算（一个线索回多封只算一次），并给出热回复数
   const r = await db.prepare(
-    `SELECT COUNT(DISTINCT lead_id) AS leads_replied FROM replies WHERE lead_id IS NOT NULL`
+    `SELECT COUNT(DISTINCT lead_id) AS leads_replied FROM replies WHERE lead_id IS NOT NULL AND ${REAL_REPLY_SQL}`
   ).first<{ leads_replied: number }>();
   const hot = await db.prepare(
-    `SELECT COUNT(*) AS n FROM replies WHERE category IN ('interested','inquiry')`
+    `SELECT COUNT(*) AS n FROM replies WHERE category IN ('interested','inquiry') AND ${REAL_REPLY_SQL}`
   ).first<{ n: number }>();
 
   const total = u?.total ?? 0, machine = u?.machine_like ?? 0;
@@ -674,7 +674,7 @@ app.get("/api/dashboard", async (c) => {
     `SELECT ${group} AS v, COUNT(DISTINCT l.id) AS n,
             COUNT(DISTINCT CASE WHEN EXISTS (SELECT 1 FROM emails e WHERE e.lead_id=l.id AND e.status='sent')
                                 THEN l.id END) AS sentLeads,
-            COUNT(DISTINCT CASE WHEN EXISTS (SELECT 1 FROM replies r WHERE r.lead_id=l.id)
+            COUNT(DISTINCT CASE WHEN EXISTS (SELECT 1 FROM replies r WHERE r.lead_id=l.id AND ${realReplySql('r')})
                                 THEN l.id END) AS repliedLeads
      FROM ${from}
      WHERE ${group} IS NOT NULL AND ${group} != ''
@@ -714,7 +714,7 @@ app.get("/api/dashboard", async (c) => {
     "SELECT date(sent_at) AS d, COUNT(*) AS n FROM emails WHERE status='sent' AND sent_at IS NOT NULL AND date(sent_at) >= date('now','-13 days') GROUP BY date(sent_at)"
   ).all()).results as any[];
   const repliedDaily = (await db.prepare(
-    "SELECT date(received_at) AS d, COUNT(*) AS n FROM replies WHERE received_at IS NOT NULL AND date(received_at) >= date('now','-13 days') GROUP BY date(received_at)"
+    `SELECT date(received_at) AS d, COUNT(*) AS n FROM replies WHERE received_at IS NOT NULL AND ${REAL_REPLY_SQL} AND date(received_at) >= date('now','-13 days') GROUP BY date(received_at)`
   ).all()).results as any[];
   const newDaily = (await db.prepare(
     "SELECT date(created_at) AS d, COUNT(*) AS n FROM leads WHERE created_at IS NOT NULL AND date(created_at) >= date('now','-13 days') GROUP BY date(created_at)"
@@ -1650,7 +1650,7 @@ app.get("/api/today", async (c) => {
     //     （"机器在跑但今天没产出" ≠ "机器没在跑"），不许因为是 0 就不显示。
     todayWork: {
       replies: (await db.prepare(
-        "SELECT COUNT(*) AS n FROM replies WHERE received_at IS NOT NULL AND date(received_at) = date('now')"
+        `SELECT COUNT(*) AS n FROM replies WHERE received_at IS NOT NULL AND ${REAL_REPLY_SQL} AND date(received_at) = date('now')`
       ).first<{ n: number }>())?.n || 0,
       newLeads: (await db.prepare(
         "SELECT COUNT(*) AS n FROM leads WHERE created_at IS NOT NULL AND date(created_at) = date('now')"
@@ -2543,6 +2543,9 @@ const SELF_HEAL_COLUMNS: { table: string; column: string; ddl: string }[] = [
   // 分析认领戳：fastTick 与手动批量分析并发时用来抢占，避免同一条线索被两边各烧一次 AI。
   { table: "leads", column: "analyzing_at",
     ddl: "ALTER TABLE leads ADD COLUMN analyzing_at TEXT" },
+  // 自动回执标记：让 SQL 聚合能排除机器信（真源判定仍是 reply-inbox.ts 的 isNoiseReply，这列是它的缓存）。
+  { table: "replies", column: "is_auto",
+    ddl: "ALTER TABLE replies ADD COLUMN is_auto INTEGER NOT NULL DEFAULT 0" },
 ];
 async function ensureKeywordArchivedColumn(env: Env): Promise<void> {
   for (const m of SELF_HEAL_COLUMNS) {

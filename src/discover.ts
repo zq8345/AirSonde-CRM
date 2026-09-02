@@ -1,5 +1,6 @@
 // P5 自动找客户：关键词 → 搜索 API → 提取公司官网 → 去重入库
 import type { Env } from "./index";
+import { realReplySql } from "./reply-inbox";
 
 // 默认关键词池 —— **Joe 定版（C4-A，2026-08-31）**。此清单是唯一真源。
 // ⚠️ 改这里**不会**改变生产：`keywords` 表里已有旧词，且播种是 `ON CONFLICT DO NOTHING`（只增不删）。
@@ -774,7 +775,10 @@ export async function recomputeKeywordStats(env: Env): Promise<{ updated: number
       "SELECT COUNT(DISTINCT l.id) AS n FROM leads l JOIN emails e ON e.lead_id = l.id WHERE l.keyword = ? AND e.status = 'sent'"
     ).bind(keyword).first<{ n: number }>();
     const repRow = await env.DB.prepare(
-      "SELECT COUNT(DISTINCT l.id) AS n FROM leads l WHERE l.keyword = ? AND (l.status = 'replied' OR EXISTS (SELECT 1 FROM replies r WHERE r.lead_id = l.id))"
+      // 🔴 2026-09-02 Joe 指认：「indoor air quality services company 发7·回1·14%」那个"回1"
+      //   是 Conditionedair 的自动回执。**机器发的"我们收到了"不算这家公司回应了你。**
+      //   排除谓词单一真源在 reply-inbox.ts（REAL_REPLY_SQL），别在这儿手写 r.is_auto。
+      `SELECT COUNT(DISTINCT l.id) AS n FROM leads l WHERE l.keyword = ? AND (l.status = 'replied' OR EXISTS (SELECT 1 FROM replies r WHERE r.lead_id = l.id AND ${realReplySql('r')}))`
     ).bind(keyword).first<{ n: number }>();
     const sent = sentRow?.n || 0;
     const replied = repRow?.n || 0;

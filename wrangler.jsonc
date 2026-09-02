@@ -94,7 +94,7 @@
   //   `build.command` 由 **wrangler 自己**在 deploy/dev 前执行 ⇒ 换哪个命令都躲不开它。
   //   它失败会中止部署，这正是我们要的：**判据是"这次部署过没过闸"，不是"我有没有主动禁用它"。**
   "build": {
-    "command": "node scripts/guard-typecheck.js && npx tsc --noEmit"
+    "command": "node scripts/stamp-build.js && node scripts/guard-typecheck.js && npx tsc --noEmit"
   },
 
   // 团队后台自定义域名（Cloudflare 自动建 DNS + 证书）。airsonde.com 在同一 CF 账号。

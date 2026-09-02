@@ -78,9 +78,14 @@ export function previewOf(raw: string, n = 140): string {
 }
 
 /**
- * 噪音判定 —— **读取时计算，不落库**。
- * 为什么不存：规则一定会改（现在只有 15 封样本），存下来等于把今天的判断烤死；
- * 而且"存了判定"会让人以为它是事实，其实只是当下的猜测。
+ * 噪音判定 —— **判定逻辑的唯一真源**。
+ *
+ * ⚠️ 2026-09-02 更新（原文说"读取时计算、不落库"，那条已被部分推翻，留着会自相矛盾）：
+ *   判定**仍然只在这里定义**，但结果现在会作为 `replies.is_auto` **落库一份**——
+ *   因为它要参与 SQL 聚合（关键词战绩/看板/周报），而 SQL 调不了 JS 函数。
+ *   原来"不落库"的理由是"规则会改，存下来等于把今天的判断烤死"，这个顾虑仍然成立，
+ *   所以那一列的定位是**缓存而非事实**：**规则一改就整表重刷**（见 REAL_REPLY_SQL 那段）。
+ *   ⇒ 改了本函数的任何一条规则，都必须顺手重刷 replies.is_auto，否则口径会静默停在旧规则上。
  *
  * ⚠️ 三条保守纪律（宁可少降噪，也别误伤真客户）：
  *   1. **只认明确的机器特征**（RFC 3834 头、群发头、已知调查机器人链接）；
@@ -111,6 +116,24 @@ export function isNoiseReply(r: { raw_headers?: string | null; content?: string 
       && /(?:will (?:review|respond|get back)|support team)/i.test(body)) return true;
   return false;
 }
+
+/**
+ * 🔴🔴 回信计数的**唯一排除谓词**（2026-09-02，Joe 指认「indoor air quality services company 发7·回1·14%」
+ *   那个"回1"是 Conditionedair 的自动回执 —— 我修了 stage 和飞书，**但按 replies 表聚合的口径一处没改**）。
+ *
+ * ⚠️ 为什么必须落库成 `is_auto` 列，而不是继续"读取时算"：
+ *   本文件上方那条纪律（"噪音判定读取时计算、不落库，因为规则一定会改"）在**只用于分组显示**时是对的。
+ *   但现在这个判断要参与 **SQL 聚合**（关键词战绩 / 看板北极星 / 周报 / 待办），SQL 调不了 JS 函数。
+ *   ⇒ 落库，但**明确它是缓存而不是事实**：规则一改就整表重刷一遍（重刷路径见下方 restampAllReplies 的注释）。
+ *   这样既保住"规则可以改"，又让 8 个计数口径能引用同一个谓词。
+ *
+ * ⛔ **只给"计数"用，不给"展示"用**。收件箱、时间线、回复工作台**必须照常看得见**自动回执 ——
+ *    它是真实发生过的事，只是不算"这家公司回应了你"。
+ *    （本次逐个分了类：8 处计数加谓词，14 处展示/查询一个都不动。）
+ */
+export const REAL_REPLY_SQL = "COALESCE(is_auto,0)=0";
+/** 同一个谓词的带别名版本（`FROM replies r` 这种）。**别在调用处手写 `r.is_auto`** —— 手写就是第二份真源。 */
+export const realReplySql = (alias: string) => `COALESCE(${alias}.is_auto,0)=0`;
 
 /** 四个分组页签。noise 与 orphan 是"取向"而非分类：先判孤儿，再判噪音，再按 category 分。 */
 export type InboxTab = "pending" | "declined" | "noise" | "orphan";

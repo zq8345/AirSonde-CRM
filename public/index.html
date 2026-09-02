@@ -26,6 +26,13 @@
     header { padding:14px 12px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px; }
     header h1 { font-size:15px; margin:0; }
     header .sub { color:var(--muted); font-size:12px; }
+    /* 版本戳（2026-09-02）：Joe 三次撞"部署了但看到旧页面"，每次都要重新取证才分得清
+       "没部署" 还是 "缓存"。这行小字把它变成一眼可查的事实。
+       ⚠️ 守宪法「不泄漏机器状态」：**做成最轻的灰字，不是徽章** —— 平时几乎看不见，
+          只在他主动往角落看的时候才存在。不占布局、不可交互、不抢任何注意力。 */
+    #build-stamp { position:fixed; right:8px; bottom:6px; font-size:10px; color:var(--muted);
+                   opacity:.35; pointer-events:none; user-select:text; z-index:1; letter-spacing:.02em; }
+    #build-stamp:hover { opacity:.8; }
     .wrap { display:flex; gap:12px; padding:12px; height:calc(100vh - 64px); box-sizing:border-box; }
     .side { width:178px; background:var(--surface-2); border:.5px solid var(--border); border-radius:12px; padding:12px; flex-shrink:0; overflow:auto;
             display:flex; flex-direction:column; }   /* 批③：flex 把底部⚙设置顶到底 */
@@ -5230,6 +5237,21 @@ ${esc(d.ours.body||'')}</div></details>`
     { const lid = new URLSearchParams(location.search).get("lead");
       if (lid && /^\d+$/.test(lid)) openDetail(lid);
       else openToday(); }   // #40 无深链时默认视图 = 今日待办整页
-  </script>
+  
+    // 版本戳：读构建时生成的 public/build.json。
+    // ⚠️ 带 cache-buster —— 否则这个"用来揭穿缓存的东西"自己先被缓存了，那就成了笑话。
+    // ⚠️ 拿不到就**保持空白**，绝不显示"未知"之类的字：一个说不出版本的戳没有价值，
+    //    而摆一个"未知"在角落只会让人以为出了故障。
+    (async () => {
+      try {
+        const r = await fetch('/build.json?_=' + Date.now(), { cache: 'no-store' });
+        if (!r.ok) return;
+        const b = await r.json();
+        const el = document.getElementById('build-stamp');
+        if (el && b && b.sha) el.textContent = `${b.sha} · ${b.at || ''}`;
+      } catch { /* 拿不到就不显示，不打扰 */ }
+    })();
+</script>
+<div id="build-stamp" title="当前页面对应的部署版本。如果这里的 sha 不是最新的一次部署，你看到的就是旧页面。"></div>
 </body>
 </html>
