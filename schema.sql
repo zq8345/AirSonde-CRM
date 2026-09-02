@@ -33,6 +33,14 @@ CREATE TABLE IF NOT EXISTS leads (
   next_action_date   TEXT,              -- 下一步日期 YYYY-MM-DD（qw）
   last_engaged_at    TEXT,              -- 最近打开/点击时间，冗余便于排序（sprint1）
   fetch_fail_count   INTEGER NOT NULL DEFAULT 0,   -- 连续抓站失败计数（fetchfail）
+  -- is_test：测试数据判定（生成列，定义即 src/noise.ts 的 LEADS_IS_TEST_DDL）。
+  -- ⚠️ 用生成列而不是插入时打标：插入线索的地方不止一处，打标漏一处就静默失效，
+  --    而新增插入点的人不会知道要打标。生成列让数据库自己算 ⇒ 定义一处、天然正确、无需回填。
+  is_test            INTEGER GENERATED ALWAYS AS (
+                       CASE WHEN LOWER(COALESCE(email,'')) LIKE '%@airsonde.com' OR LOWER(COALESCE(email,'')) LIKE '%@airsonde.net'
+                         OR LOWER(COALESCE(website,'')) LIKE '%airsonde.com%' OR LOWER(COALESCE(website,'')) LIKE '%airsonde.net%'
+                         OR LOWER(COALESCE(source,'')) LIKE '%ignition%' OR LOWER(COALESCE(source,'')) LIKE '%test%'
+                         OR LOWER(COALESCE(keyword,''))='ignition-test' THEN 1 ELSE 0 END) VIRTUAL,
   analyzing_at       TEXT,                          -- 分析认领戳（10 分钟过期）。fastTick 与手动批量分析
                                                     -- 并发时用它抢占，避免同一条线索被两边各烧一次 AI。
   human_approved     INTEGER NOT NULL DEFAULT 0,   -- Joe 手动放行 <60（humanapprove，唯一豁免分数线的口子）

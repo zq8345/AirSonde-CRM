@@ -16,7 +16,8 @@ const LIMIT_MAX = 2000;
 import { runDiscovery, getKeywords, seedDefaultKeywords, getSearchConfig, COUNTRIES, DEFAULT_COUNTRIES, recomputeKeywordStats, inferCountryFromWebsite, getSerperUsage, runNmeaDiscovery, runLinkHarvest, runDirectoryRefresh, RVWITHTITO_URL, RVWITHTITO_BLACKLIST, SERPER_DAILY_BUDGET_DEFAULT, findDuplicateLead } from "./discover";
 import { findLeadEmail, diagnoseSite, type PageProbe } from "./findemail";
 import { ingestReplies, matchReplyToLead } from "./replies";
-import { ensureReplyColumns, stripQuoted, previewOf, isNoiseReply, tabOf, REAL_REPLY_SQL, realReplySql, type InboxTab } from "./reply-inbox";
+import { ensureReplyColumns, stripQuoted, previewOf, isNoiseReply, tabOf, type InboxTab } from "./reply-inbox";
+import { REAL_REPLY_SQL, realReplySql, NOT_TEST_SQL, notTestSql, LEADS_IS_TEST_DDL } from "./noise";
 import { installFetchMeter, meteredDB, mark as subMark, reset as subReset, summary as subSummary } from "./subreq";
 import { normalizeCustomerType, customerTypeLabel, classifyKillReason, KILL_REASONS } from "./taxonomy";
 import { normalizePhone, formatPhoneDisplay } from "./scrape";   // C5-31：号码清洗与展示切分，单源
@@ -645,15 +646,23 @@ app.get("/api/dashboard", async (c) => {
   const db = c.env.DB;
 
   // 1) 漏斗各状态计数
-  const statusRows = await db.prepare("SELECT status, COUNT(*) AS n FROM leads GROUP BY status").all();
+  // ⚠️ 业绩口径一律排测试数据（谓词单源在 src/noise.ts）。
+  //   ⛔ 只排"计数"，不排"展示" —— 左栏 /api/stats 和线索列表**照常看得见**那条测试线索，
+  //      否则会长得像数据丢了。这条边界写在 noise.ts 顶部，别在这儿再解释一遍。
+  const statusRows = await db.prepare(`SELECT status, COUNT(*) AS n FROM leads WHERE ${NOT_TEST_SQL} GROUP BY status`).all();
   const funnel: Record<string, number> = {};
   let total = 0;
   for (const r of statusRows.results as any[]) { funnel[r.status] = r.n; total += r.n; }
   const F = (s: string) => funnel[s] || 0;
 
   // 2) 发送总量 + 关键率（分母 = 去重后已发送到的线索数，因回复后 lead 状态不再是 sent）
-  const emailsSentRow = await db.prepare("SELECT COUNT(*) AS n FROM emails WHERE status='sent'").first<{ n: number }>();
-  const sentLeadsRow = await db.prepare("SELECT COUNT(DISTINCT lead_id) AS n FROM emails WHERE status='sent'").first<{ n: number }>();
+  // 邮件表本身没有 is_test，要经 leads 过滤（测试线索发出去的信也不算战绩）。
+  const emailsSentRow = await db.prepare(
+    `SELECT COUNT(*) AS n FROM emails e JOIN leads l ON l.id=e.lead_id WHERE e.status='sent' AND ${notTestSql("l")}`
+  ).first<{ n: number }>();
+  const sentLeadsRow = await db.prepare(
+    `SELECT COUNT(DISTINCT e.lead_id) AS n FROM emails e JOIN leads l ON l.id=e.lead_id WHERE e.status='sent' AND ${notTestSql("l")}`
+  ).first<{ n: number }>();
   const emailsSent = emailsSentRow?.n || 0;
   const sentLeads = sentLeadsRow?.n || 0;
   const replied = F("replied"), bounced = F("bounced"), unsubscribed = F("unsubscribed");
@@ -2546,6 +2555,9 @@ const SELF_HEAL_COLUMNS: { table: string; column: string; ddl: string }[] = [
   // 自动回执标记：让 SQL 聚合能排除机器信（真源判定仍是 reply-inbox.ts 的 isNoiseReply，这列是它的缓存）。
   { table: "replies", column: "is_auto",
     ddl: "ALTER TABLE replies ADD COLUMN is_auto INTEGER NOT NULL DEFAULT 0" },
+  // 测试数据判定（生成列）。⚠️ DDL **引用 noise.ts 的常量，不在这儿抄第二份** ——
+  //   抄一份就意味着"测试数据的定义"有两个家，迟早一处改了另一处没改。
+  { table: "leads", column: "is_test", ddl: LEADS_IS_TEST_DDL },
 ];
 async function ensureKeywordArchivedColumn(env: Env): Promise<void> {
   for (const m of SELF_HEAL_COLUMNS) {

@@ -131,9 +131,9 @@ export function isNoiseReply(r: { raw_headers?: string | null; content?: string 
  *    它是真实发生过的事，只是不算"这家公司回应了你"。
  *    （本次逐个分了类：8 处计数加谓词，14 处展示/查询一个都不动。）
  */
-export const REAL_REPLY_SQL = "COALESCE(is_auto,0)=0";
-/** 同一个谓词的带别名版本（`FROM replies r` 这种）。**别在调用处手写 `r.is_auto`** —— 手写就是第二份真源。 */
-export const realReplySql = (alias: string) => `COALESCE(${alias}.is_auto,0)=0`;
+// ⚠️ 这两个谓词已搬到 src/noise.ts（「什么不算业绩」的统一定义处，与测试数据谓词并列）。
+//    这里不再定义，避免两个家。判定逻辑 isNoiseReply 仍在本文件 —— 定义和谓词分居是故意的：
+//    判定属于回复箱的领域知识，谓词属于口径纪律。
 
 /** 四个分组页签。noise 与 orphan 是"取向"而非分类：先判孤儿，再判噪音，再按 category 分。 */
 export type InboxTab = "pending" | "declined" | "noise" | "orphan";

@@ -442,7 +442,7 @@ export async function syncLeadsToBitable(env: Env): Promise<{ ok: boolean; skipp
   const allRows = (await env.DB.prepare(
     `SELECT l.*, a.match_score, a.customer_type, a.customer_category, a.reason,
             (SELECT COUNT(*) FROM emails e WHERE e.lead_id=l.id AND e.status='sent') AS sent_count,
-            (SELECT COUNT(*) FROM replies r WHERE r.lead_id=l.id AND COALESCE(r.is_auto,0)=0) AS reply_count  /* 排自动回执，谓词真源见 reply-inbox.ts */
+            (SELECT COUNT(*) FROM replies r WHERE r.lead_id=l.id AND COALESCE(r.is_auto,0)=0) AS reply_count  /* 排自动回执+测试线索，谓词真源见 src/noise.ts */  /* 排自动回执，谓词真源见 reply-inbox.ts */
      FROM leads l LEFT JOIN lead_analysis a ON a.lead_id = l.id
      WHERE l.updated_at >= ? ORDER BY l.updated_at ASC LIMIT ${SYNC_BATCH}`
   ).bind(watermark).all()).results as any[];
