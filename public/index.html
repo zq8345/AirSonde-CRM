@@ -31,6 +31,13 @@
        不靠颜色单独承载信息（色觉差异 + 打印/截图都会丢失颜色）。 */
     /* v3 视觉密度：向 Linear 的"安静 chrome + 高密度"收一档。
        ⚠️ 只调密度与层次，⛔ 不碰深色主题（那是另一个工程），⛔ 不出附录 C 的 token 集。 */
+    /* C5-42b 收尾：机器房三段分区。间距按附录 C 统一，⛔ 别一段一个节奏。 */
+    .mr-sec-head { font-size:14px; font-weight:600; color:var(--text);
+                   margin:28px 0 12px; padding-top:20px; border-top:1px solid var(--border); }
+    .mr-sec-head .hint { font-weight:400; margin:0; }
+    #v-machine .cfg-form .set-card { margin:0 0 12px; }        /* 控制区四块之间统一 12px */
+    #v-machine .cfg-form .set-card:last-of-type { margin-bottom:0; }
+    #mr-status { margin-bottom:4px; }                           /* 状态区与分区线之间的呼吸 */
     .db-block { padding:16px 18px; margin-bottom:10px; }        /* 卡间距压一档（原 24/16） */
     .db-t { font-size:13px; font-weight:600; letter-spacing:.02em; margin-bottom:10px; }
     .db-block .hint { font-size:11.5px; }                        /* 次级数字更小更浅 */
@@ -981,9 +988,14 @@
             但那是 `</div>…<div>` 那种平衡 —— **括号数相等不等于结构正确**。
             结果 tsc 绿、重复 id 扫描绿、node --check 绿，而浏览器解析时提前闭合了容器，
             ④方向盘整块从 DOM 里消失。改成**按 div 深度走**并断言"任何前缀深度不为负"才抓住。 -->
+    <!-- 🟡 分区标题（Joe 指认"维护折叠行下面直接冒出控制字样"）：
+         三段之间要**视觉分明** —— 状态区(只读监控) ↔ 控制区(可改) ↔ 维护区(危险操作)。
+         ⚠️ 标题里带上"点编辑可改"：这一区默认只读，**光有一个「编辑」按钮不够**，
+            按钮说的是"能做什么"，标题说的是"现在是什么状态"。两句都要有。 -->
+    <div class="mr-sec-head">⚙ 机器控制 <span class="hint">· 默认只读，点右边「编辑」才能改</span></div>
     <div class="cfg-form preview" style="max-width:820px">
-      <div class="sec-row" style="margin:18px 0 10px">
-        <span class="sec-title" style="margin:0">🎛 控制</span>
+      <div class="sec-row" style="margin:0 0 12px">
+        <span class="sec-title" style="margin:0">当前配置</span>
         <span class="sec-tools">
           <button class="mini" id="mr-cfg-edit" type="button">编辑</button>
           <button class="mini" id="mr-cfg-cancel" type="button" style="display:none">取消</button>
@@ -4403,7 +4415,11 @@
     document.querySelectorAll('#cfg-cancel,#mr-cfg-cancel').forEach(cb => { cb.onclick = () => {
         // ⚠️ 「取消」必须**重新加载**，不能只切皮肤 —— 只切皮肤会把他改了一半的值留在框里，
         //   下次点编辑看到的是脏值，而他以为自己取消过了。
-        openSettings();
+        // 🔴 C5-42b 收尾：控制区现在有两个家，**取消必须回到他所在的那一页**。
+        //   原来写死 openSettings() ⇒ 在机器房点取消会被**甩到设置页**，
+        //   而他只是想放弃这次修改。⚠️ 这是我共用 handler 时引入的：
+        //   共用行为可以，但"回到哪里"是**位置**，位置不能共用。
+        if (cb.closest('#v-machine')) openMachineRoom(); else openSettings();
       }; });
     // ⚠️ 保存**仍是一个 handler 存全部** —— 变的只是它有两个入口，⛔ 别为机器房另写一套。
     document.querySelectorAll('#save-sendcfg,#mr-save-cfg').forEach(btn => { btn.onclick = async () => {
@@ -5353,6 +5369,37 @@ ${esc(d.ours.body||'')}</div></details>`
     // ⚠️ 这一页**允许**出现工程术语：进来的人就是来看内部的。首页一个都不许有。
     window.openMachineRoom = async function openMachineRoom(retried){
       showMainView('machine');
+      // 🔴🔴 C5-42b 收尾（Joe 截图抓到）：控制区默认是**可编辑**的，不是预览态。
+      //
+      // 根因：`setSettingsMode("preview")` 只在 `openSettings()` 里调过 ——
+      //   而 `openMachineRoom()` 只取数、**从不做两态初始化，也从不填控制区的值**。
+      //   搬迁前这不是问题（控制区住在设置页，进设置页必然初始化）；搬完就漏了。
+      //
+      // ⚠️ 我的本地验收当时是绿的，因为**我先点了「设置」再进机器房** ——
+      //   那一步顺手把两态初始化了。Joe 是直接进机器房，所以他看到的是真相。
+      //   教训：**测试路径要复刻用户路径，不能自己顺手先满足了某个前置条件。**
+      //   （我的点击顺序无意中"帮"页面完成了初始化，于是测出了一个假绿。）
+      //
+      // ⇒ 机器房进场也做完整初始化：回预览态 + 把控制区的值真的填进去。
+      //   ⛔ 不为机器房写第二套加载逻辑，复用 openSettings 那两个 fetchCfg + fillSettingsFields。
+      setSettingsMode("preview");
+      try {
+        const g1 = await fetchCfg("/api/settings/sending");
+        const g2 = await fetchCfg("/api/settings/followup");
+        if (g1.ok && g2.ok) {
+          await fillSettingsFields(g1.data, g2.data);
+          setSettingsMode("preview");     // 填完再置一次：填充过程可能动到控件属性
+        } else {
+          // ⚠️ 控制区读不到配置时**必须说出来**，不能留一片空框假装正常（铁律八）。
+          const eb = $("#mr-cfg-loaderr");
+          if (eb) { eb.style.display=''; eb.innerHTML =
+            `控制区的配置没读上来（${(g1.ok?g2.why:g1.why)||'接口失败'}）—— 上面显示的空白**不是你的设置**，请刷新重试。`; }
+        }
+      } catch (e) {
+        console.error("mr-cfg:", e);
+        const eb = $("#mr-cfg-loaderr");
+        if (eb) { eb.style.display=''; eb.textContent = "控制区填充出错：" + String(e && e.message || e).slice(0,80); }
+      }
       $("#mr-status").innerHTML = pageHeader('机器房','') + `<p class="hint">加载中…</p>`;
       // ⚠️ C5-3：`scfg` = /api/settings/search，**本批新增的一路**。
       //    机器房原来只读 ignition / sending / today —— 我第一版把「后台自动搜索」「轮转进度」
