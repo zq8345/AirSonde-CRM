@@ -26,6 +26,28 @@
     header { padding:14px 12px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px; }
     header h1 { font-size:15px; margin:0; }
     header .sub { color:var(--muted); font-size:12px; }
+    /* ══ C5-40 数据看板 v2 ══ 只用附录 C 的 token，⛔ 无外部图表库（单文件仓 + CSP 的老规矩）。 */
+    /* 发现卡：左侧色条区分严重度。⚠️ 色条是**唯一**的严重度编码之外还要有文字，
+       不靠颜色单独承载信息（色觉差异 + 打印/截图都会丢失颜色）。 */
+    .db-finding { border-left:3px solid var(--border-strong); background:var(--panel);
+                  border-radius:8px; padding:12px 14px; margin:0 0 10px; }
+    .db-finding:last-child { margin-bottom:0; }
+    .db-f-red   { border-left-color:var(--red);   background:var(--tint-red); }
+    .db-f-amber { border-left-color:var(--amber); background:var(--tint-amber); }
+    .db-f-green { border-left-color:var(--green); background:var(--tint-green); }
+    .db-f-t { font-size:14px; font-weight:600; color:var(--text); line-height:1.5; }
+    .db-f-e { font-size:13px; color:var(--muted); line-height:1.55; margin:4px 0 8px; }
+    /* 成长进度：⚠️ 这是"仪表在长大"，不是"功能没做好" —— 措辞和视觉都要轻，别像报错。 */
+    .db-grow { font-size:12px; color:var(--muted); line-height:1.6; padding:8px 0; }
+    .db-grow + .db-grow { border-top:1px solid var(--border); }
+    /* 回信构成横条 */
+    .db-mixbar { display:flex; height:14px; border-radius:7px; overflow:hidden; background:var(--panel); margin:2px 0 8px; }
+    .db-mixbar i { display:block; height:100%; }
+    .db-mix-inquiry, .db-mix-interested { background:var(--green); }
+    .db-mix-not_interested { background:var(--border-strong); }
+    .db-mix-complaint { background:var(--red); }
+    .db-mix-auto { background:var(--amber); opacity:.55; }
+    .db-mix-other { background:var(--border-strong); opacity:.6; }
     /* 版本戳（2026-09-02）：Joe 三次撞"部署了但看到旧页面"，每次都要重新取证才分得清
        "没部署" 还是 "缓存"。这行小字把它变成一眼可查的事实。
        ⚠️ 守宪法「不泄漏机器状态」：**做成最轻的灰字，不是徽章** —— 平时几乎看不见，
@@ -400,6 +422,20 @@
                border:none; color:var(--muted); font-size:22px; line-height:1; cursor:pointer;
                padding:2px 8px; margin:-8px -8px 0 8px; border-radius:6px; transition:color .12s, background .12s; }
     .modal-x:hover { color:var(--red); background:var(--bg); }
+    /* 🔴 2026-09-02 Joe 实时指认：「—」与「✕」挨太近会误点。
+       ⚠️ 误点的代价**不对称**：点错「✕」他以为搜索被取消了（其实后台还在跑），
+          而这个弹窗正是他唯一能看见进度的地方 —— 所以宁可占位置也要分得开。
+       两颗按钮语义不同，hover 底色也不同：收起=中性蓝，关闭=告警红。 */
+    /* ⚠️⚠️ 间距**不靠 float 上打补丁**。两条都试过、都量出 0：
+       · `right:46px`（原实现）—— 依赖 sticky 的静态位置，脆且方向反直觉；
+       · `margin-right` —— 被 .modal-x 自己的 margin shorthand 和 float 方向抵消。
+       ⇒ 改成一个显式的 flex 容器，间距由 `gap` **结构保证**，与 float/sticky 无关。
+       （判据：合成测试量出的净间距 ≥12px，见交付说明。） */
+    .modal-ctl { position:sticky; top:-6px; float:right; z-index:5; display:flex; gap:14px;
+                 margin:-8px -8px 0 8px; }
+    .modal-ctl .modal-x { position:static; float:none; margin:0; }
+    .modal-min:hover { color:var(--blue) !important; background:var(--tint-blue) !important; }
+    .modal-x.modal-close:hover { color:var(--red); background:var(--tint-red); }
     /* 详情弹窗三段式：顶固定·中滚动·底固定 */
     .detail-modal { padding:0; display:flex; flex-direction:column; width:min(720px,94vw); }
     .detail-top { padding:16px 20px 12px; border-bottom:1px solid var(--border); position:relative; flex-shrink:0; }
@@ -1178,8 +1214,13 @@
       <!-- ⭐ C5-28（Joe 原话"记得加个最小化的按钮"）：他不敢点 ×，因为 **× 在弹窗上默认读作"取消"**。
            这是真实的 affordance 盲点 —— 行为对不对不重要，**他不敢点就等于这个能力不存在**。
            ⇒ 加一个显式「—」，与 × 同义；× 的悬浮提示也改成"收起"，让"收起 ≠ 取消"长在按钮上。 -->
-      <button class="modal-x" type="button" onclick="closeRestock()" title="收起（后台继续跑）" style="right:46px">—</button>
-      <button class="modal-x" type="button" onclick="closeRestock()" title="收起（后台继续跑）">×</button>
+      <!-- 🔴 Joe 实时指认：两颗挨太近会误点。⚠️ 误点代价**不对称** —— 点错「✕」他会以为搜索被取消了
+           （其实后台照跑），而这个弹窗正是他唯一看得见进度的地方。所以宁可占位置也要分得开。
+           ⇒ 用 flex 容器 + gap 把间距做成**结构性**的，不再靠 float 上的偏移补丁。 -->
+      <div class="modal-ctl">
+        <button class="modal-x modal-min" type="button" onclick="closeRestock()" title="收起（后台继续跑）" aria-label="收起">—</button>
+        <button class="modal-x modal-close" type="button" onclick="closeRestock()" title="关闭（后台继续跑，随时可以再打开看进度）" aria-label="关闭">✕</button>
+      </div>
       <h2>➕ 找客户</h2>
       <!-- 积压刹车条：它的全部意义就是**拦在"再进货"这个决定前面**（总工裁定 A）。
            ⚠️ 条里三个「去处理」链接点下去要先关弹窗再跳，否则弹窗会盖在跳转后的列表上。 -->
@@ -4700,6 +4741,10 @@ ${esc(d.ours.body||'')}</div></details>`
       const enoughN = denom >= DB_N_MIN;
       const w = wk[wk.length-1] || {sent:0,replied:0}, prev = wk[wk.length-2] || {sent:0,replied:0};
       const totalReplied = c.replied || 0;
+      // ⚠️ 上提（2026-09-02）：退订率/退信率原来定义在块3 里，而**发现卡引擎在它之前就要用**。
+      //   上提而不是在引擎里另算一遍 —— 算两遍就是两个真源，迟早一处改了另一处没改。
+      //   （这个 bug 是灌了丰满数据才炸出来的：空库时那条分支根本走不到 ⇒ 只验空态会漏。）
+      const ur = denom ? (c.unsubscribed||0)/denom : 0, brr = denom ? (c.bounced||0)/denom : 0;
       // ⚠️ 原来是 `o.sent > 0` —— 1 封发出去 1 封回信就报"回信率 100%"。
       //   null 的含义统一为"这个比率现在不该被相信"，调用方本来就已经在处理 null。
       const rateOf = (o) => (o && o.sent >= DB_RATE_MIN_N) ? (o.replied||0)/o.sent : null;
@@ -4745,11 +4790,20 @@ ${esc(d.ours.body||'')}</div></details>`
       // ⚠️ 行尾动作**按维度定**：入口要指向能完成动作的地方（铁律四推论）。
       //    关键词 → 方向盘（勾选就在那）；国家 → 补货弹窗预选该国（单国定向是国家维度唯一的杆）；
       //    分类 → **无按钮**（没有对应旋钮，摆一个不通向动作的按钮就是骗人）。
+      // ⑤ C5-40：战绩榜收敛成 **top3 + bottom3**（样本≥DB_RATE_MIN_N 的才进榜）。
+      //   ⚠️ 为什么不是"显示前 8 个"：一屏罗列 8 行会让 Joe **逐行读**，而他要的是
+      //     "谁最好、谁最差" 这一个判断。中间那些既不指导加码也不指导停用，是纯噪音。
+      //   ⚠️ 少于 7 个时直接全给（切了反而看不全），不硬凑"上下各 3"。
+      const topBottom = (arr) => {
+        const ok = (arr||[]).filter(x => (x.sentLeads||0) >= DB_RATE_MIN_N);
+        if (ok.length <= 6) return ok;
+        return [...ok.slice(0,3), ...ok.slice(-3)];
+      };
       const dimRows = (items, labelFn, actFn) => items.map(it=>{
         const sent = it.sentLeads||0, rep = it.repliedLeads||0;
         const ok = sent >= DB_N_MIN;
         const r = sent ? rep/sent : 0;
-        return `<div class="db-dimrow ${ok?'':'db-locked'}"><span class="db-dimname">${labelFn(it)}</span><span class="db-dimbar"><i style="width:${ok?(r*100).toFixed(0):0}%"></i></span><span class="db-dimv">${ok ? pct(r) : `${rep}/${sent}`}${ok?'':`<span class="hint"> 样本不足</span>`}</span>${actFn ? actFn(it) : ''}</div>`;
+        return `<div class="db-dimrow ${ok?'':'db-locked'}"><span class="db-dimname">${labelFn(it)}</span><span class="db-dimbar"><i style="width:${ok?(r*100).toFixed(0):0}%"></i></span><span class="db-dimv">${ok ? pct(r) : `${rep}/${sent}`}${ok?'':`<span class="hint"> 还差 ${DB_N_MIN-sent} 家</span>`}</span>${actFn ? actFn(it) : ''}</div>`;
       }).join('');
       // 🔴 C5-38 第 5 条：排序也要有样本地板。原来纯按比率排 ⇒ 一个「1 发 1 回」的关键词
       //   比率 100%、稳坐第一，把真正有数据的关键词挤出 slice(0,8) 之外 —— 行虽然标了
@@ -4776,7 +4830,7 @@ ${esc(d.ours.body||'')}</div></details>`
           if (rl > 0 && rh/rl >= DB_SPREAD_MIN)
             j = `<div class="db-judge">「${esc(hi.v)}」的回信率是「${esc(lo.v)}」的 ${(rh/rl).toFixed(1)} 倍 —— 考虑把关键词的力气挪过去 ${act('去方向盘',"openSettings()")}</div>`;
         }
-        b2 = `<div class="db-sub">按关键词</div>${dimRows(kwR.slice(0,8), i=>esc(i.v), () => act('去方向盘',"openSettings()")) || empty('还没有关键词数据')}<div class="db-sub">按国家</div>${dimRows(ccR.slice(0,8), i=>esc(countryName(i.v)), it => act('补一轮这国',`openRestockFor('${esc(String(it.v||'').toLowerCase())}')`)) || empty('还没有国家数据')}<div class="db-sub">按分类</div>${dimRows(catR.slice(0,6), i=>esc(i.v), null) || empty('还没有分类数据')}${j}`;
+        b2 = `<div class="db-sub">按关键词</div>${dimRows(topBottom(kwR), i=>esc(i.v), () => act('去方向盘',"openSettings()")) || empty('还没有关键词数据')}<div class="db-sub">按国家</div>${dimRows(topBottom(ccR), i=>esc(countryName(i.v)), it => act('补一轮这国',`openRestockFor('${esc(String(it.v||'').toLowerCase())}')`)) || empty('还没有国家数据')}<div class="db-sub">按分类</div>${dimRows(topBottom(catR), i=>esc(i.v), null) || empty('还没有分类数据')}${j}`;
       }
 
       // ── 块3 · 哪里在漏水 + 账本 ────────────────────────────────────
@@ -4832,10 +4886,10 @@ ${esc(d.ours.body||'')}</div></details>`
         if (worst){
           leak = `<div class="db-judge">掉得最狠的是 <b>${esc(worst.from)}→${esc(worst.to)}</b>（${worstP}%）${leakAct(worst.to)}</div>`;
         } else if (!enoughN) leak = `<div class="hint">已发 ${denom} 家，不到 ${DB_N_MIN} —— 暂不指认漏点</div>`;
-        const ur = denom ? (c.unsubscribed||0)/denom : 0, brr = denom ? (c.bounced||0)/denom : 0;
+        // ⚠️ ur/brr 已上提到 denom 旁边（发现卡引擎要先用它们）。这里不再重复定义 —— 定义两次就是两个真源。
         const bad = enoughN && (ur>=DB_UNSUB_WARN || brr>=DB_BOUNCE_WARN);
         const health = !enoughN
-          ? `<div class="hint">退订 ${c.unsubscribed||0} · 退信 ${c.bounced||0}（共发 ${denom} 家，样本不足不算率）</div>`
+          ? `<div class="hint">退订 ${c.unsubscribed||0} · 退信 ${c.bounced||0} —— 再发 ${DB_N_MIN-denom} 家后开始算比率</div>`
           : bad
             ? `<div class="db-judge db-bad">⚠️ 退订 ${pct(ur)}${ur>=DB_UNSUB_WARN?`（超 ${pct(DB_UNSUB_WARN)}）`:''} · 退信 ${pct(brr)}${brr>=DB_BOUNCE_WARN?`（超 ${pct(DB_BOUNCE_WARN)}）`:''} —— 先停下看信的内容和名单来源</div>`
             : `<div class="db-ok">退订 ${pct(ur)} · 退信 ${pct(brr)} —— 都在正常范围</div>`;
@@ -4851,9 +4905,105 @@ ${esc(d.ours.body||'')}</div></details>`
         b3 = fn + mailLine + exLine + leak + health + ledger;   // C5-38②：邮件封数另起一行；exLine 让归零自己解释自己
       }
 
+      // ════════ C5-40 ① 发现卡引擎 ════════
+      //
+      // Joe 的要求是"可视化 + 找出问题 + 指导动作"。前两块看板早就有了，**第三块一直缺**：
+      // 他得自己看着一堆条形图去想"那我该干嘛"。发现卡把这一步交给机器。
+      //
+      // ⚠️⚠️ 三条纪律，一条都不能松：
+      //   1. **每条规则都有样本地板** —— 复用既有的 DB_N_MIN / DB_RATE_MIN_N，⛔ 不新立阈值。
+      //      3 个里掉 2 个 = 67%，那是噪音不是发现；据噪音指挥 Joe 比不指挥更糟。
+      //   2. **没命中就说"机器按计划运行"**，⛔ 不硬凑卡。凑出来的发现会训练他忽略这一整块。
+      //   3. **未激活的卡显示"成长进度"而不是"样本不足"** —— 让他看到的是"仪表在长大"，
+      //      不是"功能没做好"。这是总调度定的形态，也适用于看板其它样本地板处。
+      const G = d.discover || {};
+      const gLimit = Number(G.dailyLimit || 0);
+      const gFail = Number(G.sendFailedToday || 0);
+      const wkUnsub = (G.weeklyUnsub || []).map(x => Number(x.n) || 0);   // 已按周倒序
+      const findings = [], growing = [];
+      // 全局回信率（分母 = 去重后已发送的公司数），作为各维度的比较基准
+      const globalReply = denom >= DB_RATE_MIN_N ? totalReplied / denom : null;
+
+      // (a) 某关键词发得够多、回信率却不到全局一半 → 建议停用
+      if (globalReply == null) {
+        growing.push({ t: '关键词表现对比', need: [['累计发信公司数', denom, DB_RATE_MIN_N], ['真人回信', totalReplied, 1]] });
+      } else {
+        const bad = (d.byKeyword || []).filter(k => (k.sentLeads || 0) >= 10 &&
+          ((k.repliedLeads || 0) / (k.sentLeads || 1)) < globalReply / 2);
+        if (bad.length) {
+          const w = bad[0];
+          findings.push({ sev: 'amber',
+            t: `「${esc(w.v)}」发了 ${w.sentLeads} 家只回了 ${w.repliedLeads || 0} 家`,
+            e: `回信率 ${Math.round((w.repliedLeads||0)/w.sentLeads*100)}%，不到全局 ${Math.round(globalReply*100)}% 的一半`,
+            cta: act('去方向盘停用它', "openSettings()") });
+        }
+      }
+      // (b) 某国家/分类回信率是全局 2 倍以上且样本够 → 建议加码
+      if (globalReply != null) {
+        const strong = [...(d.byCountry||[]).map(x=>({...x,kind:'国家'})), ...(d.byCategory||[]).map(x=>({...x,kind:'客户类型'}))]
+          .filter(x => (x.sentLeads||0) >= 15 && ((x.repliedLeads||0)/(x.sentLeads||1)) >= globalReply * 2);
+        if (strong.length) {
+          const b = strong[0];
+          findings.push({ sev: 'green',
+            t: `${b.kind}「${esc(b.v)}」的回信率是全局的 ${(((b.repliedLeads||0)/b.sentLeads)/globalReply).toFixed(1)} 倍`,
+            e: `发 ${b.sentLeads} 家回 ${b.repliedLeads||0} 家`,
+            cta: b.kind === '国家' ? act('补一轮这国', `openRestockFor('${esc(String(b.v).toLowerCase())}')`) : act('去找客户', "openRestock()") });
+        }
+      }
+      // (c) 退信率超线 或 退订连续两周上行 → 红卡
+      if (enoughN && brr > DB_BOUNCE_WARN) {
+        findings.push({ sev: 'red', t: `退信率 ${pct(brr)}，超过 ${pct(DB_BOUNCE_WARN)} 的警戒线`,
+          e: `${c.bounced||0} 封退回 / 共发 ${denom} 家 —— 退信率高会拖垮域名信誉`,
+          cta: act('去看邮箱来源', "gotoGroup('ready')") });
+      } else if (wkUnsub.length >= 3 && wkUnsub[0] > wkUnsub[1] && wkUnsub[1] > wkUnsub[2]) {
+        findings.push({ sev: 'amber', t: `退订连续两周在涨（${wkUnsub[2]} → ${wkUnsub[1]} → ${wkUnsub[0]}）`,
+          e: '不是单周波动，是趋势 —— 通常意味着文案或线索来源出了偏差',
+          cta: act('去改文案', "openSettings()") });
+      } else if (wkUnsub.length < 3) {
+        growing.push({ t: '退订趋势', need: [['有退订记录的周数', wkUnsub.length, 3]] });
+      }
+      // (d) 今天有发送失败 → 去处理
+      if (gFail >= 3) {
+        findings.push({ sev: 'red', t: `今天有 ${gFail} 封信没发出去`,
+          e: '失败的信不会自己重发 —— 这些公司此刻还没被联系到',
+          cta: act('去机器房看原因', "openMachineRoom()") });
+      }
+      // (e) 管道断流：待联系存量撑不过明天
+      if (gLimit > 0 && (d.readyCount || 0) < gLimit) {
+        findings.push({ sev: 'amber', t: `待联系只剩 ${d.readyCount||0} 家，明天的额度是 ${gLimit} 封`,
+          e: '按这个速度，机器明天会闲着 —— 弹药不足，不是机器不干活',
+          cta: act('去找客户', "openRestock()") });
+      }
+
+      const sevCls = { red: 'db-f-red', amber: 'db-f-amber', green: 'db-f-green' };
+      const growHtml = growing.map(g => {
+        const bits = g.need.map(([what, have, need]) =>
+          `${esc(what)} ${have}/${need}${have >= need ? ' ✓' : ''}`).join(' · ');
+        return `<div class="db-grow"><b>${esc(g.t)}</b>：满足 ${bits} 后开始工作</div>`;
+      }).join('');
+      const findHtml = findings.length
+        ? findings.map(f => `<div class="db-finding ${sevCls[f.sev]}"><div class="db-f-t">${f.t}</div>` +
+            `<div class="db-f-e">${f.e}</div>${f.cta || ''}</div>`).join('')
+        : `<div class="db-ok">本周机器按计划运行 —— 没有需要你决定的事</div>`;
+
+      // ════════ C5-40 ④ 回信构成 ════════
+      // ⚠️ 这里**故意不排自动回执** —— 它是"构成"不是"战绩"。把被排除的那一类藏起来，
+      //    这张卡就失去意义了（Joe 正是要看清"我收到的信里有多少是机器发的"）。
+      const MIXLBL = { inquiry:'询价', interested:'有兴趣', not_interested:'拒绝', complaint:'投诉', auto:'自动回执', other:'其他' };
+      const mix = (G.replyMix || []).map(x => ({ k: x.k, n: Number(x.n)||0 }));
+      const mixTotal = mix.reduce((a,b) => a + b.n, 0);
+      const mixHtml = mixTotal
+        ? `<div class="db-mixbar">` + mix.map(m =>
+            `<i class="db-mix-${esc(m.k)}" style="width:${(m.n/mixTotal*100).toFixed(1)}%" title="${esc(MIXLBL[m.k]||m.k)} ${m.n} 封"></i>`).join('') +
+          `</div><div class="hint db-legend">` + mix.map(m =>
+            `<span>${esc(MIXLBL[m.k]||m.k)} ${m.n}</span>`).join(' · ') + `</div>`
+        : `<div class="db-grow"><b>回信构成</b>：收到第 1 封回信后开始工作（当前 0/1）</div>`;
+
       $("#v-page").innerHTML = pageHeader('数据看板','')
+        + card('本周发现', findHtml + growHtml)
         + `<div class="page-card db-block">${starLine}</div>`
         + card('生意在动吗？', b1)
+        + card('回信都是些什么信？', mixHtml)
         + card('力气该花哪儿？', b2)
         + card('哪里在漏水？', b3);
     }

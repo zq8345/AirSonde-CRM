@@ -865,6 +865,39 @@ app.get("/api/dashboard", async (c) => {
       bFlipPending: buckets?.bFlipPending || 0,   // <60 且还没被人工处理 = 翻牌堆待复核
       min: APPROVE_MIN_SCORE,
     },
+    // ══ C5-40 发现卡引擎的输入（2026-09-02 新增）══
+    // ⚠️ 全部是**纯增量新字段**：一个既有字段的口径定义都没动
+    //   （重刷进行中，改既有口径会让迁移矩阵前后不一致 —— 那条约束我守着）。
+    discover: {
+      // (c) 退订趋势：weekly 原来只有 sent/replied，规则要"连续两周上行"就得有退订的周序列
+      // ⚠️ 退订**没有独立的表**（我第一版写了 `FROM unsubscribes`，那个表根本不存在）——
+      //   真源是 `leads.status='unsubscribed'`，时间用 updated_at（状态变更的时刻）。
+      //   ⛔ 这里**故意不加 try/catch**：写错表名就该 500 报出来。
+      //     加了 catch 返回 [] 的话，这张卡会**永远静默不出现**，而且没有任何东西会说它坏了 ——
+      //     那正是这仓栽过的"静默跳过的检查最危险"。宁可整页报错，也不要一张假装没数据的卡。
+      weeklyUnsub: (await db.prepare(
+        `SELECT ${weekKey.replace("{col}", "l.updated_at")} AS w, COUNT(*) AS n
+           FROM leads l
+          WHERE l.status='unsubscribed' AND ${notTestSql("l")} AND l.updated_at IS NOT NULL
+          GROUP BY w ORDER BY w DESC LIMIT 3`
+      ).all()).results as any[],
+      // (d) 连续发送失败
+      sendFailedToday: (await db.prepare(
+        `SELECT COUNT(*) AS n FROM emails e JOIN leads l ON l.id=e.lead_id
+          WHERE e.status='failed' AND date(e.created_at)=date('now') AND ${notTestSql("l")}`
+      ).first<{ n: number }>())?.n || 0,
+      // (e) 管道断流：待联系存量 vs 明日额度
+      dailyLimit: (await systemDailySendLimit(c.env)).effective,
+      // ④ 回信构成（询价/拒绝/自动回执/其他）。⚠️ 自动回执**要单独显示**，
+      //   所以这一处**不能**套 REAL_REPLY_SQL —— 它是"构成"不是"战绩"，
+      //   把被排除的那一类藏起来，这张卡就失去意义了。测试线索仍然排除。
+      replyMix: (await db.prepare(
+        `SELECT CASE WHEN COALESCE(r.is_auto,0)=1 THEN 'auto' ELSE COALESCE(r.category,'other') END AS k,
+                COUNT(*) AS n
+           FROM replies r LEFT JOIN leads l ON l.id=r.lead_id
+          WHERE COALESCE(l.is_test,0)=0 GROUP BY k ORDER BY n DESC`
+      ).all()).results as any[],
+    },
     noEmailCount: noEmailRow?.n || 0,
     analyzedCount: analyzedRow?.n || 0,
     viewed: viewedRow?.n || 0,     // #40 数据看板：已查看（sent+点击）
