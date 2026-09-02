@@ -5621,17 +5621,26 @@ ${esc(d.ours.body||'')}</div></details>`
       if (lid && /^\d+$/.test(lid)) openDetail(lid);
       else openToday(); }   // #40 无深链时默认视图 = 今日待办整页
   
-    // 版本戳：读构建时生成的 public/build.json。
+    // 版本戳：读 /api/version —— 真源是 **Cloudflare 的 version id**（平台记录的"正在服务
+    // 这个请求的那一版"），不是构建时的 git sha。
+    // 🔴 2026-09-02 换掉旧做法的原因：旧戳读构建时 `git rev-parse HEAD`，而部署流程是
+    //    **先 deploy 后 commit** ⇒ 戳永远落后一个 commit。真出过事：总调度照戳报了一个
+    //    已经不是生产在跑的 commit。**一个戳的全部价值就是回答"我看到的是哪一版"；
+    //    给一个误导性的答案，比不给更坏。**
     // ⚠️ 带 cache-buster —— 否则这个"用来揭穿缓存的东西"自己先被缓存了，那就成了笑话。
-    // ⚠️ 拿不到就**保持空白**，绝不显示"未知"之类的字：一个说不出版本的戳没有价值，
-    //    而摆一个"未知"在角落只会让人以为出了故障。
+    // ⚠️ 拿不到就**保持空白**，绝不显示"未知"：说不出版本的戳没有价值，而角落里一个"未知"
+    //    只会让人以为出了故障。
     (async () => {
       try {
-        const r = await fetch('/build.json?_=' + Date.now(), { cache: 'no-store' });
+        const r = await fetch('/api/version?_=' + Date.now(), { cache: 'no-store' });
         if (!r.ok) return;
-        const b = await r.json();
+        const v = await r.json();
         const el = document.getElementById('build-stamp');
-        if (el && b && b.sha) el.textContent = `${b.sha} · ${b.at || ''}`;
+        if (!el) return;
+        if (!v.versionId) return;                       // 拿不到真源 ⇒ 宁可空白，不编一个
+        const short = String(v.versionId).slice(0, 8);
+        el.textContent = short + (v.deployedAt ? ' · ' + String(v.deployedAt).replace('T',' ').slice(0,16) + 'Z' : '');
+        el.title = '生产版本 ' + v.versionId + (v.buildSha ? ' | 构建时 git sha ' + v.buildSha + '（仅供对照，可能落后一个 commit）' : '') + ' | 如果这个版本号不是最新一次部署的 Version ID，你看到的就是旧页面。';
       } catch { /* 拿不到就不显示，不打扰 */ }
     })();
 </script>

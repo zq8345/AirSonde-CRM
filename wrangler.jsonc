@@ -108,6 +108,12 @@
   ],
 
   // 可观测性：开日志留存（上游 2026-07-28 事故结论：历史日志不可查 = 出问题只能等复现）。
+  // 🔴 版本戳的**真源**（2026-09-02）：Cloudflare 注入"当前正在服务这个请求的那一版"。
+  //   为什么必须换掉原来的做法：原来戳的是构建时 `git rev-parse HEAD`，而我**先部署后提交**
+  //   ⇒ 戳永远落后一个 commit。而这个戳存在的唯一意义就是回答"生产跑的是哪一版" ——
+  //   **给一个误导性的答案，比没有答案更坏**（铁律八同族）。
+  //   version_metadata 由平台注入，不依赖任何本地状态，改不了也漏不掉。
+  "version_metadata": { "binding": "CF_VERSION" },
   "observability": { "enabled": true, "head_sampling_rate": 1 },
 
   // C1 锁死：不开 workers.dev（上游开着是为了退订链接公开可达 + Basic Auth 应急；

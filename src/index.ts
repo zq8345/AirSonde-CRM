@@ -131,6 +131,8 @@ import { larkAppConfigured, sendAppCard, syncLeadsToBitable, verifyLarkCallback,
 export interface Env {
   DB: D1Database;
   ASSETS: Fetcher;
+  /** 平台注入的版本元数据（wrangler.jsonc: version_metadata）。本地 dev 里可能是 undefined。 */
+  CF_VERSION?: { id: string; tag?: string; timestamp?: string };
   OPENROUTER_API_KEY: string;
   SCORE_MODEL: string;
   EMAIL_MODEL: string;
@@ -3811,6 +3813,31 @@ app.post("/api/rescore-low/batch", async (c) => {
 });
 
 // ---- 非 /api 请求交给静态资源（后台前端）----
+/**
+ * 版本戳的**唯一真源**：`CF_VERSION.id` = 平台记录的"正在服务这个请求的那一版"。
+ *
+ * ⚠️ 为什么不能用构建时的 git sha（原做法，已废）：`stamp-build.js` 读的是 `git rev-parse HEAD`，
+ *   而部署流程是**先 deploy 后 commit** ⇒ 戳永远落后一个 commit。
+ *   2026-09-02 真出过事：总调度按戳报"生产 build 是 d1be6c3"，而那时跑的已经是下一版了。
+ *   **一个戳的全部价值就是回答"我看到的是哪一版"；给一个误导性的答案，比不给更坏。**
+ * ⚠️ git sha 仍然返回，但降级为 `buildSha`（相关性参考），⛔ 不是"生产跑哪版"的依据。
+ */
+app.get("/api/version", async (c) => {
+  const v = c.env.CF_VERSION;
+  let build: any = null;
+  try { build = await (await c.env.ASSETS.fetch(new Request("https://x/build.json"))).json(); } catch { /* 没有就没有 */ }
+  return c.json({
+    versionId: v?.id ?? null,          // ← 真源。本地 dev 没有这个绑定，返回 null（如实）
+    tag: v?.tag ?? null,
+    deployedAt: v?.timestamp ?? null,
+    buildSha: build?.sha ?? null,      // ← 仅供对照，可能落后一个 commit
+    // ⚠️ 这里原本还有个 `local: !v` 想标"这是本地 dev" —— **删掉了，因为它在说谎**：
+    //   本地 miniflare 也会注入一个 version_metadata，于是它在本地照样返回 false。
+    //   一个判不准的字段不如没有（铁律八同族：宁可不说，不给错的答案）。
+    //   要区分环境的话真源是 hostname，不是这个绑定 —— 但戳本来也不需要区分。
+  });
+});
+
 app.all("*", (c) => c.env.ASSETS.fetch(c.req.raw));
 
 // ============ 批⑥A 全量重扫 ============
