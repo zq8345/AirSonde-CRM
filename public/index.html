@@ -330,10 +330,10 @@
        为什么不只靠顶部横幅：Joe 是从页面**中部**看起的（截图就是从中间开始），
        顶部一条提示他根本没进入视野，而满屏空字段看起来就像"配置全丢了"。
        ⇒ 状态要长在**他正在看的那片区域**上，而不是只长在正确的位置上。 */
-    .set-page.cfg-unloaded { opacity:.45; pointer-events:none; filter:grayscale(.5); }
+    .cfg-form.cfg-unloaded { opacity:.45; pointer-events:none; filter:grayscale(.5); }
     .cfg-unloaded-tip { display:none; margin:10px 0; padding:10px 12px; border-radius:8px;
       background:var(--panel); border:1px solid var(--border); font-size:13px; color:var(--muted); }
-    .set-page.cfg-unloaded ~ .cfg-unloaded-tip, .cfg-unloaded-tip.show { display:block; }
+    .cfg-form.cfg-unloaded ~ .cfg-unloaded-tip, .cfg-unloaded-tip.show { display:block; }
     /* C2-D 首页三句话：一句一行，字号大、留白多 —— 判据是"30 秒看完"，不是"信息装得下" */
     .say-list { display:flex; flex-direction:column; gap:10px; margin-top:4px; }
     .say { display:flex; gap:12px; align-items:flex-start; padding:16px 18px; background:var(--bg);
@@ -763,17 +763,17 @@
     /* ⚠️ 勾选框也要锁：我第一版写的是 `input:not([type=checkbox])`，那会让「新域保护」
        「自动跟进」这些**配置项**在预览态照样能改 —— 违反"其余字段一律编辑态才可改"。
        免锁的判据是 **`.cfg-live` 这个显式标记**（操作 ≠ 配置），不是"它是不是勾选框"。 */
-    .set-page.preview input:not(.cfg-live):not([type=checkbox]),
-    .set-page.preview select:not(.cfg-live),
-    .set-page.preview textarea {
+    .cfg-form.preview input:not(.cfg-live):not([type=checkbox]),
+    .cfg-form.preview select:not(.cfg-live),
+    .cfg-form.preview textarea {
       border:0; background:transparent; padding-left:0; box-shadow:none;
       pointer-events:none; resize:none; color:var(--text); }
-    .set-page.preview textarea { min-height:0; height:auto; overflow:hidden; }
-    .set-page.preview .set-num { width:auto; min-width:0; }
+    .cfg-form.preview textarea { min-height:0; height:auto; overflow:hidden; }
+    .cfg-form.preview .set-num { width:auto; min-width:0; }
     /* 预览态里那些"只在编辑时才有意义"的按钮整体退场（无对象的按钮不出现，同附录 C.8） */
-    .set-page.preview .edit-only { display:none !important; }
+    .cfg-form.preview .edit-only { display:none !important; }
     /* 勾选框在预览态锁住（.cfg-live 的除外）：只读要看得出来，所以顺带降透明度。 */
-    .set-page.preview input[type=checkbox]:not(.cfg-live) { pointer-events:none; opacity:.55; }
+    .cfg-form.preview input[type=checkbox]:not(.cfg-live) { pointer-events:none; opacity:.55; }
     .set-page .auto-box { border-radius:10px; padding:12px 14px; margin:0 0 4px; }
     .set-page .auto-row { padding:6px 0; }
     /* 动作条：保存是唯一实心；测试卡片是动作不是设置，降为描边次级 */
@@ -960,6 +960,18 @@
   <!-- ⚠️ 元素 id 全部原样保留 → 既有的读取/保存逻辑一行没改，行为不变。这是刻意的：
        这一页管着 Joe 的发信旋钮和自动化开关，改版不该顺手动语义。
        分区顺序按重要性：自动化 → 发信参数 → 话术 → 无回复自动跟进 → 飞书通知 → 当前账号。 -->
+  <!-- ══ C5-42a 机器房静态壳 ══
+       ⚠️ 这一单是**纯重构：产出的 HTML 一个字都不改，只改它被写到哪里**。
+       原来 openMachineRoom 是 `$("#v-page").innerHTML = 整页模板串`。
+       那种写法下，任何"搬进机器房的静态卡片"都会在每次打开时被重建 ⇒
+       挂在 id 上的事件绑定全部失效，**而且不会报错**（页面照常渲染，只是开关点了没反应）。
+       ⇒ 先把机器房换成"静态壳 + 动态只写 #mr-status"，与 #v-settings 同构；
+          C5-42b 再把控制类卡片搬进来时，它们就和设置页里一样是静态节点。
+       ⚠️ 判据（总调度定）：**机器房显示的东西一个字都没变、每个现有交互行为不变。**
+          我在改之前抓了一份基线（683 字 · 4 个可交互元素），改完逐字比。 -->
+  <div id="v-machine" style="display:none">
+    <div id="mr-status"></div>
+  </div>
   <div id="v-settings" style="display:none">
     <div class="pg-head">
       <button class="btn-ghost" onclick="showMainView('list')">← 返回列表</button>
@@ -980,7 +992,13 @@
          openSettings 第一行 fetch 一抛（登录过期时返回的是登录页 HTML，r.json() 必抛），
          后面每个 .value= 都不执行 → 整张表单停在占位态、一个字的错误都不显示。 -->
     <div class="load-error" id="cfg-loaderr" style="display:none"></div>
-    <div class="set-page">
+    <!-- ⚠️ 两个类各管一件事，别合并：
+           · set-page  = **版式**（max-width、textarea 尺寸…）——只属于设置页
+           · cfg-form  = **状态**（预览/编辑两态、加载失败置灰）——谁要两态谁加它
+           C5-42 把控制类板块搬进机器房时，机器房那个容器只加 cfg-form、不加 set-page。
+           ⚠️ 这次分离的理由就是附录 C.9 那次事故：**容器不只管位置，还管谁能被状态类选中** ——
+              两态原来写成 .set-page 的后代选择器，于是"没住在 set-page 里的卡"静默拿不到两态。 -->
+      <div class="set-page cfg-form">
       <!-- C5-2c：顶部那句通栏提示**拆开收进了各自的卡**（养域期→②机器开关，地址合规→①你是谁）。
            它原来把两件不相干的事说在一句里，而且离对应的输入框有半屏远 —— 说明贴着字段才有用。 -->
 <!-- 熔断横幅：只在熔断时出现，必须显眼 —— 自动发送停了而 Joe 不知道，比不停还糟 -->
@@ -1080,7 +1098,7 @@
       </div>
       <!-- 🔴 2026-09-02：`.set-page` 的闭合原来在这里 —— 于是 ③④⑤ 三张卡**在它外面**。
            后果不只是左缘差 16px（那层灰底 panel 的 padding），更严重的是：
-           **预览/编辑两态的 CSS 全部写在 `.set-page.preview` 后代选择器上** ⇒
+           **预览/编辑两态的 CSS 全部写在 `.cfg-form.preview` 后代选择器上** ⇒
            实测预览态下 ①② 的输入框是 border:none+透明（正确的只读样子），
            而 ③④ 仍是 border:solid+白底（还长得像可编辑的表单框）。
            ⇒ 两态只对 5 张卡里的 2 张生效。闭合下移到全部卡片之后。 -->
@@ -4091,9 +4109,21 @@
     // ══⭐⭐ C5-30：设置页两态 ══
     // ⚠️ 「编辑」在**加载失败时禁用** —— 防线前置比拦保存更早：
     //   拦保存是等他填完一屏才告诉他不行；禁用编辑是一开始就不让他白填。
-    function setSettingsMode(mode){          // "preview" | "edit"
-      const sp = document.querySelector('#v-settings .set-page'); if (!sp) return;
+    // 🔴 C5-42：搬迁后会有**两个** `.cfg-form` 容器（设置页 + 机器房控制区）。
+    //   ⚠️ 这些函数原来全是 `querySelector`（只取第一个）—— 搬完之后第二个容器会
+    //   **静默拿不到两态**：没有报错、没有异常，只是机器房那边的输入框永远是可编辑的样子。
+    //   这正是这类搬迁最容易留下的 bug（和附录 C.9 那次同源：谁能被状态类选中）。
+    //   ⇒ 一律改成 `querySelectorAll` + 遍历。**scope 参数**允许只切某一个容器的态。
+    function setSettingsMode(mode, scope){   // "preview" | "edit"；scope 省略 = 全部容器
+      const forms = scope ? [scope] : [...document.querySelectorAll('.cfg-form')];
+      if (!forms.length) return;
       const edit = mode === "edit";
+      for (const sp of forms) setOneFormMode(sp, edit);
+      const show = (id, on) => { const e = $(id); if (e) e.style.display = on ? '' : 'none'; };
+      show('#cfg-edit', !edit); show('#save-sendcfg', edit); show('#cfg-cancel', edit);
+      window._settingsMode = mode;
+    }
+    function setOneFormMode(sp, edit){
       sp.classList.toggle('preview', !edit);
       // ⚠️ CSS 的 pointer-events 挡得住鼠标，**挡不住键盘 Tab 进去改** —— 所以再用属性兜一层。
       //   readonly 只对文本类有效；勾选框要用 disabled。这里是手动 fetch 提交（读 .checked），
@@ -4101,9 +4131,6 @@
       sp.querySelectorAll('input:not([type=checkbox]):not(.cfg-live), textarea').forEach(el => { el.readOnly = !edit; });
       sp.querySelectorAll('input[type=checkbox]:not(.cfg-live)').forEach(el => { el.disabled = !edit; });
       sp.querySelectorAll('select:not(.cfg-live)').forEach(el => { el.disabled = !edit; });
-      const show = (id, on) => { const e = $(id); if (e) e.style.display = on ? '' : 'none'; };
-      show('#cfg-edit', !edit); show('#save-sendcfg', edit); show('#cfg-cancel', edit);
-      window._settingsMode = mode;
     }
     window.setSettingsMode = setSettingsMode;
 
@@ -4140,7 +4167,7 @@
       {
         _cfgLoaded = false;                                    // 闸落下：保存被挡住
         // 整片置灰：让"这些空白不是你的数据"在**他正在看的地方**就说清楚，而不是只在页顶挂一条。
-        { const sp = document.querySelector('#v-settings .set-page'); if (sp) sp.classList.add('cfg-unloaded'); }
+        document.querySelectorAll('.cfg-form').forEach(sp => sp.classList.add('cfg-unloaded'));
         if (errBox) {
           errBox.style.display = '';
           errBox.innerHTML = loadErrorHtml('cfg-retry', retried)
@@ -4160,7 +4187,7 @@
     async function fillSettingsFields(c, fu){
       { const sv = $("#save-sendcfg"); if (sv) { sv.disabled = false; sv.title = ""; } }
       { const eb2 = $("#cfg-edit"); if (eb2) { eb2.disabled = false; eb2.title = ""; } }
-      { const sp = document.querySelector('#v-settings .set-page'); if (sp) sp.classList.remove('cfg-unloaded'); }
+      document.querySelectorAll('.cfg-form').forEach(sp => sp.classList.remove('cfg-unloaded'));
       $("#cfg-limit").value = c.daily_send_limit;
       $("#cfg-company").value = c.company_name || "";
       $("#cfg-address").value = c.company_address || "";
@@ -4497,13 +4524,17 @@
     window.showMainView = (v) => {
       const list = document.getElementById('v-list'), page = document.getElementById('v-page');
       const settings = document.getElementById('v-settings');   // 批⑩A：设置整页
+      const machine = document.getElementById('v-machine');     // C5-42a：机器房整页（静态壳）
       if (!list || !page) return;
       // C5-3：`found` 变量随 #v-found 一并删除。⚠️ 这一行原来还留着 `if(found) …` ——
       //   `found` 已不是声明过的变量了，`if(found)` 会抛 ReferenceError（不是 undefined 那种温和的），
       //   **整个视图切换当场死掉**。删元素必须连着删对它的每一处引用，不能只删声明。
       list.style.display='none'; page.style.display='none'; if(settings) settings.style.display='none';
+      if(machine) machine.style.display='none';
       if (v === 'list' || v === 'due') { list.style.display=''; page.innerHTML=''; }   // 批③B due=列表视图，但左栏高亮在导航项
       else if (v === 'settings') { if(settings) settings.style.display=''; page.innerHTML=''; }
+      // C5-42a：机器房与设置页同构 —— 静态壳常驻，动态内容只写 #mr-status。
+      else if (v === 'machine') { if(machine) machine.style.display=''; page.innerHTML=''; }
       else { page.style.display=''; }
       activeView = v;              // #42 记录当前视图
       refreshNavHighlight();       // #42 左栏高亮跟随视图切换
@@ -5282,7 +5313,7 @@ ${esc(d.ours.body||'')}</div></details>`
     // ⚠️ 这一页**允许**出现工程术语：进来的人就是来看内部的。首页一个都不许有。
     window.openMachineRoom = async function openMachineRoom(retried){
       showMainView('machine');
-      $("#v-page").innerHTML = pageHeader('机器房','') + `<p class="hint">加载中…</p>`;
+      $("#mr-status").innerHTML = pageHeader('机器房','') + `<p class="hint">加载中…</p>`;
       // ⚠️ C5-3：`scfg` = /api/settings/search，**本批新增的一路**。
       //    机器房原来只读 ignition / sending / today —— 我第一版把「后台自动搜索」「轮转进度」
       //    写成 `cfg.discoveryEnabled` / `cfg.discoveryCursor`，而 `cfg` 是 sending，
@@ -5298,7 +5329,7 @@ ${esc(d.ours.body||'')}</div></details>`
         fetchCfg("/api/today").then(r=>r.ok?r.data:null),
         fetchCfg("/api/settings/search").then(r=>r.ok?r.data:null),
       ]);
-      if (!ign || !cfg) { $("#v-page").innerHTML = pageHeader('机器房','') + `<div class="load-error">${loadErrorHtml('mr-retry', retried)}</div>`;
+      if (!ign || !cfg) { $("#mr-status").innerHTML = pageHeader('机器房','') + `<div class="load-error">${loadErrorHtml('mr-retry', retried)}</div>`;
         const b=$("#mr-retry"); if(b) b.onclick=()=>openMachineRoom(true); return; }
 
       // C5-9 ①：四列 → 三列。第四列（unlocks 说明）正是把表撑出白卡右侧的那一列，
@@ -5317,7 +5348,7 @@ ${esc(d.ours.body||'')}</div></details>`
            —— 新域一天暴增最容易被判垃圾，这道闸让它每天最多涨 50%</span>`
         : `关 · 直接用天花板 <b>${cfg.daily_send_limit}</b> 封<span class="hint">（新发件域建议开着）</span>`;
 
-      $("#v-page").innerHTML = pageHeader('机器房','')
+      $("#mr-status").innerHTML = pageHeader('机器房','')
         + `<div class="fc-card"><div class="sec-title">🔌 点火状态 —— ${ign.ignitedCount}/${ign.total} 项就绪${ign.coreReady?'（核心链路已通）':'（核心链路未通）'}</div>
              <table class="mr-tab"><tbody>${capRows}</tbody></table>
              <p class="hint">配法：<code>npx wrangler secret put &lt;钥匙名&gt;</code></p></div>
