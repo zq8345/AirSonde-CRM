@@ -2536,7 +2536,11 @@ app.get("/api/settings/search", async (c) => {
     allCountries: COUNTRIES,           // { gl: 中文名 } 全目录（供"添加国家"下拉）
     keywords,                          // 生效关键词（用于透明度预估）
     activeKeywords,                    // #45 已勾选关键词（null=全部）
-    discoveryEnabled: S2("discovery_enabled", "0") === "1",   // #S1 后台每6h自动搜索开关（默认关）
+    // 🔴 2026-09-02：`discovery_enabled` 独立开关**已废**（Joe：单一总闸，开自动模式所有环节都工作）。
+    //   ⚠️ 字段仍返回、但恒等于「自动模式」—— **不是留着当装饰**：前端有消费方，
+    //     直接删字段会让它读到 undefined（那正是本仓刚抓过的"删了没跟着改引用"）。
+    //   ⇒ 让它跟随总闸，语义与实际行为一致；等前端消费点清干净再删这个字段。
+    discoveryEnabled: (await getSetting(c.env, "automation_enabled", "0")) === "1",
     // 批⑳ 机器状态卡：轮转游标（只读）。前端算分母 = keywords × allCountries（后台轮转恒用全量），
     //   与 discover.ts runDiscovery 的 totalC=combos.length 同口径。裸值即可，别在这里算 total（口径单源在轮转逻辑）。
     discoveryCursor: Number(S2("discovery_cursor", "0")) || 0,
@@ -2550,7 +2554,7 @@ app.get("/api/settings/search", async (c) => {
 app.post("/api/settings/search", async (c) => {
   const b = await jsonBody<{ countries?: string[]; countryList?: string[]; activeKeywords?: string[] | null; perKeyword?: number; discoveryEnabled?: boolean; serperBudget?: number; dirAutoRefresh?: boolean }>(c);
   if (typeof b.discoveryEnabled === "boolean") {
-    await setSetting(c.env, "discovery_enabled", b.discoveryEnabled ? "1" : "0");   // #S1 Joe 后台开关
+    // ⛔ 不再写 discovery_enabled：搜索跟随「自动模式」总闸，这里写它只会造出第二个真源。
   }
   if (typeof b.dirAutoRefresh === "boolean") {
     await setSetting(c.env, "directory_autorefresh_enabled", b.dirAutoRefresh ? "1" : "0");   // 队列⑦ 每周自动刷新目录（零 Serper，默认开）
@@ -4142,6 +4146,24 @@ const TICK_ANALYZE_MAX = 3;
 /** 快 tick 单次最多发几封。一封实测 31-43s、并发 3 ⇒ 3 封约 40s，装得进一分钟。
  *  ⚠️ 真正管"每天发多少"的是 Joe 在设置里的日限，这个数只管**一次 tick 别撑爆**。 */
 const TICK_SEND_MAX = 3;
+/**
+ * 🔴 每个 fastTick 最多搜几个 keyword×country 组合（2026-09-02 Joe 定：全速找，不摊平）。
+ *
+ * Joe 原话：「以最快速度搜，2000 或许 3 小时就搜完，那我自己决定要不要加预算，
+ *   而不是摊到每分钟。」⇒ **搜索预算上限是唯一旋钮**，机器全速跑、花完当天停。
+ *
+ * ⚠️ 这个数**不是业务旋钮，是平台安全上限** —— 它唯一的作用是防 `Too many subrequests`
+ *   （2026-08-31 生产真撞过，正是 discovery 撞的）。
+ * 实测依据（不是拍的）：
+ *   · 1 个组合 = **1 次 Serper fetch**。discovery 阶段**不抓站**（抓站在 analyze 阶段，另算），
+ *     全仓 grep 确认 runDiscovery 里没有 scrapeSite/额外 fetch。
+ *   · 付费档实测子请求上限 ≥200/次调用（探针 /api/diag/fetch-subrequest-probe）。
+ *   · 同一个 tick 里还有 analyze(≤3 条 × 抓站) 和 send(≤3 封) 也在花子请求。
+ *   ⇒ 留足余量：**25**。25 + 分析抓站(3×≈8) + 发信(3×≈2) ≈ 55，离 200 有 3.6 倍余量。
+ * ⚠️ 想提高吞吐**别动这个数**（那是拿平台上限赌钱）——调 `serper_daily_budget`，
+ *   它决定"今天搜多少"，这个数只决定"每分钟一口吃多大"。
+ */
+const TICK_DISCOVER_MAX = 25;
 /** 每封开发信之间的最小间隔（秒）。**Joe 的旋钮**，settings 里 `send_interval_seconds` 覆盖；设 0 = 不限速。
  *  90s ≈ 40 封/小时 —— 对刚养起来的域名是温和的节奏，而"每天发多少"仍然由他的日限说了算。 */
 const SEND_INTERVAL_DEFAULT = 90;
@@ -4219,6 +4241,30 @@ async function fastTick(env: Env, ctx: ExecutionContext): Promise<void> {
     //   原来它只在整点班跑 ⇒ 退订率飙上去后**最坏要 59 分钟才停发**，而这条链每分钟都在发。
     //   evaluateSendBreaker 幂等（已熔断就直接返回，不会每分钟推一条飞书）。
     try { await evaluateSendBreaker(env); } catch (e) { console.error("breaker(tick):", e); }
+
+    // ══ 3d) 找新客户（2026-09-02 从整点班搬来）══
+    //
+    // 🔴 三样东西同时撤掉了，理由各不相同：
+    //   ① `isSearchRound`（0/6/12/18 那道 hourUtc%6 门）—— 当初怕烧光搜索预算才加的，
+    //      而那个顾虑**已经被 `serper_daily_budget` 这道闸取代**（runDiscovery 里
+    //      `usedToday >= budget` 就 break，且每搜一次即记账，进程中断也不丢）。
+    //      再叠一层时间限制 = 多余，而且**把"多快找"的决定权从 Joe 手里拿走了**。
+    //   ② `discovery_enabled` 独立开关 —— Joe 定的是单一总闸：「开自动模式所有环节都工作」。
+    //      两个开关意味着他关了总闸还要再想一下"搜索是不是也停了"。
+    //   ③ `maxCombos: 20` 写死 —— 换成 TICK_DISCOVER_MAX（**平台安全上限，不是业务旋钮**）。
+    //
+    // ⇒ 现在的行为：**自动模式开着 = 每分钟全速搜，一路烧到当天预算用完，次日 UTC 重置。**
+    //   Joe 想多找就调高预算 —— 那是他的决定，不是我们替他摊平。
+    // ⚠️ 时间预算照旧看表：搜索是这一 tick 里最不紧急的（发信和分析优先），排在最后且要求余量。
+    if (budget.has(20_000)) {
+      try {
+        const d = await runDiscovery(env, { perKeyword: 5, maxCombos: TICK_DISCOVER_MAX });
+        if (d.searched) {
+          console.log(`tick-discover: 搜 ${d.searched} 组合 → 入库 ${d.inserted} 家` +
+            (d.budgetStopped ? "（今日搜索预算已用完，停到明天）" : ""));
+        }
+      } catch (e) { console.error("tick-discover:", e); }
+    }
 
     // 3c) 发就绪的。所有业务闸（日限/爬坡/熔断/压制/幂等）都在 sendApprovedBatch 里，一个不豁免。
     //
@@ -4307,7 +4353,7 @@ async function scheduled(event: ScheduledController, env: Env, ctx: ExecutionCon
   //     它零 Serper 成本，但"免费"不等于"可以随便跑" —— 每小时去敲一次门是骚扰。
   //     所以它**保持 0/6/12/18 不变**。
   //   把它俩绑在一个布尔上，就是"把碰巧相等固化成必须相等"（guard-cadence.js 里写过的那个坑）。
-  const isSearchRound = true;                     // 付费搜索：每轮（cron = 每小时）
+  // ⚠️ `isSearchRound` 已随 discovery 搬进 fastTick 一并删除（2026-09-02）。
   const isDirectoryRound = hourUtc % 6 === 0;     // 目录抓取：仍然只在 0/6/12/18
 
   // ⭐ step 0）收客户回复 —— **排在最前面，这个顺序本身是修复的一部分**。
@@ -4387,17 +4433,10 @@ async function scheduled(event: ScheduledController, env: Env, ctx: ExecutionCon
   }
 
   subMark("1-discovery");
-  // 1) 搜索找新客户（每关键词 5 条，控制用量）—— #S1 受 discovery_enabled 开关控制（默认关，防 cron 每 6h 全量烧 Serper 积分）
-  try {
-    // 方案A：这一步**每轮都跑**（20 组合/轮 × 24 轮 = 480 次/天，在 1000 日预算内）。
-    // 硬封顶仍在 runDiscovery 内部（serper_daily_budget），撞到就 budgetStopped 停，烧不穿。
-    if (!isSearchRound) {
-      console.log(`discovery skipped: 本轮 ${hourUtc}:00 不是搜索班次`);
-    } else if ((await getSetting(env, "discovery_enabled", "0")) === "1") {
-      const d = await runDiscovery(env, { perKeyword: 5, maxCombos: 20 });   // P0-b 每轮只跑 20 组合(轮转)，不再全量 572；P0-c 预算内
-      inserted = d.inserted;
-    } else { console.log("discovery skipped: discovery_enabled=0"); }
-  } catch (e) { console.error("discover:", e); }
+  // 🔴 2026-09-02 Joe 拍板：找客户搬进 fastTick（每分钟全速跑），整点班**不再做 discovery**。
+  //   见 fastTick 里的 3d) 段。这里保留路标，防止有人再排回来。
+  //   ⛔ 撤掉的三样：`isSearchRound`（0/6/12/18 那道 hourUtc%6 门）、`discovery_enabled`
+  //      独立开关、`maxCombos: 20` 写死。理由见 fastTick 那段。
   subMark("1.5-目录源");
   // 1.5) 队列⑦ 免费目录源每周自动刷新（NMEA + rvwithtito）——**零 Serper**，与上面的付费搜索开关无关。
   //      内部自判 >7 天才真跑、遵守 Crawl-delay 10 与礼貌 UA；抓到的新公司走同一条去重+分析管道（下面第 2 步会打分）。
