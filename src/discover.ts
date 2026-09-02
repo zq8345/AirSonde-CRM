@@ -201,6 +201,25 @@ const JUNK_DOMAINS = [
   "roadslesstraveled.", "walmart.", "homedepot.", "target.com",
   // E2：中国铺货平台/批发站（避开价格战红海；-site:*.cn 之外的结果侧兜底）
   "alibaba.", "aliexpress.", "made-in-china.", "dhgate.", "temu.", "1688.com", "globalsources.",
+  // ── 2026-09-02 补漏：全部来自**生产真实数据**（53 条 403 里逐条肉眼过），不是设想 ──
+  //   来历：查"官网抓不到"那一桶时发现，相当比例根本不该进库 —— 它们抓不到是因为
+  //   跑企业级 bot 防护，而它们**本来就不是采购方**，抓到了也没用。
+  // ⚠️ 只收**明确不采购**的实体。像 atlascopco / belimo / draeger / phoenixcontact / fondriest
+  //    这些同样 403 的**一条都没加** —— 它们是制造商或仪器分销商，是真目标，不是垃圾。
+  // B2B 目录/名录/数据商（它们卖名单，不买仪器）
+  "indiamart.", "justdial.", "directindustry.", "globalspec.", "globaltradeplaza.",
+  "industrystock.", "thomasnet.", "tradewheel.", "zoominfo.", "buyersguide.",
+  // 学术出版/论文库
+  "mdpi.", "sciencedirect.", "tandfonline.", "researchgate.", "onlinelibrary.",
+  "springer.", "jstor.",
+  // 词典/百科/参考站
+  "britannica.", "merriam-webster.", "niche.com",
+  // 议会/政府间组织/人道组织（.gov 之外的那一族）
+  ".parliament.uk", "ilo.org", "redcross.org",
+  // ⛔ 想加而**故意没加**的：
+  //   · `.org` —— 实测库里 34 条 .org 中有 `airscan.org`，≥60 分**且已经发过信**。加了就误杀真客户。
+  //   · `.int` —— TLD 本身干净，但这里是 `includes` 子串匹配：`www.interco.com` 含 ".int"，会误杀。
+  //     （与上面 `.gov` vs `gov` 是同一条教训：**宽规则要先想它会顺手打死谁**。）
 ];
 function isJunkDomain(d: string): boolean {
   return !d || JUNK_DOMAINS.some((j) => d.includes(j));
