@@ -191,6 +191,49 @@ if (typeof process !== "undefined" && String(process.argv?.[1] || "").replace(/\
     else if (rogue.length) { console.log(`  🔴 字号闸：闭集外的野字号 ${rogue.map(v=>v+"px").join(" / ")}（闭集 12/13/14/15/17/22）`); fail++; }
     else { console.log(`  ✅ 字号闸：${found.length} 处 font-size，去重 ${new Set(found).size} 档，全在闭集内`); pass++; }
   }
+
+  // ── 🔴 死绑定闸（2026-09-02 加，同一形状抓了三次）──
+  //   形状：**删元素时没跟着删/改绑定**，而防御式的 `if (el)` 把"元素永远不会有了"
+  //   伪装成"什么都没发生"。三个实例（fc-serper-save / 关键词恢复 / mr-cfg-loaderr）
+  //   不同人、不同时间写的，同一个形状 —— 那不是巧合，是这种写法的必然产物。
+  //   后果都一样：**功能悄悄消失，没有任何东西会报错。**
+  //
+  // ⚠️ 判据（先想清楚再写实现 —— 我的分类器为此错过两次）：
+  //   引用 = `$("#foo")` / `getElementById("foo")`
+  //   来源 = ① 任意处的 `id="foo"`（模板串里也是这个字面量）
+  //         ② 作为**字符串实参**出现（如 `loadErrorHtml('dash-retry')` —— 那种 id
+  //            由被调函数用 `id="${retryId}"` 拼出来，字面量在调用处）
+  //   ⇒ 两者都没有 = 死绑定。
+  //
+  // ⚠️ 存量 8 个**先冻结成基线**，不阻塞部署（它们是历史包袱，清理是另一个单）。
+  //   闸的作用是：**新增一个就红**。基线只许减不许加。
+  {
+    const { readFileSync: rf2 } = await import("node:fs");
+    const html = rf2(new URL("../public/index.html", import.meta.url), "utf8");
+    const refs = new Set([
+      ...[...html.matchAll(/\$\(\s*["']#([a-zA-Z0-9_-]+)["']\s*\)/g)].map((m) => m[1]),
+      ...[...html.matchAll(/getElementById\(\s*["']([a-zA-Z0-9_-]+)["']\s*\)/g)].map((m) => m[1]),
+    ]);
+    const orphans = [];
+    for (const id of refs) {
+      if (new RegExp(`id=["']${id}["']`).test(html)) continue;
+      const stripped = html
+        .replace(new RegExp(`\$\(\s*["']#${id}["']\s*\)`, "g"), "")
+        .replace(new RegExp(`getElementById\(\s*["']${id}["']\s*\)`, "g"), "");
+      if (new RegExp(`(?<!#)["']${id}["']`).test(stripped)) continue;
+      orphans.push(id);
+    }
+    const BASELINE = ["cfg-auto-min","cfg-capacity","d-analyze","email-body","email-caret",
+                      "fc-maint-body","fc-maint-caret","fc-serper-used"];
+    const added = orphans.filter((o) => !BASELINE.includes(o));
+    if (!refs.size) { console.log("  🔴 死绑定闸：一个 id 引用都没扫到 —— 选择器坏了"); fail++; }
+    else if (added.length) {
+      console.log(`  🔴 死绑定闸：新增 ${added.length} 个引用了但不存在的元素：${added.join(" / ")}` +
+        `（元素删了绑定没删？if(el) 会把它静默吞掉，功能会悄悄消失）`); fail++;
+    } else {
+      console.log(`  ✅ 死绑定闸：${refs.size} 个 id 引用，死绑定 ${orphans.length} 个（基线 ${BASELINE.length}，无新增）`); pass++;
+    }
+  }
   console.log(`\n通过 ${pass} · 失败 ${fail}`);
   console.log(fail === 0
     ? "✅ 闸自检通过：**在真实发生过的缺陷上会红**（案例①正是 C2-D 那次被它抓住的原句）"
