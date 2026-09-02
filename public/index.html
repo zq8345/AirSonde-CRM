@@ -29,8 +29,15 @@
     /* ══ C5-40 数据看板 v2 ══ 只用附录 C 的 token，⛔ 无外部图表库（单文件仓 + CSP 的老规矩）。 */
     /* 发现卡：左侧色条区分严重度。⚠️ 色条是**唯一**的严重度编码之外还要有文字，
        不靠颜色单独承载信息（色觉差异 + 打印/截图都会丢失颜色）。 */
-    .db-finding { border-left:3px solid var(--border-strong); background:var(--panel);
-                  border-radius:8px; padding:12px 14px; margin:0 0 10px; }
+    /* v3 视觉密度：向 Linear 的"安静 chrome + 高密度"收一档。
+       ⚠️ 只调密度与层次，⛔ 不碰深色主题（那是另一个工程），⛔ 不出附录 C 的 token 集。 */
+    .db-block { padding:16px 18px; margin-bottom:10px; }        /* 卡间距压一档（原 24/16） */
+    .db-t { font-size:13px; font-weight:600; letter-spacing:.02em; margin-bottom:10px; }
+    .db-block .hint { font-size:11.5px; }                        /* 次级数字更小更浅 */
+    .fn-row.fn-good .fn-fill { background:var(--green); }        /* 基准着色：达标 */
+    .fn-row.fn-low  .fn-fill { background:var(--amber); }        /* 基准着色：低于行业区间 */
+    .db-finding { border-left:4px solid var(--border-strong); background:var(--panel);
+                  border-radius:8px; padding:10px 12px; margin:0 0 8px; }
     .db-finding:last-child { margin-bottom:0; }
     .db-f-red   { border-left-color:var(--red);   background:var(--tint-red); }
     .db-f-amber { border-left-color:var(--amber); background:var(--tint-amber); }
@@ -4755,7 +4762,14 @@ ${esc(d.ours.body||'')}</div></details>`
       // ── 页顶 · 北极星 ────────────────────────────────────────────────
       // ⚠️ **不显示百分比环比**：分母是个位数时百分比会撒谎（1→2 = +100%）。说绝对差就够了。
       let starLine;
-      if (totalReplied === 0) starLine = empty('还没有人回信 —— 机器点火并发出第一批信之后，这里开始计数');
+      // ⚠️⚠️ v3 决定：**暂不上"行业参考线 1-5%"**（总调度拍板，理由是我提的）——
+      //   实际值此刻是 0，一条画在头顶的参考线配一个贴地的值，读起来是"我们做得极差"，
+      //   而真相是"还没开始"。**给一个刚起步的人看一条他必然够不到的线，只会打击他。**
+      //   等真人回信攒够再上 —— 那时它才是"目标"，而不是"审判"。
+      if (totalReplied === 0) {
+        starLine = `<div class="db-grow"><b>本周回信</b>：已经发出 ${denom} 家 —— 等第一封真人回信，`
+                 + `这里就开始画趋势（行业参考 1-5%，等你有数了再拿来比）</div>`;
+      }
       else {
         const dlt = (w.replied||0) - (prev.replied||0);
         const judge = (prev.replied === 0 && w.replied > 0) ? '本周首次有人回信'
@@ -4862,9 +4876,37 @@ ${esc(d.ours.body||'')}</div></details>`
             worstP=lv.conv; worst={from:levels[i-1].label,to:lv.label};
           }
         });
+        // ══ C5-40 v3 ③ 漏斗基准着色 ══
+        //
+        // ⚠️⚠️ 只给**真有行业基准**的那一环着色。逐环查过之后，六环里**只有一环**符合：
+        //   · 「发送→回复」→ 冷邮件健康回信率 **1-5%**（研究给的，是端到端的真基准）✅ 着色
+        //   · 送达率 >95% / 退信 <2% —— **它们不是漏斗环**，是下面那条健康行的事，那里已经在判了
+        //   · 入池→批准、批准→发送、回复→成交 —— 这些是**我们自己的产品逻辑**
+        //     （60 分线、有没有邮箱、Joe 的销售动作），**世界上没有行业基准可查**。
+        //
+        // ⛔ 所以这几环**只显示转化率、不着色、不指认**。总调度拍板选的就是这条：
+        //   自己拍一组数当基准 = 又造一个"预算 50s"式的假真源，然后所有判断都建立在它上面。
+        //   真基准要靠**我们自己的历史中位数**，那得先攒够两周真实数据。
+        const REPLY_BAND = [0.01, 0.05];        // 冷邮件健康回信率区间（行业参考，非自拍）
+        // ⚠️ 「已回复」那一行**显示的数也要换成回信率（÷已发送）**，不能留 conv（÷已查看）。
+        //   否则会出现"一行写着 100%、旁边一条绿条"，而绿是按 3.3% 判的 ——
+        //   **颜色和数字在说两件事，Joe 只会读到那个 100%。**
+        //   色与数必须同口径；做不到就两个都别上。
+        // 🔴🔴 判据必须比**基准所度量的那个量**，不是"名字看起来对的那个量"。
+        //   我第一版拿 `lv.conv` 去比 1-5%，而漏斗里「已回复」的 conv 是 **回复 ÷ 已查看**
+        //   （实测样本里 = 2/2 = 100%），行业基准说的却是 **回复 ÷ 已发送**（= 3.3%）。
+        //   贴上去的话，一个 3.3% 的健康回信率会被显示成 100% 达标 —— **绿得毫无意义**。
+        //   ⚠️ 一般化：给一个数配基准之前，先问"**这个基准当初是拿什么算出来的**"。
+        //     分母不同的两个数，名字再像也不能互相比。
+        const bandCls = (lv, i) => {
+          if (!/回复|回信/.test(lv.label)) return '';
+          if (denom < DB_N_MIN) return '';                    // 样本不够不着色
+          const r = totalReplied / denom;                     // ← 回复 ÷ **已发送**，与基准同口径
+          return r >= REPLY_BAND[0] ? 'fn-good' : 'fn-low';
+        };
         // C5-38 第 3 条：「已查看」标注仪器局限 —— 数字照显示，但**说清它为什么偏低**，
         //   否则 Joe 会把"开信率 12%"当成真实阅读率去改文案。
-        const fn = levels.map((lv)=>`<div class="fn-row"><span class="muted">${esc(lv.label)}${/查看/.test(lv.label)?'<span class="gj-help" data-help title="靠邮件里的追踪像素统计，而主流邮箱默认拦图 —— 这个数**天然大幅低估**，只能当参考，不能据它判断文案好坏。">(?)</span>':''}</span><div class="fn-track"><div class="fn-fill" style="width:${(lv.n/maxN*100).toFixed(1)}%"></div></div><span>${lv.n}${lv.conv!=null?` <span class="muted">· ${lv.conv}%</span>`:''}</span></div>`).join('');
+        const fn = levels.map((lv,i)=>`<div class="fn-row ${bandCls(lv,i)}"><span class="muted">${esc(lv.label)}${/查看/.test(lv.label)?'<span class="gj-help" data-help title="靠邮件里的追踪像素统计，而主流邮箱默认拦图 —— 这个数**天然大幅低估**，只能当参考，不能据它判断文案好坏。">(?)</span>':''}</span><div class="fn-track"><div class="fn-fill" style="width:${(lv.n/maxN*100).toFixed(1)}%"></div></div><span>${lv.n}${lv.conv!=null?` <span class="muted">· ${/回复|回信/.test(lv.label)&&denom?`${(totalReplied/denom*100).toFixed(1)}% 回信率`:`${lv.conv}%`}</span>`:''}</span></div>`).join('');
         // C5-38 第 2 条：漏斗的单位是**公司（lead）**，服务端 sentC = COUNT(DISTINCT lead_id)，
         //   本来就是对的（复核过，不是这次改的）。缺的是**说清它是累计口径** ——
         //   左栏"已联系"是**当前状态格子**，一条线索回信后就离开那个格子；
@@ -4883,9 +4925,17 @@ ${esc(d.ours.body||'')}</div></details>`
           ? `<div class="hint">已排除：${exBits.join(' · ')}<span class="gj-help" data-help title="这些不算战绩，所以不进上面的数字：自动回执是对方机器发的「我们收到了」，不代表这家公司回应了你；测试数据是我们自己造的点火数据。⚠️ 它们没有被删除——线索列表和收件箱里照常看得见。">(?)</span></div>`
           : '';
         let leak = '';
+        // ⚠️⚠️ 2026-09-02 改：**在有自建基准之前，只陈述事实、不做指认。**
+        //   原来指认的判据是"绝对落差最大"，而「入池→批准」掉 73% **本来就是正常的**
+        //   （那道 60 分线就是用来筛掉大多数的）—— 老指认它，等于每周教 Joe 忽略这一句。
+        //   正确的判据是"**相对基准的差距最大**"，但那需要每一环的基准，而我们现在没有
+        //   （见上方 bandCls 那段：只有回信那一环有行业基准）。
+        //   ⇒ 宁可少说一句，不说一句错的。基准攒够（自己的历史中位数）后再把指认加回来。
         if (worst){
-          leak = `<div class="db-judge">掉得最狠的是 <b>${esc(worst.from)}→${esc(worst.to)}</b>（${worstP}%）${leakAct(worst.to)}</div>`;
-        } else if (!enoughN) leak = `<div class="hint">已发 ${denom} 家，不到 ${DB_N_MIN} —— 暂不指认漏点</div>`;
+          leak = `<div class="hint">转化最低的一环是 <b>${esc(worst.from)}→${esc(worst.to)}</b>（${worstP}%）` +
+                 `<span class="gj-help" data-help title="这里只陈述事实、暂不给建议：判断「这一环是不是有问题」需要一条基准线，而除了回信率（行业参考 1-5%）之外，其余各环的基准只能来自我们自己的历史数据 —— 那还在积累中。">(?)</span></div>`;
+        } else if (!enoughN) leak = `<div class="hint">已发 ${denom} 家，再发 ${Math.max(0,DB_N_MIN-denom)} 家后开始看各环转化</div>`;
+        const bandNote = `<div class="hint">回信那一环按行业参考 1-5% 着色；其余各环的基准还在积累中（用我们自己的历史中位数，不外借）</div>`;
         // ⚠️ ur/brr 已上提到 denom 旁边（发现卡引擎要先用它们）。这里不再重复定义 —— 定义两次就是两个真源。
         const bad = enoughN && (ur>=DB_UNSUB_WARN || brr>=DB_BOUNCE_WARN);
         const health = !enoughN
@@ -4899,10 +4949,13 @@ ${esc(d.ours.body||'')}</div></details>`
         const ledger = ai.notIgnited
           ? `<div class="hint">AI 还没点火，暂无花费</div>`
           : (aiM==null ? `<div class="hint">这次没问到 AI 花费（不是 $0）</div>`
-            : totalReplied===0
-              ? `<div class="hint">本月 AI $${aiM.toFixed(2)} · 搜索 ${sp.usedToday??0} 次 —— 还没有回信，成本还算不出每封多少</div>`
+            // ⑥ v3：**回信 <5 封时不算"每封成本"**。1 封回信算出来的单价是噪音，
+            //   而一个精确到分的假数字比没有数字更危险 —— 它看起来像个可以拿来做决定的数。
+            //   空态照"成长进度"的统一形态说，不说"算不出"。
+            : totalReplied < 5
+              ? `<div class="hint">本月 AI $${aiM.toFixed(2)} · 搜索 ${sp.usedToday??0} 次 —— 回信满 5 封后开始算每封成本（当前 ${totalReplied}/5）</div>`
               : `<div class="hint">本月 AI $${aiM.toFixed(2)} · 搜索 ${sp.usedToday??0} 次 ÷ 回信 ${totalReplied} 封 = 每封约 <b>$${(aiM/totalReplied).toFixed(2)}</b></div>`);
-        b3 = fn + mailLine + exLine + leak + health + ledger;   // C5-38②：邮件封数另起一行；exLine 让归零自己解释自己
+        b3 = fn + bandNote + mailLine + exLine + leak + health + ledger;   // C5-38②：邮件封数另起一行；exLine 让归零自己解释自己
       }
 
       // ════════ C5-40 ① 发现卡引擎 ════════
