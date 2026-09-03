@@ -620,7 +620,9 @@
        全页同一套 9 列同序同宽：公司 230 · 阶段 96 · 评分 64 · 分类 100 · 国家 80 · 邮箱 190 · 联系方式 158 · 本页专属(吸余宽) · 时间 96。
        表头 12px --muted 500 高 38 底 #fafbfc；正文 13 行高 48；th 与 td 同一对齐（公司/邮箱/分类左，其余居中）。
        ⚠️ 全部作用域限定在 #v-list table：全局 th,td 规则还服务机器房等别的表。列宽拖动/记忆整套已删（SPEC §4）。 */
-    #v-list table { table-layout:fixed; width:100%; }
+    /* ⚠️ 生产实测（Joe 的窗口 1278 宽）：8 列固定宽合计 1014，主区只剩 ~1030 ⇒ 第 8 列被挤成 0 宽、「时间」叠到它上面。
+       给表一个下限（1014 + 本页专属最少 150），窄窗口时在 .main 里横向滚，⛔ 不压列不折叠列。 */
+    #v-list table { table-layout:fixed; width:100%; min-width:1164px; }
     #v-list th { font-size:12px; font-weight:500; color:var(--muted); text-align:left; height:38px; padding:0 10px; border-bottom:1px solid var(--border);
                  white-space:nowrap; background:#fafbfc; vertical-align:middle; word-break:normal; }
     #v-list td { height:48px; padding:0 10px; border-bottom:1px solid var(--border); font-size:13px; vertical-align:middle;
@@ -2108,7 +2110,13 @@
       const s = await fetch("/api/stats").then(r=>r.json()).catch(()=>null);
       if (!s) return;
       // 批㉑：国家名从后端 COUNTRIES 单源填（列表页 countryName 用它显示 vg/pg… 的中文名，不裸码）
-      if (s.allCountries) for (const [k,v] of Object.entries(s.allCountries)) COUNTRY_NAMES[k.toUpperCase()] = v;
+      if (s.allCountries) {
+        for (const [k,v] of Object.entries(s.allCountries)) COUNTRY_NAMES[k.toUpperCase()] = v;
+        // nav-table-v2 顺手核①（Joe 截图：全部页国家列裸码 JP/SE/BE）：首屏 loadList 常常比 /api/stats 先回来，
+        //   行渲染时目录还没到，countryName 回落成两字母码。目录到位后**就地重画**已渲染的国家格（td 带 data-cc），
+        //   不重拉列表。以后 allCountries 一来这里就跑，⛔ 别在 loadList 里再等目录（那会把列表拖慢一整个 RTT）。
+        document.querySelectorAll("#rows td[data-cc]").forEach(td => { const n = countryName(td.dataset.cc); if (td.textContent !== n) td.textContent = n; });
+      }
       const bs = s.byStatus || {};
       const groupCount = { unscored:0, noscore:0, review:0, ready:0, sent:0, replied:0, won:0, ignored:0, blacklisted:0, all:s.total };
       const map = { new:"unscored",analyzed:"review",pending:"review",approved:"ready",
@@ -2984,7 +2992,7 @@
           <td class="ac"><span class="pill stg">${esc(STAGE_LABEL[gridKeyOf(l)] || l.status)}</span></td>
           <td class="ac">${scPill(l.match_score)}</td>
           <td>${catPill(l)}</td>
-          <td class="ac">${l.country ? esc(countryName(l.country)) : mu}</td>
+          <td class="ac"${l.country ? ` data-cc="${esc(l.country)}"` : ""}>${l.country ? esc(countryName(l.country)) : mu}</td>
           <td title="${esc(l.email)||''}">${l.email ? esc(l.email) : mu}</td>
           <td class="ac chc">${chSlots(l)}</td>
           <td class="ac">${ownCell(l)}</td>
