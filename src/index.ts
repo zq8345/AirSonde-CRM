@@ -2724,6 +2724,48 @@ app.post("/api/keywords/:id/restore", async (c) => {
 // 🔬 只读诊断：这个站的 8 个联系页路径**各自**发生了什么（HTTP 状态/字节/最终URL/耗时/有无邮箱）。
 // 起因见 findemail.ts TIMEOUT 上方那段：A/B 证明放宽超时零改善，UA/跳转/提取逻辑也都排除了，
 // 剩下的假设（站点拦截 CF Worker 数据中心 IP）**必须拿到每个路径的状态码才能证伪或坐实**。
+// ══════════════ C5-52：Serper `num` 计价探针（⚠️ 会花积分，见下）══════════════
+//
+// 🔬 要回答的问题：**`num=100` 到底花几个积分？**
+//   已坐实（Joe 的 Serper Logs，账单侧真源）：`num=5 → 1 积分`。
+//   🔴 **但这推不出 `num=100 → 1 积分`** —— Serper 完全可能按 `ceil(num/10)` 计价，
+//     那样就是 10 积分，把 `search_per_keyword` 从 5 改成 100 **一分钱不省**。
+//     ⛔ 不许拿"我以为"去改一个花钱的参数。
+//
+// ⚠️ 为什么要有这个端点，而不是我在本地 curl：
+//   `SEARCH_API_KEY` 是 Cloudflare secret，**值不许经过任何窗口**。
+//   ⇒ 只能让服务端自己调，key 全程留在服务器上。
+//
+// ⛔ **纯探测，不写库**：不走 runDiscovery、不建 lead、结果直接丢掉，只回报条数。
+// ⛔ q 必须传一个**不在我们词表里**的词，否则这次测试会污染当天的线索数据。
+// ⚠️ 它**真的会花积分**（每次至少 1）—— 所以默认只跑一次，n 由调用方显式给。
+app.get("/api/diag/serper-num-probe", async (c) => {
+  const num = Math.max(1, Math.min(100, Number(c.req.query("num")) || 10));
+  const q = (c.req.query("q") || "").trim();
+  if (!q) return c.json({ error: "必须显式给 q，且请用一个不在词表里的词（防止污染数据）" }, 400);
+  if (!c.env.SEARCH_API_KEY) return c.json({ error: "SEARCH_API_KEY 未配置" }, 400);
+  const at = new Date().toISOString();
+  try {
+    const res = await fetch("https://google.serper.dev/search", {
+      method: "POST",
+      headers: { "X-API-KEY": c.env.SEARCH_API_KEY, "content-type": "application/json" },
+      body: JSON.stringify({ q, gl: "us", num }),
+    });
+    const data: any = await res.json().catch(() => ({}));
+    return c.json({
+      at, requested_num: num, q,
+      http: res.status,
+      organic_count: (data.organic || []).length,   // ← 它**真的给了几条**（≠ 我们要了几条）
+      // ⚠️ Credits **读不到**：那是 Joe 账单侧的数，只有 serper.dev/logs 看得见。
+      //   ⛔ 我不替他猜，这里只给时间戳让他能在日志里对上这一行。
+      credits: "读不到——请到 serper.dev/logs 看这个时间戳对应那一行的 Credits 列",
+      写库: "无（纯探测，结果已丢弃）",
+    });
+  } catch (e: any) {
+    return c.json({ at, requested_num: num, error: String(e?.message || e) }, 500);
+  }
+});
+
 // ⚠️ **只读**：不写库、不改 lead、不消耗任何付费额度（不碰 Hunter）。
 // 🔬 决定性实验：**D1 调用到底吃不吃那 50 个子请求额度？**
 //
