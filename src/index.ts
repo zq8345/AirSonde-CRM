@@ -2740,6 +2740,17 @@ app.post("/api/keywords/:id/restore", async (c) => {
 // ⛔ q 必须传一个**不在我们词表里**的词，否则这次测试会污染当天的线索数据。
 // ⚠️ 它**真的会花积分**（每次至少 1）—— 所以默认只跑一次，n 由调用方显式给。
 app.get("/api/diag/serper-num-probe", async (c) => {
+  // 🔴 花钱闸：这是个 GET，**谁误点一次就烧一个积分**。⇒ 不带显式确认参数一律只回说明、不发请求。
+  //   ⚠️ 判据不是"它是不是危险操作"，是**它出错的代价**：这里的代价是真金白银 + 污染账单日志。
+  //   （与 C5-49b 那条同源：豁免与否看代价，不看它长得像不像操作。）
+  if (c.req.query("confirm") !== "spend-credits") {
+    return c.json({
+      说明: "Serper num 计价探针。**每次调用至少花 1 个 Serper 积分**，所以必须显式确认。",
+      用法: "/api/diag/serper-num-probe?confirm=spend-credits&num=100&q=<一个不在我们词表里的词>",
+      "⛔": "q 必须用不在词表里的词，否则会污染当天线索数据；本端点不写库，结果直接丢弃",
+      "已测结论（2026-09-03）": "num>10 无效：同一个词 num=100 与 num=10 返回条数完全相同（7 vs 7，三个查询一致）",
+    });
+  }
   const num = Math.max(1, Math.min(100, Number(c.req.query("num")) || 10));
   const q = (c.req.query("q") || "").trim();
   if (!q) return c.json({ error: "必须显式给 q，且请用一个不在词表里的词（防止污染数据）" }, 400);

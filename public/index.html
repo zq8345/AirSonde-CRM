@@ -1577,9 +1577,22 @@
           </div>
           <div class="set-numrow" style="margin-bottom:12px">
             <span style="font-size:13px">本次条数</span>
-            <input id="dp-perkw" type="range" min="1" max="100" step="1" value="10" style="width:150px;max-width:100%">
+            <!-- 🔴 C5-53：上限由 100 改成 **10**（2026-09-03 生产实测）。
+                 实测：同一个词 `num=100` 与 `num=10` 返回**完全相同的 7 条**（三个不同查询一致）
+                       —— 那不是"结果不够多"，是 **num 超过约 10 就不起作用**。
+                 ⇒ 原来 1–100 的滑块里，**90% 的行程是无效的**，而它看起来完全可用。
+                 ⚠️ 为什么选"改上限"而不是"保留 100 但把 >10 标灰"：
+                    range 控件**没有"这一段无效"的视觉语言** —— 标灰也还是能拖过去、
+                    拖过去数字照样变大，人只会更困惑。**一个拖不到的位置，比一个拖得到但没用的位置诚实。**
+                 ⚠️ 10 是**观测值不是文档常数**：若哪天 Serper 改了，用
+                    `/api/diag/serper-num-probe?confirm=spend-credits&num=100&q=<冷门无关词>` 重测再调。 -->
+            <input id="dp-perkw" type="range" min="1" max="10" step="1" value="10" style="width:150px;max-width:100%">
             <span style="font-size:13px"><b id="fc-perkw-val">10</b> 条/词/国</span>
+            <span class="hint" style="margin:0">· Serper 单页封顶约 10 条，再调高也不会更多</span>
           </div>
+          <!-- 存量值 > 10 时的诚实出口：⛔ 不能让滑块把它静默钳到 10 —— 那会变成
+               "界面显示 10、机器仍按存量跑"，又一次界面说谎。这里如实说出来。 -->
+          <div class="hint" id="fc-perkw-note" style="margin:0 0 8px;display:none"></div>
           <!-- 估算行：从蓝底横幅降成卡内一行安静文字；只有批量大时才由 .fc-warn 变警示色 -->
           <div id="dp-transparency" class="rs-est"></div>
           <button id="dp-run" class="primary" style="margin-top:12px">▶ 开始搜索</button>
@@ -4010,7 +4023,11 @@
     function updateTransparency(){
       const nc = getSelectedCountries().length;
       const nk = _fcKwRows.length ? getSelectedKeywords().length : _fcKwEffCount;  // 无自定义清单时用生效默认数
-      const per = Number($("#dp-perkw").value) || 1;
+      // 🔴 C5-53：`per` 现在**封顶 10**（滑块 max 已降）。原来滑到 100 时这一行会算出
+      //   nk×nc×100 —— Joe 拉到 100 时它说「预计最多新增 168,300 家」，
+      //   **而实测每次只给约 10 条** ⇒ 那句话骗人，且骗的方向正是让他以为能捞到 20 倍。
+      //   ⇒ 这里再夹一次（⛔ 不只靠滑块的 max：滑块可能被存量/脚本绕过，闸不能只有一层）。
+      const per = Math.min(10, Number($("#dp-perkw").value) || 1);
       const est = nk*nc*per;
       const big = est > 500;   // 大批量醒目提醒，防误跑烧钱
       const one = $("#fc-one-country") && $("#fc-one-country").value;
@@ -4199,7 +4216,19 @@
       //   ⚠️ 成因和「关键词恢复」那个缺陷完全一样：**删 UI 时只删元素、没跟着删/改绑定**，
       //      而 `if (el)` 这种防御式写法把"元素不见了"伪装成了"什么都没发生"。
       //   ⇒ 绑定删掉，预算改由主保存提交（见保存 handler 里那段）。
-      const per = cfg.perKeyword || 10;
+      // 🔴 C5-53：滑块上限已降到 10（实测 num>10 无效）。⚠️ 但后端存量可能还是 100 ——
+      //   `input[type=range]` 会把超出 max 的值**静默钳到 10**，于是界面显示 10、
+      //   而库里仍是 100 ⇒ **又一次"界面说谎"**。⇒ 存量 >10 就如实说出来。
+      const perRaw = cfg.perKeyword || 10;
+      const per = Math.min(10, perRaw);
+      { const n = $("#fc-perkw-note");
+        if (n) {
+          if (perRaw > 10) {
+            n.style.display = '';
+            n.innerHTML = `⚠️ 你之前设的是 <b>${perRaw}</b> 条 —— 实测 Serper 单页封顶约 10 条，`
+              + `<b>超过 10 的部分一直没有生效</b>。这里显示 ${per}；下次保存会把它存成 ${per}。`;
+          } else { n.style.display = 'none'; n.textContent = ''; }
+        } }
       $("#dp-perkw").value = per; $("#fc-perkw-val").textContent = per;
       $("#dp-perkw").oninput = () => { $("#fc-perkw-val").textContent = $("#dp-perkw").value; updateTransparency(); };
       // 批㉑：国家勾选墙删了 → 不再有 fc-cc-add / renderCountries / _fcCcManage。关键词那套保留。
@@ -4303,16 +4332,21 @@
       //   不受这里影响）。只存关键词勾选 + 每关键词条数。
       await fetch("/api/settings/search", {method:"POST",headers:{"content-type":"application/json"},
         body:JSON.stringify({ activeKeywords:(_fcKwRows.length ? getSelectedKeywords() : null), perKeyword:Number($("#dp-perkw").value)||10 })});
-      // C5-29④：搜索预算并入统一保存（原来它有一颗自己的「保存预算」小按钮，已删）。
-      // ⚠️ 元素不在 DOM 时（弹窗单独打开）**跳过，不提交** —— 提交一个读不到的值就是拿 0 覆盖真设置。
-      { const b = $("#fc-serper-budget");
-        if (b && String(b.value).trim() !== "") {
-          await fetch("/api/settings/search", {method:"POST",headers:{"content-type":"application/json"},
-            // ⚠️ 字段名是 `serperBudget`（后端 src/index.ts 认的就是它）。
-            //   写错名字**不会报错，只会静默不生效** —— 保存看起来成功了，值一个字没变。
-            body:JSON.stringify({ serperBudget: Number(b.value) })}).catch(()=>{});
+      // 🔴 C5-53：**这里原来还有一条重复的搜索预算提交路径，已删。**
+      //   它带着 `.catch(()=>{})` —— 失败被吞掉，保存照样显示"✅ 已保存"。
+      //   ⚠️ 而下面 26 行处的注释白纸黑字写着「这里是**唯一**能存它的地方了，别再给它开第二条路」
+      //     —— **加第二条路的人没删第一条，还把那句禁令留在了两者中间。**
+      //     这就是"注释说的和代码做的相反"的教科书案例：**注释挡不住这种事，守卫才挡得住。**
+      //   ⛔ 顺带定一条：`.catch(()=>{})` 在保存路径上**全段禁止** ——
+      //     它把"保存失败"伪装成"保存成功"，而那正是 Joe 报的现象（改了 5000，刷新回 2500）。
+      // 🔴 C5-53：画像保存原来也带 `.catch(()=>{})` —— 同一个病：**存失败了照样报"已保存"**。
+      //   ⚠️ 这一条比预算那条更贵：画像是 Joe 亲手写的一段文字，
+      //     他以为存上了、关掉页面，那段字就没了。⇒ 不吞，让它冒泡。
+      { const prof = $("#fc-profile");
+        if (prof) {
+          const r = await fetch("/api/settings/profile", {method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({profile:prof.value})});
+          if (!r.ok) throw new Error(`客户画像保存失败：HTTP ${r.status}`);
         } }
-      const prof = $("#fc-profile"); if (prof) await fetch("/api/settings/profile", {method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({profile:prof.value})}).catch(()=>{});
       // 🔴 搜索预算并进主保存（2026-09-02 修缺陷 b）：它原来靠一个**已被删除的按钮**提交，
       //   改了存不进去且零提示。⚠️ 这里是**唯一**能存它的地方了，别再给它开第二条路。
       // C5-44：国家勾选一并存（与预算同一个接口，一次提交）。
@@ -4321,11 +4355,20 @@
       { const cc = [..._fcCcChecked];
         await fetch("/api/settings/search", { method:"POST", headers:{"content-type":"application/json"},
           body: JSON.stringify({ countries: cc }) }); }
+      // ⭐ 搜索预算：**全仓唯一一条提交路径**（C5-53 删掉了上面那条重复的）。
       { const sb = $("#fc-serper-budget");
-        if (sb && sb.value !== "") {
-          const v = Number(sb.value) || 1000;
-          await fetch("/api/settings/search", { method:"POST", headers:{"content-type":"application/json"},
+        if (sb && String(sb.value).trim() !== "") {
+          // 🔴 C5-53：原来是 `Number(sb.value) || 1000` —— **填 0 会被静默变成 1000**，
+          //   而 0 是**合法值**（＝今天不搜）。那是又一个"我没收到"被当成"用默认值"的形状。
+          //   ⇒ 改成显式判：非数字才不提交（并说出来），⛔ 不拿一个数去顶替。
+          const v = Number(sb.value);
+          if (!Number.isFinite(v) || v < 0) {
+            throw new Error(`搜索预算「${sb.value}」不是有效数字，已阻止保存（⛔ 不拿默认值顶替）`);
+          }
+          const r = await fetch("/api/settings/search", { method:"POST", headers:{"content-type":"application/json"},
             body: JSON.stringify({ serperBudget: v }) });
+          // ⛔ 不吞错：保存失败必须冒泡到调用方，让"✅ 已保存"不会在失败时出现。
+          if (!r.ok) throw new Error(`搜索预算保存失败：HTTP ${r.status}`);
         } }
       return true;
     }
@@ -4926,6 +4969,16 @@
       const ntf = !doParams ? {} : await saveNotifyCfg();
       if (doParams && res.ok) _chatScript = $("#cfg-chatscript").value || DEFAULT_CHAT;
       const bad = [ res.error && `发信设置：${res.error}`, fu.error && `跟进设置：${fu.error}`, ntf.error && `飞书通知：${ntf.error}` ].filter(Boolean);
+      // 🔴🔴 C5-53：方向盘（画像 / 国家 / 关键词 / 搜索预算）**必须在这里提交** ——
+      //   它原来排在提示语**之后**，且异常只 `console.error` ⇒ 屏幕上恒显示「✅ 已保存」。
+      //   ⇒ **这才是"保存成功但值没变"的直接成因**，失败被吞在三层里：
+      //      ① fetch 的 `.catch(()=>{})` ② 这里的 `console.error` ③ 提示语恒说成功。
+      //   ⚠️ 记住这个形状：**每一层单独看都"很稳健"，合起来就是一个永远说成功的保存按钮。**
+      //   ⚠️ 而且顺序本身就是判据的一部分：**在提示语算完之后才 push 进 bad，等于没 push。**
+      if (doSearch) {
+        try { await saveSearchCfg(); }
+        catch (e) { bad.push(`找客户策略：${String((e && e.message) || e)}`); }
+      }
       // ⭐ **存进去的值和你输的不一样时，必须当场说出来**。
       //   老代码把 1000 静默截成 500 还回 ok:true —— "接受了请求、存了另一个数、什么都不说"
       //   正是本项目一路在修的那种病，UI 这一层同样不许犯。
@@ -4940,8 +4993,6 @@
         ? `<span style="color:var(--danger,#c0392b)">⚠️ 有 ${bad.length} 段没存上：${esc(bad.join("；"))}</span>`
         : okMsg) + clampNote;
       if (doParams && !bad.length) renderAutomation(await fetch("/api/settings/sending").then(r=>r.json()).catch(()=>({})));   // 熔断/已发数回读，别让页面停在旧值
-      // 方向盘（画像 / 国家 / 关键词 / 搜索预算）—— C5-49 起**只有找客户策略那颗保存**会提交它。
-      if (doSearch) { try { await saveSearchCfg(); } catch (e) { console.error("save-wheel:", e); } }
       // C5-30②：保存成功才回预览态。⚠️ **有段没存上就留在编辑态** ——
       //   把他打回只读会让"没存上的那几个字"看起来像已经存好了。
       //   🔴 C5-49：只把**自己这张卡**打回预览态，⛔ 别顺手把另一张卡也关掉（那也是越权）。
