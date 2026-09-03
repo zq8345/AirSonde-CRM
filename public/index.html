@@ -1126,6 +1126,9 @@
     .hdr-left { width:178px; flex-shrink:0; display:flex; align-items:center; justify-content:center; }  /* 正对左侧栏(178px)：logo 上下+左右居中 */
     .hdr-right-zone { flex:1; min-width:0; display:flex; align-items:center; gap:12px; }  /* 正对主列表：按钮+搜索+设置 */
     .side-nav { padding:8px 10px; border-radius:8px; cursor:pointer; color:var(--text); font-size:13px; display:flex; align-items:center; gap:9px; }
+    /* v8 补丁⑥：「设置」是 <button>，把原生按钮外观归零后与其它 side-nav 同一套；
+       ⚠️ 特异性 (0,1,1) 低于 .side-nav.active (0,2,0)，选中态的底色/字重照常生效（第一版写成内联 style 把它们压掉了） */
+    button.side-nav { width:100%; border:0; background:none; font:inherit; font-size:13px; text-align:left; }
     /* C5-4v 附录 C.6：图标 stroke=currentColor ⇒ 选中/悬停不必再配第二份颜色 */
     .nav-ico { flex:0 0 auto; opacity:.75; }
     .side-nav:hover .nav-ico, .side-nav.active .nav-ico { opacity:1; }
@@ -1181,7 +1184,9 @@
            原来点它要先在「发信设置 / 飞书通知」里选一个，可那是**我们的**分法不是 Joe 的：
            他只想"去设置里改点东西"。而且弹窗撑不下这些内容，他已经在里面滚动了。 -->
       <div class="side-settings">
-        <button id="btn-settings" class="gear-btn">⚙ 设置</button>
+        <!-- v8 补丁⑥（Joe）：「设置」纳入与 待办事项/数据看板/自动化 同一条高亮规则 ——
+             同 class .side-nav + data-nav="settings"，refreshNavHighlight 按 activeView 统一点亮，⛔ 不单独写 if。 -->
+        <button id="btn-settings" class="side-nav" data-nav="settings">⚙ 设置</button>
         <!-- ⭐ 退出登录放在**左栏底部**，紧挨「设置」。
              起因：设置页底部「👤 当前账号」里本来就有一个退出链（真 <a href>、应用级端点），
              但 Joe 在**左下角**找它 —— 而那儿只有「⚙ 设置」。
@@ -1236,7 +1241,8 @@
         <thead><tr><th><input type="checkbox" id="sel-all" title="全选当前筛选" onclick="event.stopPropagation();toggleSelAll(this.checked)"> 公司</th><th>评分</th><th>阶段</th><th>邮箱</th><th>分类</th><th>国家</th><th class="chcol">LinkedIn</th><th class="chcol">WhatsApp</th><th class="chcol">Facebook</th><th class="chcol">Instagram</th><th class="chcol">电话</th><th>录入时间</th></tr></thead>
         <tbody id="rows"></tbody>
       </table>
-      <div class="empty" id="empty" style="display:none">暂无数据。点上方「➕ 找客户」加线索——自动搜一轮，或导入自有名单 CSV。</div>
+      <!-- v8 补丁④：空态文案按格，单一真源 EMPTY_TEXT（loadList 按 current 填），这里不再写死一句全站通用的 -->
+      <div class="empty" id="empty" style="display:none"></div>
       </div><!-- /.table-card -->
       </div><!-- /#v-list -->
       <div id="v-page" style="display:none"></div>
@@ -1731,11 +1737,11 @@
     const TABS = [
       { key:"all", label:"全部" },
       { key:"unscored", label:"待分析" },
-      // ⭐ 工具栏 v8（Joe 2026-09-03）：「官网抓不到」升为左栏独立一格，紧跟待分析。
+      // ⭐ 工具栏 v8（Joe 2026-09-03）：「无官网」升为左栏独立一格，紧跟待分析。
       //   判据在后端 NO_SCORE_WHERE（analyzed/pending 且无分 = recordFetchFailure 连续 3 次失败归档的那批）。
       //   ⚠️ 它以前是待分析里的"只看 B 组"子筛选（批⑭②）—— 那个入口随工具栏分段筛选一起撤了，
       //     能力（改网址/重新分析/忽略）原样搬进这一格的固定槽位。
-      { key:"noscore", label:"官网抓不到" },
+      { key:"noscore", label:"无官网" },   // v8 补丁⑦（Joe 定名）：key 不动，所有人看得见的字都从这一处取
       { key:"review", label:"待审批" },
       // ⭐ 批⑨②③：「待发送」→「待联系」、「已发送」→「已联系」，「已查看」并入「已联系」。
       //
@@ -1763,6 +1769,19 @@
     //   ⚠️ **只统一 label，key 一个字不改**（key 是前后端契约：STATUS_GROUPS / STAGE_SQL /
     //      gotoGroup / URL 都认它，见上面 769-771 行立过的规矩）。
     const STAGE_LABEL = Object.fromEntries(TABS.map(t => [t.key, t.label]));
+    // v8 补丁④（总工定稿）：每格一句空态文案，不带说明。⛔ 唯一真源，别在别处再写"暂无数据"。
+    const EMPTY_TEXT = {
+      all:         "还没有线索，点右上「找客户」",
+      unscored:    "排队空了，机器每分钟自动找",
+      noscore:     `没有${STAGE_LABEL.noscore}的`,
+      review:      "没有等你拍板的",
+      ready:       "没有可联系的，去待审批批几条",
+      sent:        "还没发出过信",
+      replied:     "还没有人回信",
+      won:         "还没有成交",
+      ignored:     "没有忽略的",
+      blacklisted: "没有退订/退信",
+    };
     // 批⑲：批准线。镜像后端 `APPROVE_MIN_SCORE`（src/index.ts）——真正的闸在后端
     // （approveGateReason），这里只用于**前端分段与按钮文案**，改后端时记得一起看这一处。
     const APPROVE_MIN = 60;
@@ -1840,8 +1859,8 @@
       if (s==='sent')     return 'sent';
       if (s==='approved' || s==='queued') return 'ready';
       // ⚠️ 这一支**必须带 match_score 维度**，否则就退回成上面那个病：
-      //    有分 →「待审批」(REVIEW_WHERE)；无分 →「官网抓不到」(NO_SCORE_WHERE)
-      // v8 补丁②：「官网抓不到」已是左栏独立一格 ⇒ 这里也独立成 key，主词 = 格名（批⑱ 原则不许被新格破）
+      //    有分 →「待审批」(REVIEW_WHERE)；无分 →「无官网」(NO_SCORE_WHERE)
+      // v8 补丁②：「无官网」已是左栏独立一格 ⇒ 这里也独立成 key，主词 = 格名（批⑱ 原则不许被新格破）
       if (s==='analyzed' || s==='pending') return (l.match_score == null) ? 'noscore' : 'review';
       return 'unscored';   // status='new'（UNSCORED_SHOW_WHERE）
     }
@@ -1902,7 +1921,7 @@
       }
       if (key==='ready')  return { badge:`📤 ${name}`, cls:"st-send", next:'点"发送已批准"' };
       if (key==='review') return { badge:`📋 ${name}`, cls:"st-new",  next:"审核→批准发送" };
-      // v8 补丁②：「官网抓不到」独立成格 ⇒ 主词就是格名（以前是待分析的副标，被新格破了批⑱ 的"主词=格名"）
+      // v8 补丁②：「无官网」独立成格 ⇒ 主词就是格名（以前是待分析的副标，被新格破了批⑱ 的"主词=格名"）
       if (key==='noscore') return { badge:`🌐 ${name}`, cls:"st-todo", next:"补个能打开的网址→重新分析" };
       // unscored 现在只剩 status='new'：等 AI 打分
       return { badge:`🆕 ${name}`, cls:"st-todo", next:"等 AI 打分（机器每分钟自动跑）" };
@@ -2061,7 +2080,7 @@
       if (typeof s.reviewScored === "number") groupCount.review = s.reviewScored;
       // ⭐ 批⑭②：「待分析」同理用后端真值覆盖 —— map 只数到 status='new'，漏 analyzed-无分。
       if (typeof s.unscoredShow === "number") groupCount.unscored = s.unscoredShow;
-      // 工具栏 v8：「官网抓不到」独立一格，真值同样只有后端算得出（lead_analysis 维度）。
+      // 工具栏 v8：「无官网」独立一格，真值同样只有后端算得出（lead_analysis 维度）。
       if (typeof s.noscoreShow === "number") groupCount.noscore = s.noscoreShow;
       // 工具栏标题的「(条数)」与左栏同一份数据 —— 暴露出去给 renderGroupTools 读，⛔ 别在那边再算一遍。
       window._groupCount = groupCount;
@@ -2122,8 +2141,9 @@
     //   （点漏斗格那条路本来就 dueMode=false；这里补上 gotoGroup —— 待办卡/找客户跳格都走它。）
     // ⭐⭐ 总工验收（v8 必修）：切页**唯一入口**，左栏 tab 点击也走这里。
     //   切页必须 clearSel()：v8 让「忽略/加黑名单」在每一页都亮，勾选集若跨页残留，
-    //   在官网抓不到勾 1 条切到全部 → 忽略按钮亮着、点下去忽略的是屏幕上看不见的那条。
-    window.gotoGroup = (k) => { current = k; if (k !== 'sent') dueMode = false; clearSel(); showMainView('list'); loadStats(); loadList(); };
+    //   在无官网勾 1 条切到全部 → 忽略按钮亮着、点下去忽略的是屏幕上看不见的那条。
+    // v8 补丁⑧e：列头菜单的数字是**本格**口径 ⇒ 切页必须重取 facets
+    window.gotoGroup = (k) => { current = k; if (k !== 'sent') dueMode = false; clearSel(); showMainView('list'); loadStats(); loadList(); loadFacets(); };
 
     // 批③D：列表页绿横幅(#hs-banner)已撤 —— 列表页只回答"这一格靠什么排空"，不挂跨页横幅。
     // 批⑤ 两档制：「🎯 X 家高分可批准」那条建议也已删 —— 自动批准干这活了，
@@ -2213,7 +2233,7 @@
         s2: { t:"批准", cls:"sec", fn:"toolHumanApproveSel()" },
         s5: { t:"忽略", cls:"dan", fn:"toolStatusSel('ignored','忽略')" },
       },
-      // 「官网抓不到」（新页）：批⑬② 那三个出口原样搬进槽位（改网址只许 1 条 —— 网址是每家不一样的事实）
+      // 「无官网」（新页）：批⑬② 那三个出口原样搬进槽位（改网址只许 1 条 —— 网址是每家不一样的事实）
       noscore: {
         s1: { t:"改网址", cls:"pri", only1:true, fn:"toolEditWebsite()" },
         s2: { t:"重新分析", cls:"sec", fn:"toolAnalyzeSel()" },
@@ -2271,7 +2291,7 @@
     // ⭐⭐ 批⑲ 页面一：「待分析」按**下一步动作**分两组。Joe 要每页回答两个问题：
     //   「这里面是什么信息」+「我下一步该干什么」。这一格的答案是：
     //   · 组A 排队等 AI —— **你不用做任何事**（说清楚就够了；给按钮反而制造"我是不是该做点什么"的焦虑）
-    //   · 组B 官网抓不到 —— **机器卡住了，只有人能解**：改对网址 / 人工批准 / 忽略
+    //   · 组B 无官网 —— **机器卡住了，只有人能解**：改对网址 / 人工批准 / 忽略
     //   判定：组B = analyzed/pending 且**无分**（recordFetchFailure 归档的那批，reason 里有原因）。
     //   ⚠️ 抓失败 1-2 次的仍留在 status='new' → 归组A（它们还在自动重试，不该引导 Joe 去打断）。
     function unscoredGroupOf(l){
@@ -2280,7 +2300,7 @@
     // 库里存的是「连续 3 次抓不到官网（超时(18s)）。**未打分**：…」——列表里只要括号里那句真原因。
     function failShort(reason){
       const s = String(reason || "").trim();
-      if (!s) return "官网抓不到";
+      if (!s) return "无官网";
       // ⚠️ 必须**贪婪**匹配到最后一个「）。」：原因本身常带嵌套括号
       //   （如「HTTP 403（WAF/机器人拦截）」「超时(18s)（重试一次仍失败：…）」），
       //   用 [^）]+ 会在第一个右括号处截断，把原因砍成半句 —— 实测就是这么露的。
@@ -2305,7 +2325,7 @@
     // 批㉖：行回归全站统一列结构 —— 抓取失败只留一个小红徽章（原因简码），
     //   错误全文 + 改网址 + 人工批准 + 忽略 全部收进详情（点行即达）；批量操作只在顶部批量条一处。
     function unscoredRowExtra(l){
-      // 工具栏 v8：「官网抓不到」独立成格后，抓取失败原因徽章要在那一格里显示（谓词不变，只放开页面判断）。
+      // 工具栏 v8：「无官网」独立成格后，抓取失败原因徽章要在那一格里显示（谓词不变，只放开页面判断）。
       if (current !== 'unscored' && current !== 'noscore') return "";
       if (unscoredGroupOf(l) === 'B')
         return ` <span class="fail-badge" title="${esc(l.reason||'')}\n\n点行进详情处理（改网址 / 人工批准 / 忽略）">抓取失败 · ${esc(failCode(l.reason))}</span>`;
@@ -2401,7 +2421,7 @@
       // ⭐ C5-17（Joe 用红叉重申撤横带）：待分析页与待联系页**同一处理** ——
       //   横带撤掉、锚点没了 ⇒「跳到」改成**按组筛选**（再点一次取消）。分组谓词一个字没动。
       // 工具栏 v8（Joe：工具栏只保留一行、删掉分段筛选）：
-      //   · 待分析的「只看：排队打分 / 官网抓不到」chips 撤除 —— 「官网抓不到」已升成左栏独立一格，
+      //   · 待分析的「只看：排队打分 / 无官网」chips 撤除 —— 「无官网」已升成左栏独立一格，
       //     待分析页现在只剩 status='new'（排队等 AI），没有第二个分段可切。
       //   · 待联系的「只看：①有邮箱 ②社媒/电话 ③无联系方式」撤除 —— 这三个维度列头 ▾ 菜单
       //     （邮箱 / 渠道）已经能筛，工具栏不再重复摆一份（铁律五）。
@@ -2717,50 +2737,45 @@
       loadList();
     }
 
+    // ══ v8 补丁⑧：六个列头菜单同一套规则（Joe：所有筛选按钮里的描述必须一致）══
+    //   a) 首项一律「全部」（不带名词、不带数字） b) 其余每项「标签 (N)」 c) ⛔ 无 emoji，阶段项 = 左栏格名逐字
+    //   d) 评分项无说明尾巴 e) 🔴 N = 当前这一格能筛出多少行（后端 ?group=，与 /api/leads 同一 WHERE），切页重取
+    //   f) 未打分 = 没有分数的全体（LEFT JOIN 口径，与筛选同一条 SQL） g) 分类按归一后标签合并，不再重复
+    //   h) 国家「全部」+「中文名 (N)」按 N 降序（只列本格有的）
+    let _facets = null;   // 最近一次 facets（阶段/渠道菜单在 hdrOpts 里读它）
     async function loadFacets() {
-      const f = await fetch("/api/leads/facets").then(r=>r.json()).catch(()=>({countries:[],allCountries:{},categories:[],noEmailCount:0,withEmailCount:0,total:0,scoreBuckets:{}}));
-      // 国家：全部目标国家都显数量（含 0）
+      const f = await fetch(`/api/leads/facets?group=${encodeURIComponent(current)}`).then(r=>r.json()).catch(()=>null);
+      if (!f) return;
+      _facets = f;
+      const N = (n) => ` (${Number(n)||0})`;
+      // 国家
       const cSel = $("#f-country"), cur = cSel.value;
-      const cnt = {}; (f.countries||[]).forEach(c=>{ cnt[String(c.v).toUpperCase()] = c.n; });
-      const seen = new Set();
-      let opts = `<option value="">全部国家</option>`;
-      for (const [code,name] of Object.entries(f.allCountries||{})) {
-        const CC = code.toUpperCase(); seen.add(CC);
-        opts += `<option value="${CC}">${esc(name)} (${cnt[CC]||0})</option>`;
-      }
-      // 数据里出现、但不在目标国家清单里的（如 CSV 导入的其它国家）也补进去；用中文名，查不到显原值
-      (f.countries||[]).forEach(c=>{ const CC=String(c.v).toUpperCase(); if(!seen.has(CC)) opts += `<option value="${CC}">${esc(countryName(c.v))} (${c.n})</option>`; });
-      cSel.innerHTML = opts;
+      cSel.innerHTML = `<option value="">全部</option>` +
+        (f.countries||[]).map(c=>{ const CC=String(c.v).toUpperCase(); return `<option value="${CC}">${esc(countryName(c.v))}${N(c.n)}</option>`; }).join("");
       cSel.value = cur;
-      // 分类
+      // 分类（值仍是 slug，显示中文；后端已按 normalizeCustomerType 归一合并）
       const tSel = $("#f-type"), tcur = tSel.value;
-      tSel.innerHTML = `<option value="">全部分类</option>` +
-        (f.categories||[]).map(t=>`<option value="${esc(t.v)}">${esc(t.label||t.v)} (${t.n})</option>`).join("");
+      tSel.innerHTML = `<option value="">全部</option>` +
+        (f.categories||[]).map(t=>`<option value="${esc(t.v)}">${esc(t.label||t.v)}${N(t.n)}</option>`).join("");
       tSel.value = tcur;
-      // 邮箱：三项都带数量
+      // 邮箱
       const eSel = $("#f-email"), ecur = eSel.value;
       eSel.innerHTML =
-        `<option value="">全部邮箱 (${f.total||0})</option>` +
-        `<option value="yes">有邮箱 (${f.withEmailCount||0})</option>` +
-        `<option value="no">缺邮箱 (${f.noEmailCount||0})</option>`;
+        `<option value="">全部</option>` +
+        `<option value="yes">有邮箱${N(f.withEmailCount)}</option>` +
+        `<option value="no">缺邮箱${N(f.noEmailCount)}</option>`;
       eSel.value = ecur;
-      // ⭐ 两档制：老三档（0-40 / 40-70 / 70-100）已删 —— 40 和 70 不对应任何决策，纯装饰。
-      //    现在只有 60 一条线：≥60 机器自动发 / <60 进翻牌堆等 Joe 复核 / 未打分是特殊态。
+      // 评分：只有 60 一条线（≥60 机器自动发 / <60 等 Joe 复核 / 未打分）。
       const sb = f.scoreBuckets||{}; const smin = sb.min || 60;
       const sSel = $("#f-score"), scur = sSel.value;
-      // Joe 2026-08-31：待审批页上「≥60分 · 自动通道」与分层①「建议批准（≥60 分）」
-      //   是**同一个集合的两个展示位**（APPROVE_MIN 与 SCORE_LINE 都是 60），而段头还带批量动作
-      //   ⇒ 该页不出现这一档（铁律五）。用 data-dup 打标记，"哪些档在这页该出现"这条规则
-      //   只写在 syncScoreOptsToPage() 一处，不在这里抄第二遍 smin 的推导。
-      // ⛔ 「<60分」**不能一起删**：它不是筛选，是 `renderFlipPile()` 那套读法的**唯一入口**
-      //   （isFlipPileView() 靠 `f-score === "0-60"` 判定）。删了 = 约 70 行的一整个视图变成
-      //   到不了的死代码 —— Joe 说的是"去掉重复的选项"，不是"删掉一种读法"。
-      //   （它文案里的「翻牌堆」是宪法禁词，该页归 C5-3，一并挂到那单。）
+      // Joe 2026-08-31：待审批页上「≥60 分」与分层①「建议批准（≥60 分）」是同一个集合的两个展示位
+      //   ⇒ 该页不出现这一档（铁律五）。data-dup 打标记，规则只写在 syncScoreOptsToPage() 一处。
+      // ⛔ 「<60 分」不能删：它是 renderFlipPile() 那套读法的唯一入口（isFlipPileView 靠 f-score === "0-60" 判定）。
       sSel.innerHTML =
-        `<option value="">全部评分</option>` +
-        `<option value="${smin}-100" data-dup="review">≥${smin}分 · 自动通道 (${sb.bAuto||0})</option>` +
-        `<option value="0-${smin}">&lt;${smin}分 · 复核 (${sb.bFlip||0})</option>` +
-        `<option value="none">未打分 (${sb.bNone||0})</option>`;
+        `<option value="">全部</option>` +
+        `<option value="${smin}-100" data-dup="review">≥${smin} 分${N(sb.bAuto)}</option>` +
+        `<option value="0-${smin}">&lt;${smin} 分${N(sb.bFlip)}</option>` +
+        `<option value="none">未打分${N(sb.bNone)}</option>`;
       sSel.value = scur;
       syncScoreOptsToPage();
     }
@@ -2866,11 +2881,12 @@
       if (box) box.style.display = "none"; if (tbl) tbl.style.display = "";
       renderOrphans();   // 批⑧：孤儿回复条（只在「已回复」格出现；不 await，别让它拖慢列表）
       const { leads } = await fetch(`/api/leads?${filterQuery()}`).then(r=>r.json());
-      $("#empty").style.display = leads.length ? "none" : "block";
+      // v8 补丁④：空态文案按格取自 EMPTY_TEXT（单一真源），不再全站一句"点上方找客户"（找客户只在全部页有）
+      { const em = $("#empty"); em.textContent = EMPTY_TEXT[current] || "没有数据"; em.style.display = leads.length ? "none" : "block"; }
       _loadedLeads = leads;
       // 🔴 C5-17：**「全选」的作用域必须等于"屏幕上看得见的行"**。
       //   原来 `_loadedIds` 取的是**未筛的全量** ⇒ 筛了「排队打分」再点表头全选，
-      //   会把屏幕上根本没显示的「官网抓不到」那批一起圈进去
+      //   会把屏幕上根本没显示的「无官网」那批一起圈进去
       //   （Joe 实测：全选 136 条把 43 条抓不到的一起圈了）。
       //   ⇒ 先算出当前渲染集 rowsData，再由它决定 _loadedIds。**一个口径，不是两个。**
       const rowsData = ((current === 'ready' || current === 'unscored') && _readyFilter)
@@ -2928,21 +2944,10 @@
     //   不再与格名平级 —— 它们本来就不是平行阶段，是架在格子上的第二维度。
     //   ⚠️ 选「已联系」筛出来的必须 == 左栏「已联系」格的那批人，所以后端
     //      `STAGE_SQL.sent` 已同步放开了原来的 `AND NOT ENGAGED`（否则就是"名改了 WHERE 没改"）。
-    const STAGE_OPTS = [
-      ["",            "全部阶段"],
-      ["unscored",    `🆕 ${STAGE_LABEL.unscored}`],
-      ["noscore",     `🌐 ${STAGE_LABEL.noscore}`],   // v8 补丁②：与左栏格一一对应（后端 STAGE_SQL.noscore 已有）
-      ["review",      `📋 ${STAGE_LABEL.review}`],
-      ["ready",       `📤 ${STAGE_LABEL.ready}`],
-      ["sent",        `✅ ${STAGE_LABEL.sent}`],
-      ["engaged",     `　└ ${STAGE_LABEL.sent} · 🔥已参与`],
-      ["replied",     `💬 ${STAGE_LABEL.replied}`],
-      ["talking",     `　└ ${STAGE_LABEL.replied} · 💬洽谈中`],
-      ["declined",    `　└ ${STAGE_LABEL.replied} · ❌已婉拒`],
-      ["won",         `🤝 ${STAGE_LABEL.won}`],
-      ["ignored",     `🗄️ ${STAGE_LABEL.ignored}`],
-      ["blacklisted", `⛔ ${STAGE_LABEL.blacklisted}`],
-    ];
+    // v8 补丁⑧c：阶段菜单 = 「全部」+ 左栏 9 格逐字（从 TABS 取，⛔ 无 emoji、无子项、无说明）。
+    //   数字来自 facets.stages（全库数 = 左栏数：选阶段会跳到「全部」再筛，拿到的正是那批）。
+    //   旧子项 engaged/talking/declined 的后端谓词保留（兼容旧链接），菜单不再列。
+    const stageOpts = () => [["", "全部"], ...TABS.slice(1).map(t => [t.key, `${t.label} (${Number(_facets?.stages?.[t.key]) || 0})`])];
     const CH_COLS = { ch_linkedin:["linkedin","LinkedIn"], ch_whatsapp:["whatsapp","WhatsApp"], ch_facebook:["facebook","Facebook"], ch_instagram:["instagram","Instagram"], ch_phone:["phone","电话"] };
     // 统一「漏斗=筛选」图标（Feather filter，与排序三角 ▲/▼ 明显不同形）
     const FUNNEL_SVG = `<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="21 4 3 4 10 12.5 10 19 14 21 14 12.5"/></svg>`;
@@ -2990,8 +2995,9 @@
       return $("#"+SEL_OF[type]).value;
     }
     function hdrOpts(type){
-      if (type==="stage") return STAGE_OPTS.slice();
-      if (type in CH_COLS){ const [k,name]=CH_COLS[type]; return [["","全部"],[k,"有 "+name]]; }
+      if (type==="stage") return stageOpts();
+      // 渠道：「全部」+「有 X (N)」，N = 本格里该渠道非空的行数（facets.channels）
+      if (type in CH_COLS){ const [k,name]=CH_COLS[type]; return [["","全部"],[k,`有 ${name} (${Number(_facets?.channels?.[k]) || 0})`]]; }
       return [...$("#"+SEL_OF[type]).options].map(o=>[o.value, o.text]);
     }
     let _menuTh = null;
@@ -3099,7 +3105,7 @@
 
     // ⭐ 两档制 · 分数颜色的**单一真源**。以前三个函数三套线（列表 70/40、详情 80/60），
     //   没有一条是真正的决策线 60 —— 那些线不对应任何后果，纯装饰。
-    //   现在：绿 = 机器会自动发它；红 = 进翻牌堆等 Joe 复核；灰 = 未打分（多半官网抓不到，**不是**不合格）。
+    //   现在：绿 = 机器会自动发它；红 = 进翻牌堆等 Joe 复核；灰 = 未打分（多半无官网，**不是**不合格）。
     //   琥珀色整个退役：两档制下没有"中间态"这回事。
     const SCORE_LINE = 60;   // 与后端 APPROVE_MIN_SCORE 对齐；后端返回 scoreBuckets.min 时以后端为准
     function detailScoreClass(s){ if(s==null) return "sc-none"; return s>=SCORE_LINE ? "sc-green" : "sc-red"; }
@@ -3266,7 +3272,7 @@
               ${/* 批㉖：列表上的三按钮墙收进这里 —— 抓取失败线索的**唯一**处理块（错误全文+改网址+人工批准+忽略）。 */''}
               ${(['analyzed','pending'].includes(lead.status) && a.match_score == null) ? `<div class="dp-card" style="border:1px solid var(--red)">
                 <div class="k" style="color:var(--red)">⚠️ 抓取失败处理</div>
-                <div class="hint" style="margin:4px 0 8px;white-space:pre-wrap">${esc(cleanReason(a.reason) || '官网抓不到（原因未记录）')}</div>
+                <div class="hint" style="margin:4px 0 8px;white-space:pre-wrap">${esc(cleanReason(a.reason) || '无官网（原因未记录）')}</div>
                 <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
                   <input id="ff-url" class="inlinput" style="flex:1;min-width:220px" placeholder="改成正确的官网地址" value="${esc(lead.website)||''}">
                   <button class="btn-ghost mini" onclick="ffSaveWebsite(${lead.id})">🔗 保存并重抓</button>
@@ -3667,7 +3673,7 @@
 
     // 评分色块
     window.scoreBadge = (s) => {
-      if (s == null) return '<span class="muted" title="未打分（多半是官网抓不到，不是不合格）">—</span>';
+      if (s == null) return '<span class="muted" title="未打分（多半是无官网，不是不合格）">—</span>';
       // ⭐ 两档制：颜色就是决策 —— 绿=机器会自动发它，红=进翻牌堆等你复核。中间没有第三种颜色。
       const color = s >= SCORE_LINE ? "var(--green)" : "var(--red)";
       return `<span class="pill" style="background:${color};color:var(--bg)">${s}</span>`;
@@ -3756,7 +3762,7 @@
           const s = r.stats||{};
           rescanMsg(`✅ <b>重扫完成</b> —— 全部 ${total} 家已按最新标准重打<br>`
             + `<span class="hint">≥${SCORE_LINE} 分 <b>${s.hi||0}</b> 家（自动通道）　·　&lt;${SCORE_LINE} 分 <b>${s.lo||0}</b> 家（待你复核）　·　`
-            + `官网抓不到 <b>${s.nil||0}</b> 家（未打分，不是不合格）</span><br>`
+            + `无官网 <b>${s.nil||0}</b> 家（未打分，不是不合格）</span><br>`
             + `<span class="hint">自动发送仍是关闭的 —— 要不要重开由你决定。</span>`);
           loadStats(); loadList(); loadFacets(); return;
         }
@@ -4146,7 +4152,7 @@
       const el = $("#fc-backlog"); if(!el) return;
       if(!b){ el.style.display='none'; return; }
       // 工具栏 v8（总工验收补）：「没打分」拆成两个数，与左栏两格逐字同源 ——
-      //   排队打分 = 待分析（status=new，机器会自动啃）· 官网抓不到 = 要人改网址的那批。
+      //   排队打分 = 待分析（status=new，机器会自动啃）· 无官网 = 要人改网址的那批。
       //   原来一个并集数会和左栏打架（弹窗 567 vs 左栏 347）。
       const un=b.unscored||0, ns=b.noscore||0, ne=b.noEmail||0, sd=b.sendable||0;
       const total=un+ns+ne+sd;
@@ -4155,7 +4161,7 @@
       // C5-3：积压条现在住在「➕ 补货」弹窗里 → 跳转前**先关弹窗**，
       //   否则弹窗会盖在跳转后的列表上（总工点名的实现注意点）。
       const lnk=(n,txt,grp)=> n?`<a class="bk-lnk" onclick="closeRestock();gotoGroup('${grp}')">${n} ${txt}</a>`:'';
-      const parts=[lnk(un,'排队打分','unscored'),lnk(ns,'官网抓不到','noscore'),lnk(ne,'缺邮箱','review'),lnk(sd,'能发没发','ready')].filter(Boolean);
+      const parts=[lnk(un,'排队打分','unscored'),lnk(ns,STAGE_LABEL.noscore,'noscore'),lnk(ne,'缺邮箱','review'),lnk(sd,'能发没发','ready')].filter(Boolean);
       el.style.display='block';
       el.innerHTML = `<span class="bk-ic">${jam>200?'⚠️':'🚦'}</span><b>管道积压 ${total} 条</b>`
         + (parts.length?`（${parts.join(' · ')} → 去处理）`:'')
@@ -4599,15 +4605,25 @@
         if (tbl && tbl.parentNode) tbl.parentNode.insertBefore(el, tbl);
       }
       if (!orphans.length){ el.style.display='none'; return; }
-      el.style.display=''; el.style.cssText += ";margin:0 0 10px;border:1px solid #e6d3a3;background:var(--tint-amber);border-radius:8px;padding:10px 12px";
-      el.innerHTML = `<div style="font-weight:600;color:var(--amber);margin-bottom:6px">⚠️ ${orphans.length} 封回复没匹配到线索 —— 这是真人给你回的信，别让它烂在这</div>`
-        + orphans.map(o=>`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid #e6d3a3">
+      // v8 补丁③：噪音判定来自后端 is_noise（= reply-inbox.ts 的 isNoiseReply，回复箱同一套，⛔ 前端不再判一遍）。
+      //   橙色告警条只在 ≥1 封**非噪音**孤儿时出现、才写"真人给你回的信"；
+      //   噪音（DMARC/退信回执）收成一行灰字，点「查看」才展开 —— 生产那 7 封 DMARC 曾被当真人回信喊了一整条橙带。
+      const real = orphans.filter(o => !o.is_noise), noise = orphans.filter(o => o.is_noise);
+      const row = (o) => `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid var(--border)">
             <span class="pill" style="background:${catColor[o.category]||'#6b7480'};color:var(--bg);flex-shrink:0">${esc(catLabel[o.category]||o.category||'未分类')}</span>
             <b style="flex-shrink:0">${esc(o.from_email)}</b>
             <span class="muted" style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(o.content||'')}">${esc(o.summary||o.subject||'')}</span>
             <span style="flex:1"></span>
             <button class="btn" style="flex-shrink:0" data-act="link-orphan" data-id="${o.id}" data-from="${esc(o.from_email)}">关联到线索…</button>
-          </div>`).join("");
+          </div>`;
+      el.style.display=''; el.style.cssText += ";margin:0 0 10px;border-radius:8px;padding:10px 12px;"
+        + (real.length ? "border:1px solid #e6d3a3;background:var(--tint-amber)" : "border:1px solid var(--border);background:var(--panel)");
+      el.innerHTML = (real.length
+          ? `<div style="font-weight:600;color:var(--amber);margin-bottom:6px">⚠️ ${real.length} 封回复没匹配到线索 —— 这是真人给你回的信，别让它烂在这</div>` + real.map(row).join("")
+          : "")
+        + (noise.length
+          ? `<details class="orphan-noise"${real.length ? ' style="margin-top:6px"' : ''}><summary class="muted" style="font-size:12px;cursor:pointer;list-style:none">${noise.length} 封系统自动报告（DMARC/退信回执）已归为噪音 · <span style="color:var(--blue)">查看</span></summary>${noise.map(row).join("")}</details>`
+          : "");
     }
     // 人工关联：三层匹配也有兜不住的时候（换域名回、私人邮箱回）—— 那时得有人能一键接上
     window.linkOrphan = async (replyId, from) => {
@@ -5742,7 +5758,7 @@ ${esc(d.ours.body||'')}</div></details>`
       // 被抑制时**照说事实**，只是降级成一行小字、不占头条（抑制 ≠ 隐瞒）。
       if (gLimit > 0 && (d.readyCount || 0) < gLimit && knownCause) {
         const why = [];
-        if ((G.stuckNoSite || 0) > DB_RATE_MIN_N) why.push(`${G.stuckNoSite} 家官网抓不到、还没分拣`);
+        if ((G.stuckNoSite || 0) > DB_RATE_MIN_N) why.push(`${G.stuckNoSite} 家无官网、还没分拣`);
         if ((G.rescoreLeft || 0) > 0) why.push(`重刷还剩 ${G.rescoreLeft} 家没跑完`);
         growing.push({ t: '待联系存量偏低', need: [], note:
           `已知原因：${why.join(' · ')} —— 这两件在处理中，不用你现在做什么` });

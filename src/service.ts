@@ -29,7 +29,7 @@ export interface AnalyzeOutcome {
   id: number;
   score?: number;
   error?: string;
-  /** 官网抓不到（**不是**模型失败）。调用方应「跳过这条、继续下一条」，绝不能拿它当"分析失败"去 break 整轮。 */
+  /** 无官网（**不是**模型失败）。调用方应「跳过这条、继续下一条」，绝不能拿它当"分析失败"去 break 整轮。 */
   fetchFailed?: boolean;
   /** 抓失败已达上限，已归档成 analyzed（match_score 仍为 NULL） */
   giveUp?: boolean;
@@ -37,7 +37,7 @@ export interface AnalyzeOutcome {
 }
 
 // ⭐「抓站失败 ≠ 不合格」
-// 以前 analyzeLead 不看 scrapeSite 返回的 ok，官网抓不到时照样把空文本喂给 scoreLead，
+// 以前 analyzeLead 不看 scrapeSite 返回的 ok，无官网时照样把空文本喂给 scoreLead，
 // H3 必判"官网看不出在卖/装硬件" → ≤30 → **永久钉死，且与"真不合格"在分数上无法区分**。
 // 生产已因此埋掉 15 家核心目标客户（cayelectronics.vg 船舶电子 / 12volt.com.au 房车电源 /
 // flarespace.com 房车改装 / ccrvtechandsolar.com / off-gridrv.com …）。
@@ -50,7 +50,7 @@ export const FETCH_FAIL_MAX = 3;
  *  这里不 import 它是因为 index.ts 反过来 import 本文件（会成环）。
  *  ⇒ 改动时两处一起改；下面那条注释就是给下一个人看的路标。 */
 export const APPROVE_MIN_SCORE_SVC = 60;
-export const FETCH_FAIL_TYPE = "官网抓不到·无法判断";
+export const FETCH_FAIL_TYPE = "无官网·无法判断";
 // 抓到了但正文少到没法判（JS-only 空壳、"请开启 JavaScript"页等）等价于没抓到——
 // 送给 LLM 同样只会得到"看不出在卖什么"→≤30 永久钉死。门槛压得很低，只拦真空壳。
 const MIN_USABLE_TEXT = 200;
@@ -87,7 +87,7 @@ async function recordFetchFailure(env: Env, lead: any, scraped: ScrapeResult, op
   // ⭐ 但**全量重扫时这个守卫必须让路**（批⑥A 实测撞出来的，不是设想）：
   //   · 守卫的前提是"已有的分数是可信的，别让网络抖动毁了它"。
   //   · 重扫的前提正相反 —— **所有旧分数都已被宣布作废**（新旧标准的混合物）。
-  //     此时若抓不到官网，诚实的记录是「官网抓不到·无法判断」(NULL)，
+  //     此时若抓不到官网，诚实的记录是「无官网·无法判断」(NULL)，
   //     而不是留着一个**按已被推翻的标准算出来的分数**继续冒充有效判断。
   //   · 而且不让路会死循环：这个 WHERE 挡掉的是**整个 DO UPDATE**，连 analyzed_at 都不更新
   //     → 这条线索永远满足"analyzed_at < 重扫开始时间" → 每班被重取 → **重扫永不完成、
@@ -172,7 +172,7 @@ export async function ensureDraft(env: Env, lead: any): Promise<{ ok: boolean; d
   ).bind(lead.id).first<any>();
   if (a?.recommended_email) return { ok: true, draft: a.recommended_email };
   if (!a || a.match_score == null) {
-    // 未打分 ≠ 低分（多半是官网抓不到）。没有分数就没有"为什么适合"，写出来的只能是空话。
+    // 未打分 ≠ 低分（多半是无官网）。没有分数就没有"为什么适合"，写出来的只能是空话。
     return { ok: false, error: "还没打分，写不了信（先 AI 分析）" };
   }
   try {

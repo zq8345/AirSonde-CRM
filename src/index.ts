@@ -20,7 +20,7 @@ import { ensureReplyColumns, stripQuoted, previewOf, isNoiseReply, tabOf, type I
 import { REAL_REPLY_SQL, realReplySql, NOT_TEST_SQL, notTestSql, LEADS_IS_TEST_DDL } from "./noise";
 import { installFetchMeter, meteredDB, mark as subMark, reset as subReset, summary as subSummary } from "./subreq";
 import { engineStatuses, pipelineTools } from "./engines";
-import { normalizeCustomerType, customerTypeLabel, classifyKillReason, KILL_REASONS } from "./taxonomy";
+import { normalizeCustomerType, customerTypeLabel, categoryValuesFor, classifyKillReason, KILL_REASONS } from "./taxonomy";
 import { normalizePhone, formatPhoneDisplay } from "./scrape";   // C5-31：号码清洗与展示切分，单源
 import { errHuman } from "./errhuman";   // C5-24 第 5 条：机器错误串 → 人话（服务端唯一一份）
 import { currentActivity, setActivity, clearActivity } from "./activity";   // C5-28：机器活动真源
@@ -33,7 +33,7 @@ import { currentActivity, setActivity, clearActivity } from "./activity";   // C
  *   `has_click` / `has_followup` / `latest_reply_cat` **一个都不是 leads 表的列** —— 它们全是
  *   列表查询里现算的派生量。于是详情页读到 `undefined`，而 `undefined == null` 为真，
  *   `stageOf()` 就把**每一条已打分的 analyzed 线索**判成 unscored ⇒ 头部恒挂
- *   「🆕 待分析 · 官网抓不到」，哪怕它 88 分正躺在待审批里。
+ *   「🆕 待分析 · 无官网」，哪怕它 88 分正躺在待审批里。
  *
  *   同一个根还打死了另外四处（读的都是 undefined，页面上一点异常都看不出来）：
  *     · isViewed 恒 false ⇒「🔥 趁热跟进」主按钮永不出现
@@ -46,7 +46,7 @@ import { currentActivity, setActivity, clearActivity } from "./activity";   // C
 const LEAD_ROW_COLS =
   "l.id, l.company_name, l.website, l.email, l.country, l.source, l.keyword, l.status, l.created_at, l.channels, " +
   "l.next_action, l.next_action_date, l.last_engaged_at, " +
-  // 批⑲：这两列**只读**，给「待分析」分组页用 —— 组B 要显示官网抓不到的**具体原因**
+  // 批⑲：这两列**只读**，给「待分析」分组页用 —— 组B 要显示无官网的**具体原因**
   // （批⑰ 已把超时/403/TLS/DNS 分开落库），组A 要显示「重试中 n/3」让 Joe 知道机器在干活。
   // ⚠️ 只加列，**不动任何 WHERE**（口径一个字没变）。
   "l.fetch_fail_count AS fetch_fail_count, a.reason AS reason, " +
@@ -327,7 +327,7 @@ const NO_SCORE_WHERE = "l.status IN ('analyzed','pending') AND a.match_score IS 
 // ⚠️⚠️ **这只是展示口径，不是 cron 处理口径**。cron 打分永远只捡 `status='new'`
 //   （见下面 analyze 那步的 SQL，一个字没动）—— analyzed-无分的**不会**被 cron 反复重抓，
 //   不会有 fetch_fail_count 风暴。展示口径和处理口径是两条独立的 SQL，这是 Joe 明确要的分离。
-// ⭐ 工具栏 v8（Joe 2026-09-03）：「官网抓不到」升为左栏独立一格 ⇒ 「待分析」只剩 status='new'
+// ⭐ 工具栏 v8（Joe 2026-09-03）：「无官网」升为左栏独立一格 ⇒ 「待分析」只剩 status='new'
 //   （排队等 AI 打分、机器每分钟自动啃）。analyzed/pending-无分 那批走 NO_SCORE_WHERE（group=noscore）。
 //   ⚠️ 两条谓词**互斥且穷尽**原来的 UNSCORED_SHOW：new ∪ noscore = 旧待分析。改口径要三处一起：
 //     /api/stats 的 unscoredShow/noscoreShow · group=unscored/noscore 分支 · STAGE_SQL。
@@ -352,7 +352,7 @@ async function getBacklog(env: Env): Promise<{ unscored: number; noscore: number
     //   拆成两个数，谓词与 /api/stats 逐字同源：unscored = UNSCORED_SHOW_WHERE，noscore = NO_SCORE_WHERE。
     //   ⚠️ LEFT JOIN：status='new' 的多半还没有 analysis 行，INNER JOIN 会数成 0。
     unscored: await q(`SELECT COUNT(*) AS n FROM leads l LEFT JOIN lead_analysis a ON a.lead_id=l.id WHERE ${UNSCORED_SHOW_WHERE}`),
-    // 官网抓不到：AI 判不了分，等人改网址（左栏独立一格，与 /api/stats 的 noscoreShow 同一谓词）
+    // 无官网：AI 判不了分，等人改网址（左栏独立一格，与 /api/stats 的 noscoreShow 同一谓词）
     noscore: await q(`SELECT COUNT(*) AS n FROM leads l JOIN lead_analysis a ON a.lead_id=l.id WHERE ${NO_SCORE_WHERE}`),
     // 缺邮箱：打了分但没邮箱 → 发不出去，卡在待审批
     noEmail: await q("SELECT COUNT(*) AS n FROM leads l JOIN lead_analysis a ON a.lead_id=l.id WHERE (l.email IS NULL OR l.email='') AND l.status IN ('analyzed','pending','approved','queued')"),
@@ -395,7 +395,7 @@ async function getAutoApproveMin(env: Env): Promise<number> {
  * humanApproved：Joe 在翻牌堆里对**单条** <60 线索亲手按过「手动发这家」。
  *   · 只豁免**分数线**这一条 —— 邮箱仍然必须有（没邮箱根本发不了，豁免它没有意义）
  *   · 幂等/压制名单/每日上限/原子取批 全都不在这个函数里，一个也豁免不到
- *   · "未打分"也不豁免：未打分 ≠ 低分，它多半是官网抓不到（见 service.ts FETCH_FAIL_MAX），
+ *   · "未打分"也不豁免：未打分 ≠ 低分，它多半是无官网（见 service.ts FETCH_FAIL_MAX），
  *     那种情况该去补网址重新分析，不是硬发一封基于空白信息写出来的信
  */
 /**
@@ -473,7 +473,7 @@ app.get("/api/stats", async (c) => {
   const unscoredShow = (await c.env.DB.prepare(
     `SELECT COUNT(*) AS n FROM leads l LEFT JOIN lead_analysis a ON a.lead_id=l.id WHERE ${UNSCORED_SHOW_WHERE}`
   ).first<{ n: number }>())?.n || 0;
-  // ⭐ 工具栏 v8：左栏「官网抓不到」独立一格的真值。判据 = NO_SCORE_WHERE
+  // ⭐ 工具栏 v8：左栏「无官网」独立一格的真值。判据 = NO_SCORE_WHERE
   //   （status analyzed/pending 且 match_score IS NULL —— 只有 recordFetchFailure 连续 3 次失败才会
   //   把线索归档成这个形态；抓失败 1-2 次的仍在 status='new'，不会误算进来）。
   const noscoreShow = (await c.env.DB.prepare(
@@ -940,65 +940,99 @@ app.get("/api/dashboard", async (c) => {
   });
 });
 
-// ---- 线索列表（多维筛选：状态组 / 国家 / 客户类型 / 有无邮箱 / 最低分 / 关键词）----
-app.get("/api/leads", async (c) => {
-  const group = c.req.query("group") || "all";
-  const q = (c.req.query("q") || "").trim();
-  const country = (c.req.query("country") || "").trim().toUpperCase();
-  const category = (c.req.query("category") || "").trim();
-  const hasEmail = (c.req.query("hasEmail") || "").trim();   // "yes" | "no" | ""
-  const minScore = Number(c.req.query("minScore") || "");    // 兼容旧参数（≥minScore）
-  const scoreMinQ = c.req.query("scoreMin");                 // 区间下界（含），缺省=不过滤
-  const scoreMaxQ = c.req.query("scoreMax");                 // 区间上界（不含），缺省=不过滤
-  const scoreMin = scoreMinQ != null && scoreMinQ !== "" ? Number(scoreMinQ) : NaN;
-  const scoreMax = scoreMaxQ != null && scoreMaxQ !== "" ? Number(scoreMaxQ) : NaN;
-  const due = c.req.query("due") === "1";                    // 快赢③：只看"该跟进了"(下一步日期已到/过期)
-  const stage = (c.req.query("stage") || "").trim();         // B：按销售漏斗阶段筛（派生，见下映射）
-  const hasChannel = (c.req.query("hasChannel") || "").trim().toLowerCase(); // B：按渠道存在筛
-  const statuses = STATUS_GROUPS[group] ?? [];
+// ══ 列表筛选 WHERE 的**唯一构造点**：/api/leads 与 /api/leads/facets 共用（v8 补丁⑧e，⛔ 别再抄一份谓词）══
+const CLICKED_SQL = "EXISTS (SELECT 1 FROM emails e WHERE e.lead_id = l.id AND e.clicked_at IS NOT NULL)";
+const ENGAGED_SQL = "EXISTS (SELECT 1 FROM emails e WHERE e.lead_id=l.id AND (e.opened_at IS NOT NULL OR e.clicked_at IS NOT NULL))";
+const LAST_CAT_SQL = "(SELECT r.category FROM replies r WHERE r.lead_id=l.id ORDER BY r.id DESC LIMIT 1)";
+// B：阶段筛选（与前端 stageOf 派生一致；映射到 SQL）
+const STAGE_SQL: Record<string, string> = {
+  // ⭐ 待分析(new) 与 待审核(analyzed/pending) 必须分开：这是阶段列筛选下拉的数据源，
+  //   以前一个 'new' 键把三个状态揉在一起 → 用户按「待审核」筛会筛出一堆还没打分的，
+  //   跟前端 stageOf 的徽章对不上。key 必须与前端 STAGE_OPTS 一致。
+  unscored: UNSCORED_SHOW_WHERE,   // 工具栏 v8：待分析 = status='new'（analyzed-无分 已独立成 noscore）
+  noscore: NO_SCORE_WHERE,         // 工具栏 v8：无官网（analyzed/pending 且无分）
+  review: REVIEW_WHERE,          // 批⑬①：只放"AI 判完了的" —— 真口径见 REVIEW_WHERE 定义
+  // ⭐ 批⑱：key 与左栏格对齐（ready / replied / ignored / blacklisted 是这次补齐的，
+  //    其中「已忽略」以前**下拉里根本筛不出来**）。approved / dead 保留为旧 URL 的兼容别名。
+  ready: "l.status IN ('approved','queued')",
+  approved: "l.status IN ('approved','queued')",   // 兼容旧链接
+  // ⚠️⚠️ 批⑱：这里**放开了原来的 `AND NOT ENGAGED`**。
+  //   原因：下拉主项的 label 已经统一成格名「已联系」，那它筛出来的就**必须等于
+  //   左栏「已联系」格的那批人（sent 全体）**；再挂个 NOT ENGAGED 就是"名改了 WHERE 没改"。
+  sent: "l.status='sent'",
+  engaged: `l.status='sent' AND ${ENGAGED_SQL}`,        // 旧子项（兼容旧链接；v8 补丁⑧ 菜单已不再列它）
+  replied: "l.status='replied'",
+  talking: `l.status='replied' AND COALESCE(${LAST_CAT_SQL},'') != 'not_interested'`,   // 旧子项（同上）
+  declined: `l.status='replied' AND ${LAST_CAT_SQL} = 'not_interested'`,                // 旧子项（同上）
+  won: "l.status='won'",
+  ignored: "l.status='ignored'",
+  blacklisted: "l.status IN ('blacklisted','unsubscribed','bounced')",
+  dead: "l.status IN ('blacklisted','unsubscribed','bounced')",   // 兼容旧链接
+};
+/** 左栏九格 —— facets 的阶段计数按这 9 个 key 出（与前端 TABS 顺序一致） */
+const STAGE_KEYS_9 = ["unscored", "noscore", "review", "ready", "sent", "replied", "won", "ignored", "blacklisted"] as const;
+// B：渠道存在筛选（channels JSON 含该键；键来自白名单，用 json_extract 精确判断）
+const CH_KEYS = new Set(["linkedin", "whatsapp", "facebook", "instagram", "phone", "telegram", "youtube"]);
+const CH_FACET_KEYS = ["linkedin", "whatsapp", "facebook", "instagram", "phone"] as const;   // 列表页五个渠道列
 
-  let sql = `SELECT ${LEAD_ROW_COLS} FROM leads l LEFT JOIN lead_analysis a ON a.lead_id = l.id`;
+/** 「这一格装哪些线索」—— group 谓词。facets 只用这一段（页口径），列表在它之上再叠筛选。 */
+function groupWhere(group: string): { where: string[]; binds: any[] } {
   const where: string[] = [];
   const binds: any[] = [];
-
-  const CLICKED = "EXISTS (SELECT 1 FROM emails e WHERE e.lead_id = l.id AND e.clicked_at IS NOT NULL)";
+  const statuses = STATUS_GROUPS[group] ?? [];
   // ⭐ 批⑨③：「已查看」格已删 → **这里的互斥必须一起拔掉**。
   //   原来：viewed = sent 且点过；sent = sent 且**没**点过（两格互斥，靠 `NOT CLICKED` 实现）。
   //   格子删了而这句不改的话，「已联系」会**看不到所有点过链接的那批** —— 而那批恰恰最该看（🔥 强意向）。
-  //   ⚠️ 实测就是这么翻车的：我先改了前端和排序，以为够了；造的 ClickedLow-65（点过链接）
-  //      **直接不出现在列表里** —— 因为过滤在 SQL 这一层。删格子必须连根拔，不能只拔看得见的那半。
-  //   现在「已联系」= sent **全体**，点过的靠 ORDER BY 置顶（见下面 group === "sent" 的排序分支）。
+  //   现在「已联系」= sent **全体**，点过的靠 ORDER BY 置顶（见 /api/leads 里 group === "sent" 的排序分支）。
   //   `viewed` 这个 group 保留只为兼容可能残留的老链接/书签，左栏已不再有它。
   if (group === "viewed") {          // 兼容旧入口：仍返回"已发送且点过"
-    where.push(`l.status='sent' AND ${CLICKED}`);
+    where.push(`l.status='sent' AND ${CLICKED_SQL}`);
   } else if (group === "sent") {     // 「已联系」= 已发出的全体（不再排除点过的）
     where.push(`l.status='sent'`);
   } else if (group === "unscored") {
-    // ⭐⭐ 批⑭②：「待分析」= 还没打分的全体 = status='new'（cron 会打分）+ analyzed/pending 无分（等人）。
-    //   批⑬② 我把 analyzed-无分 塞进了 off-funnel 的 `noscore` 桶 —— Joe 定"不许有隐藏桶"，撤回，回这里。
-    where.push(UNSCORED_SHOW_WHERE);
+    where.push(UNSCORED_SHOW_WHERE);   // 工具栏 v8：待分析 = status='new'
   } else if (group === "noscore") {
-    // ⚠️ 批⑭②：`noscore` 这个 group 名**保留**，但它不再是 off-funnel 桶 ——
-    //   它现在只是「待分析」里"analyzed-无分"那个**子筛选**（Joe 从待分析格里点"只看抓不到官网的"时用）。
-    //   保留它的理由：批⑬② 的改网址/重分析工具栏是挂在这个 group 上的，那些能力**对**、要留
-    //   （"别把能力跟着入口一起删掉"）。撤掉的是"它是个独立警报桶"这件事，不是它的能力。
-    where.push(NO_SCORE_WHERE);
+    where.push(NO_SCORE_WHERE);        // 工具栏 v8：无官网 = analyzed/pending 且无分（改网址/重新分析的工具栏挂在这个 group 上）
   } else if (group === "review") {
     // ⭐⭐ 批⑬①：「待审批」= **AI 判完了、等你拍板** → 必须有分数（Joe 实测撞出来的"格子在说谎"）。
     // ⚠️ 我第一次改错了地方：改的是 `STAGE_SQL`（`?stage=` 另一条路），而 `group=review` 走这里。
-    //    typecheck 绿、stats 数也对，唯独列表还返回没分数的 —— 造数据真撞才露的馅。
     where.push(REVIEW_WHERE);
   } else if (statuses.length) {
     where.push(`l.status IN (${statuses.map(() => "?").join(",")})`);
     binds.push(...statuses);
   }
+  return { where, binds };
+}
+
+/** 列表的完整筛选（group + 列头筛选 + 搜索）。返回 where/binds 与 due（排序要用）。 */
+function leadsWhere(qs: (k: string) => string | undefined): { where: string[]; binds: any[]; due: boolean; group: string } {
+  const group = qs("group") || "all";
+  const q = (qs("q") || "").trim();
+  const country = (qs("country") || "").trim().toUpperCase();
+  const category = (qs("category") || "").trim();
+  const hasEmail = (qs("hasEmail") || "").trim();   // "yes" | "no" | ""
+  const minScore = Number(qs("minScore") || "");    // 兼容旧参数（≥minScore）
+  const scoreMinQ = qs("scoreMin");                 // 区间下界（含），缺省=不过滤
+  const scoreMaxQ = qs("scoreMax");                 // 区间上界（不含），缺省=不过滤
+  const scoreMin = scoreMinQ != null && scoreMinQ !== "" ? Number(scoreMinQ) : NaN;
+  const scoreMax = scoreMaxQ != null && scoreMaxQ !== "" ? Number(scoreMaxQ) : NaN;
+  const due = qs("due") === "1";                    // 快赢③：只看"该跟进了"(下一步日期已到/过期)
+  const stage = (qs("stage") || "").trim();         // B：按销售漏斗阶段筛
+  const hasChannel = (qs("hasChannel") || "").trim().toLowerCase(); // B：按渠道存在筛
+
+  const { where, binds } = groupWhere(group);
   if (q) {
     where.push("(l.company_name LIKE ? OR l.website LIKE ? OR l.email LIKE ? OR l.country LIKE ?)");
     const like = `%${q}%`;
     binds.push(like, like, like, like);
   }
   if (country) { where.push("UPPER(l.country) = ?"); binds.push(country); }
-  if (category) { where.push("a.customer_category = ?"); binds.push(category); }
+  // v8 补丁⑧g：按 slug 筛时同时命中映到它的旧中文桶（库里存量原值不改），与 facets 的归一计数同一口径
+  if (category) {
+    const vals = categoryValuesFor(category);
+    where.push(`a.customer_category IN (${vals.map(() => "?").join(",")})`);
+    binds.push(...vals);
+  }
   if (hasEmail === "yes") where.push("(l.email IS NOT NULL AND l.email != '')");
   if (hasEmail === "no") where.push("(l.email IS NULL OR l.email = '')");
   if (Number.isFinite(minScore) && minScore > 0) { where.push("a.match_score >= ?"); binds.push(minScore); }
@@ -1006,43 +1040,19 @@ app.get("/api/leads", async (c) => {
   if (Number.isFinite(scoreMin)) { where.push("a.match_score >= ?"); binds.push(scoreMin); }
   if (Number.isFinite(scoreMax)) { where.push("a.match_score < ?"); binds.push(scoreMax); }
   // 「未打分」是特殊态，不是区间：分数区间表达不了 IS NULL。
-  // 这批人现在有真实来源了——抓站失败归档的「官网抓不到·无法判断」就是 match_score NULL，
-  // 它们既不在自动通道也不在翻牌堆，必须能单独捞出来看。
-  if ((c.req.query("scored") || "") === "no") where.push("a.match_score IS NULL");
+  //   LEFT JOIN 之下 = 没有分数的全体（含连 analysis 行都没有的待分析）—— facets 的 bNone 与此同一口径（v8 补丁⑧f）。
+  if ((qs("scored") || "") === "no") where.push("a.match_score IS NULL");
   if (due) where.push("(l.next_action_date IS NOT NULL AND l.next_action_date != '' AND date(l.next_action_date) <= date('now') AND l.status NOT IN ('unsubscribed','blacklisted','bounced','won','ignored'))");
-  // B：阶段筛选（与前端 stageOf 派生一致；映射到 SQL）
-  const ENGAGED = "EXISTS (SELECT 1 FROM emails e WHERE e.lead_id=l.id AND (e.opened_at IS NOT NULL OR e.clicked_at IS NOT NULL))";
-  const LAST_CAT = "(SELECT r.category FROM replies r WHERE r.lead_id=l.id ORDER BY r.id DESC LIMIT 1)";
-  const STAGE_SQL: Record<string, string> = {
-    // ⭐ 待分析(new) 与 待审核(analyzed/pending) 必须分开：这是阶段列筛选下拉的数据源，
-    //   以前一个 'new' 键把三个状态揉在一起 → 用户按「待审核」筛会筛出一堆还没打分的，
-    //   跟前端 stageOf 的徽章对不上。key 必须与前端 STAGE_OPTS 一致。
-    unscored: UNSCORED_SHOW_WHERE,   // 工具栏 v8：待分析 = status='new'（analyzed-无分 已独立成 noscore）
-    noscore: NO_SCORE_WHERE,         // 工具栏 v8：官网抓不到（analyzed/pending 且无分）
-    review: REVIEW_WHERE,          // 批⑬①：只放"AI 判完了的" —— 真口径见 REVIEW_WHERE 定义
-    // ⭐ 批⑱：key 与左栏八格对齐（ready / replied / ignored / blacklisted 是这次补齐的，
-    //    其中「已忽略」以前**下拉里根本筛不出来**）。approved / dead 保留为旧 URL 的兼容别名。
-    ready: "l.status IN ('approved','queued')",
-    approved: "l.status IN ('approved','queued')",   // 兼容旧链接
-    // ⚠️⚠️ 批⑱：这里**放开了原来的 `AND NOT ENGAGED`**。
-    //   原因：下拉主项的 label 已经统一成八格的「已联系」，那它筛出来的就**必须等于
-    //   左栏「已联系」格的那批人（sent 全体）**；再挂个 NOT ENGAGED 就是"名改了 WHERE 没改"，
-    //   等于把名实不符换个地方重生。参与度**一点没丢** —— 它降级成下面的子项 engaged。
-    sent: "l.status='sent'",
-    engaged: `l.status='sent' AND ${ENGAGED}`,        // 子项：已联系 · 🔥已参与
-    replied: "l.status='replied'",
-    talking: `l.status='replied' AND COALESCE(${LAST_CAT},'') != 'not_interested'`,   // 子项
-    declined: `l.status='replied' AND ${LAST_CAT} = 'not_interested'`,                // 子项
-    won: "l.status='won'",
-    ignored: "l.status='ignored'",
-    blacklisted: "l.status IN ('blacklisted','unsubscribed','bounced')",
-    dead: "l.status IN ('blacklisted','unsubscribed','bounced')",   // 兼容旧链接
-  };
   if (stage && STAGE_SQL[stage]) where.push(`(${STAGE_SQL[stage]})`);
-  // B：渠道存在筛选（channels JSON 含该键；键来自白名单，用 json_extract 精确判断）
-  const CH_KEYS = new Set(["linkedin", "whatsapp", "facebook", "instagram", "phone", "telegram", "youtube"]);
   if (CH_KEYS.has(hasChannel)) where.push(`json_extract(l.channels, '$.${hasChannel}') IS NOT NULL`);
+  return { where, binds, due, group };
+}
 
+// ---- 线索列表（多维筛选：状态组 / 国家 / 客户类型 / 有无邮箱 / 最低分 / 关键词）----
+app.get("/api/leads", async (c) => {
+  const { where, binds, due, group } = leadsWhere((k) => c.req.query(k));
+  const CLICKED = CLICKED_SQL;
+  let sql = `SELECT ${LEAD_ROW_COLS} FROM leads l LEFT JOIN lead_analysis a ON a.lead_id = l.id`;
   if (where.length) sql += " WHERE " + where.join(" AND ");
   // 排序：待跟进→下一步日期升序；最近参与→last_engaged_at 降序(NULL 垫底)；否则 id 倒序
   const sort = c.req.query("sort") || "";
@@ -1097,41 +1107,66 @@ app.get("/api/leads/flip-pile", async (c) => {
   return c.json({ total: rows.length, groups: out });
 });
 
+// ══ v8 补丁⑧：列头菜单的计数。🔴 口径 = **当前这一格能筛出多少行**，不是全库 ——
+//   `?group=` 走与 /api/leads 完全相同的 groupWhere（⛔ 不抄第二份谓词）。
+//   · 未打分 = LEFT JOIN 之下 match_score IS NULL 的全体（与 ?scored=no 同一条谓词；以前只数 lead_analysis 表，
+//     把连 analysis 行都没有的待分析漏掉，菜单 240 而筛出来 600）
+//   · 分类按 normalizeCustomerType 归一后再合并计数（库里旧中文桶「安装/集成」「其他」原值不改，显示不再重复）
+//   · 阶段 9 项：⚠️ 用**全库**数不是本格 —— 选阶段会跳到「全部」再筛（applyHdrFilter），拿到的正是全库那批；
+//     按本格数会显示一堆 0 而点下去却有几百条。它与左栏格数逐字相等。
+//   · 渠道 5 列：json_extract 非空计数（以前没数字）
 app.get("/api/leads/facets", async (c) => {
-  const countries = await c.env.DB.prepare(
-    "SELECT UPPER(country) AS v, COUNT(*) AS n FROM leads WHERE country IS NOT NULL AND country != '' GROUP BY UPPER(country) ORDER BY n DESC"
-  ).all();
-  const categoriesRaw = await c.env.DB.prepare(
-    "SELECT a.customer_category AS v, COUNT(*) AS n FROM lead_analysis a WHERE a.customer_category IS NOT NULL AND a.customer_category != '' GROUP BY a.customer_category ORDER BY n DESC"
-  ).all();
+  const group = c.req.query("group") || "all";
+  const { where, binds } = groupWhere(group);
+  const base = `FROM leads l LEFT JOIN lead_analysis a ON a.lead_id = l.id WHERE ${where.length ? where.join(" AND ") : "1=1"}`;
+  const db = c.env.DB;
+  const countries = await db.prepare(
+    `SELECT UPPER(l.country) AS v, COUNT(*) AS n ${base} AND l.country IS NOT NULL AND l.country != '' GROUP BY UPPER(l.country) ORDER BY n DESC`
+  ).bind(...binds).all<{ v: string; n: number }>();
+  const categoriesRaw = await db.prepare(
+    `SELECT a.customer_category AS v, COUNT(*) AS n ${base} AND a.customer_category IS NOT NULL AND a.customer_category != '' GROUP BY a.customer_category`
+  ).bind(...binds).all<{ v: string; n: number }>();
   // C5-13：下拉项**值仍是 slug**（要原样回传给 ?category= 做筛选），只是显示成中文。
   // ⚠️ 显示名和筛选值必须分开：混成一个，中文桶名一改，所有存下来的筛选就全失效。
-  const categories = (categoriesRaw.results as any[]).map((r) => ({ ...r, label: customerTypeLabel(r.v) }));
-  const noEmail = await c.env.DB.prepare(
-    "SELECT COUNT(*) AS n FROM leads WHERE (email IS NULL OR email = '')"
-  ).first<{ n: number }>();
-  const withEmail = await c.env.DB.prepare(
-    "SELECT COUNT(*) AS n FROM leads WHERE (email IS NOT NULL AND email != '')"
-  ).first<{ n: number }>();
-  const totalRow = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM leads").first<{ n: number }>();
-  // 评分分桶计数（边界统一：0-40含0不含40 / 40-70含40不含70 / 70-100含70含100，不重叠不漏）
-  // ⭐ 两档制：0-40 / 40-70 / 70-100 老三档已删 —— 40 和 70 这两条线不对应任何决策。
-  //    现在只有 60 一条线：≥60 走自动通道、<60 进翻牌堆、未打分是特殊态（多为官网抓不到）。
-  const sb = await c.env.DB.prepare(
-    `SELECT
-       SUM(CASE WHEN match_score >= ${APPROVE_MIN_SCORE} THEN 1 ELSE 0 END) AS bAuto,
-       SUM(CASE WHEN match_score IS NOT NULL AND match_score < ${APPROVE_MIN_SCORE} THEN 1 ELSE 0 END) AS bFlip,
-       SUM(CASE WHEN match_score IS NULL THEN 1 ELSE 0 END) AS bNone
-     FROM lead_analysis`
+  const catSum = new Map<string, number>();
+  for (const r of categoriesRaw.results || []) {
+    const slug = normalizeCustomerType(r.v);
+    catSum.set(slug, (catSum.get(slug) || 0) + Number(r.n || 0));
+  }
+  const categories = [...catSum.entries()].map(([v, n]) => ({ v, n, label: customerTypeLabel(v) })).sort((a, b) => b.n - a.n);
+  const stageSum = STAGE_KEYS_9.map((k) => `SUM(CASE WHEN (${STAGE_SQL[k]}) THEN 1 ELSE 0 END) AS st_${k}`).join(",\n       ");
+  // ⚠️ 先 json_valid 再 json_extract（嵌套 CASE 保证求值顺序）：一行坏 JSON 会让整个 facets 500（本地种子撞到过），
+  //   计数宁可少算那一行也不能把六个菜单一起打死。
+  const chSum = CH_FACET_KEYS.map((k) => `SUM(CASE WHEN json_valid(l.channels) THEN (CASE WHEN json_extract(l.channels, '$.${k}') IS NOT NULL THEN 1 ELSE 0 END) ELSE 0 END) AS ch_${k}`).join(",\n       ");
+  const agg = await db.prepare(
+    `SELECT COUNT(*) AS total,
+       SUM(CASE WHEN l.email IS NOT NULL AND l.email != '' THEN 1 ELSE 0 END) AS withEmail,
+       SUM(CASE WHEN l.email IS NULL OR l.email = '' THEN 1 ELSE 0 END) AS noEmail,
+       SUM(CASE WHEN a.match_score >= ${APPROVE_MIN_SCORE} THEN 1 ELSE 0 END) AS bAuto,
+       SUM(CASE WHEN a.match_score IS NOT NULL AND a.match_score < ${APPROVE_MIN_SCORE} THEN 1 ELSE 0 END) AS bFlip,
+       SUM(CASE WHEN a.match_score IS NULL THEN 1 ELSE 0 END) AS bNone,
+       ${chSum}
+     ${base}`
+  ).bind(...binds).first<any>();
+  // 阶段计数：全库（理由见上）
+  const stg = await db.prepare(
+    `SELECT ${stageSum} FROM leads l LEFT JOIN lead_analysis a ON a.lead_id = l.id`
   ).first<any>();
+  const stages: Record<string, number> = {};
+  for (const k of STAGE_KEYS_9) stages[k] = Number(stg?.[`st_${k}`] || 0);
+  const channels: Record<string, number> = {};
+  for (const k of CH_FACET_KEYS) channels[k] = Number(agg?.[`ch_${k}`] || 0);
   return c.json({
+    group,
     countries: countries.results,
-    allCountries: COUNTRIES,            // 全部目标国家，供筛选下拉始终列全
+    allCountries: COUNTRIES,            // 全部目标国家目录（国家中文名从这里取）
     categories,
-    noEmailCount: noEmail?.n || 0,
-    withEmailCount: withEmail?.n || 0,
-    total: totalRow?.n || 0,
-    scoreBuckets: { bAuto: sb?.bAuto || 0, bFlip: sb?.bFlip || 0, bNone: sb?.bNone || 0, min: APPROVE_MIN_SCORE },
+    noEmailCount: Number(agg?.noEmail || 0),
+    withEmailCount: Number(agg?.withEmail || 0),
+    total: Number(agg?.total || 0),
+    scoreBuckets: { bAuto: Number(agg?.bAuto || 0), bFlip: Number(agg?.bFlip || 0), bNone: Number(agg?.bNone || 0), min: APPROVE_MIN_SCORE },
+    stages,
+    channels,
   });
 });
 
@@ -1258,7 +1293,7 @@ app.post("/api/admin/rescore-taxonomy", async (c) => {
       //   **连 analyzed_at 都不更新** ⇒ 这条线索永远满足 `analyzed_at < startedAt`
       //   ⇒ 每一批都被重取，`remaining` 停住不降。生产实测：57 批后停在 330，队首全是
       //     顽固抓不到的（#285 连续 51 次 JS 空壳、#405 19 次、#419 HTTP 521）。
-      // ⚠️ 这是**行为变更**：抓不到的线索旧分数会被置空、落"资料不足·官网抓不到"。
+      // ⚠️ 这是**行为变更**：抓不到的线索旧分数会被置空、落"资料不足·无官网"。
       //   在 C5-13 语义下这是对的 —— **所有旧分数本来就已宣布作废**（新 8 类 + 新标准），
       //   留一个按已被推翻的标准算出来的分数继续冒充有效判断，比置空更坏。
       //   配套的归位在 service.ts 抓取失败那条路上补了（否则 approved 会卡成"有批准没分数"）。
@@ -1476,7 +1511,7 @@ app.get("/api/leads/:id", async (c) => {
   // 🔴 C5-14 根治：这里原来**手抄了一份**列表的派生列（has_open/has_click/has_followup/latest_reply_cat）。
   //   抄一份就会漂，而它已经漂了：**`match_score` 抄漏了**（它在 lead_analysis 里，这条查询压根没 join）。
   //   后果不是"少一个字段"：`stageOf()` 里 `l.match_score == null` 遇上 `undefined` 判真
-  //   ⇒ 每一条已打分的 analyzed 线索在详情页头部都被判成 unscored、恒挂「🆕 待分析 · 官网抓不到」，
+  //   ⇒ 每一条已打分的 analyzed 线索在详情页头部都被判成 unscored、恒挂「🆕 待分析 · 无官网」，
   //     哪怕它 88 分正躺在待审批里。**列表对、详情错，两块屏幕上写着互相矛盾的话。**
   //   ⇒ 不补字段，改成和列表查同一份 LEAD_ROW_COLS：口径只有一处，下次也没得漂。
   const lead = await c.env.DB.prepare(
@@ -1907,7 +1942,7 @@ app.post("/api/discover/round-complete", async (c) => {
 ` +
         `· ${noEmail} 家 缺邮箱
 ` +
-        `· ${nil} 家 官网抓不到（未打分，不是不合格）` } });
+        `· ${nil} 家 无官网（未打分，不是不合格）` } });
     }
   } catch (e) { console.error("round-complete digest:", e); }
   return c.json({ pushed: true, stats: { total, hi, noEmail, nil } });
@@ -3526,11 +3561,17 @@ app.post("/api/replies/:id/handled", async (c) => {
 // 为什么必须单开一个接口：「已回复」页的数据源是 `/api/leads?group=replied`，**每行一个线索**。
 // 孤儿回复根本没有线索 → 它在那个页面上**永远不可能出现**。这就是"入库就沉底"的机制。
 app.get("/api/replies/orphans", async (c) => {
+  // v8 补丁③：孤儿也要过回复箱**同一套**噪音判定（isNoiseReply，⛔ 不写第二套）——
+  //   生产实测 7 封 DMARC 自动报告被当"真人给你回的信"喊了一整条橙带。raw_headers 只用于判定，不出接口。
   const rows = await c.env.DB.prepare(
-    `SELECT id, from_email, subject, summary, category, content, received_at
+    `SELECT id, from_email, subject, summary, category, content, received_at, raw_headers
        FROM replies WHERE lead_id IS NULL ORDER BY id DESC LIMIT 50`
-  ).all();
-  return c.json({ orphans: rows.results });
+  ).all<any>();
+  const orphans = (rows.results || []).map((r: any) => {
+    const { raw_headers, ...rest } = r;
+    return { ...rest, is_noise: isNoiseReply({ raw_headers, content: r.content, from_email: r.from_email, subject: r.subject }) };
+  });
+  return c.json({ orphans });
 });
 
 // 人工把一条孤儿回复挂到某条线索上 —— 三层匹配也有兜不住的时候（换域名回、私人邮箱回），
@@ -3818,7 +3859,7 @@ app.post("/api/rescan/batch", async (c) => {
             `AIRSONDE ✅ 全量重扫完成\n` +
             `· ${stats.hi} 家 ≥${APPROVE_MIN_SCORE}（自动通道）\n` +
             `· ${stats.lo} 家 <${APPROVE_MIN_SCORE}（翻牌堆待复核）\n` +
-            `· ${stats.nil} 家 官网抓不到（未打分，不是不合格）\n\n` +
+            `· ${stats.nil} 家 无官网（未打分，不是不合格）\n\n` +
             `全部按最终标准重打完毕。自动发送仍是关闭状态 —— 要不要重开由 Joe 决定。` } });
         }
       } catch (e) { console.error("rescan-digest:", e); }
@@ -3833,7 +3874,7 @@ app.post("/api/rescan/batch", async (c) => {
     const scoreOnly = !RESCAN_RESET_STATUSES.includes(String(lead.status));
     try {
       // rescan:true 让 recordFetchFailure 的"别抹掉真分数"守卫让路 —— 重扫时旧分数已被宣布作废，
-      // 抓不到就该诚实记成「官网抓不到·无法判断」，而不是留个作废标准的分数；
+      // 抓不到就该诚实记成「无官网·无法判断」，而不是留个作废标准的分数；
       // 且不让路会导致这条线索每次被重取、重扫永不完成（见 service.ts 那段注释）。
       return await analyzeLead(c.env, lead, { scoreOnly, rescan: true });
     } catch (e) { console.error("rescan:", lead.id, e); return { ok: false, id: lead.id, error: String(e) }; }
@@ -4183,7 +4224,7 @@ async function analyzePending(env: Env, max: number, opts: { budget?: RoundBudge
     // 全是抓站失败 → **继续下一批**：它们已进 tried 不会被重取，后面的正常线索不该被这几条卡死。
     if (okThisBatch === 0 && hardFail > 0) break;
   }
-  if (fetchSkipped) console.log(`analyze: ${fetchSkipped} 条因官网抓不到跳过（未打分，等下轮重试）`);
+  if (fetchSkipped) console.log(`analyze: ${fetchSkipped} 条因无官网跳过（未打分，等下轮重试）`);
   return { ok: analyzed, fetchSkipped, attempts };
 }
 

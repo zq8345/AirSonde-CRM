@@ -89,6 +89,14 @@ export function normalizeCustomerType(raw?: string | null): CustomerTypeSlug {
   if (LEGACY_CATEGORY_MAP[s]) return LEGACY_CATEGORY_MAP[s];
   return "unclear";
 }
+/** 筛选 ?category=<slug> 时要同时命中的**库里原值**：slug 本身 + 映到它的旧中文桶（同一张 LEGACY 表，⛔ 别手写第二份）。
+ *  库里存量还有「安装/集成」「其他」这类旧值原样存着（不改数据），筛 integrator 必须把它们一起捞出来，
+ *  否则菜单按归一后标签显示 114 条、点进去只剩 108。 */
+export function categoryValuesFor(slug: string): string[] {
+  const s = String(slug || "").trim().toLowerCase();
+  if (!s) return [];
+  return [s, ...Object.keys(LEGACY_CATEGORY_MAP).filter((k) => LEGACY_CATEGORY_MAP[k] === s)];
+}
 
 /** 打分 prompt 用的枚举清单（slug + 中文说明），单源，别在 prompt 里再抄一遍。 */
 export function customerTypeMenu(): string {

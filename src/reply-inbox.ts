@@ -93,8 +93,13 @@ export function previewOf(raw: string, n = 140): string {
  *      不足以支撑"other = 噪音"这种推断；
  *   3. 结果只用于**折叠分组**，永不删除、永远可切回去看。
  */
-export function isNoiseReply(r: { raw_headers?: string | null; content?: string | null; from_email?: string | null }): boolean {
+export function isNoiseReply(r: { raw_headers?: string | null; content?: string | null; from_email?: string | null; subject?: string | null }): boolean {
   const h = normalizeText(r.raw_headers || "");
+  // v8 补丁③：DMARC 聚合报告。生产实证 7 封（google / mimecast / zoho / amazonses）**都不带** Auto-Submitted 头，
+  //   走不进下面任何一条 ⇒ 被当"真人回信"喊了一整条橙带。判据用 RFC 7489 §7.2.1.1 规定的报告主题格式
+  //   「Report Domain: <d> Submitter: <s> Report-ID: <id>」（SES 变体 "Dmarc Aggregate Report Domain: {…} Submitter: {…}" 同样命中），
+  //   一条规则、一个规范出处，⛔ 不按发件人域名枚举（那是"认得几种错法"）。subject 是新加的可选字段，老调用方不传照旧。
+  if (/\breport\s+domain:\s*\S+[\s\S]*?\bsubmitter:/i.test(String(r.subject || ""))) return true;
   // RFC 3834 / 群发头：自动回执、假期自动回复、邮件列表
   // ⚠️ 原写法 `/^Auto-Submitted:\s*(?!no\b)/im` 是错的：`\s*` 会**回溯到零宽**，
   //   于是否定前瞻在冒号正后方那个空格上求值（空格不是 "no"）⇒ 前瞻恒成立，
@@ -138,7 +143,7 @@ export function isNoiseReply(r: { raw_headers?: string | null; content?: string 
 /** 四个分组页签。noise 与 orphan 是"取向"而非分类：先判孤儿，再判噪音，再按 category 分。 */
 export type InboxTab = "pending" | "declined" | "noise" | "orphan";
 
-export function tabOf(r: { lead_id: number | null; category: string | null; raw_headers?: string | null; content?: string | null }): InboxTab {
+export function tabOf(r: { lead_id: number | null; category: string | null; raw_headers?: string | null; content?: string | null; subject?: string | null }): InboxTab {
   if (isNoiseReply(r)) return "noise";           // 噪音优先：机器信没有"待处理"的意义
   if (r.lead_id == null) return "orphan";        // 认不出主人（现有孤儿能力并进回复箱）
   const c = String(r.category || "other");

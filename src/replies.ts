@@ -224,7 +224,7 @@ async function ingestAccount(env: Env, acct: ImapAccount, opts: { timeoutMs?: nu
 
         // 入库即打自动回执标记：SQL 聚合调不了 JS，计数口径要靠这一列（见 reply-inbox.ts REAL_REPLY_SQL）。
         // ⚠️ 这里算一次、下面 stage 判定复用同一个值，**不要算两次** —— 算两次就有两个真源。
-        const isAuto = isNoiseReply({ raw_headers: rawHeaders, content: body, from_email: fromEmail });
+        const isAuto = isNoiseReply({ raw_headers: rawHeaders, content: body, from_email: fromEmail, subject });   // v8 补丁③：subject 参与（DMARC 报告靠主题识别）
         const insRes = await env.DB.prepare(
           "INSERT INTO replies (lead_id, from_email, subject, content, summary, category, message_id, raw_headers, received_at, is_auto) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)"
         ).bind(lead?.id ?? null, fromEmail, subject, body.slice(0, 4000), summary, category, messageId, rawHeaders, isAuto ? 1 : 0).run();
