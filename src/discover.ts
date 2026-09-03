@@ -48,7 +48,8 @@ export const EXCLUDE_QUERY = "-alibaba -aliexpress -made-in-china -dhgate -temu"
 
 interface SearchResult { title: string; url: string; }
 
-// ⭐ 目标市场（gl 代码 → 中文名）—— **Joe 定版（C4-A，2026-08-31）：27 国**
+// ⭐ 目标市场（gl 代码 → 中文名）—— Joe 定版（C4-A，2026-08-31）：27 国
+//    → **Joe 扩容（C5-47，2026-09-03）：51 国**（补全欧盟 +11 / 中东 +7 / 南美 +6）
 //
 // 上游那份是按另一条产品线的市场覆盖收录的（100+ 国，含大量微市场），对 AirSonde 不成立：
 //   IAQ 检测仪的买家高度集中在**法规趋严 + 采购力强**的欧美与发达亚太，
@@ -56,7 +57,8 @@ interface SearchResult { title: string; url: string; }
 //
 // 分级只表达优先级，不是硬门槛（都在同一张表里，搜索面由 settings.search_countries 决定）：
 //   一级 15：核心英语区 + 西欧北欧 —— 法规成熟、进口商密集、英文冷邮件不违和
-//   二级 12：南欧/中东欧/发达亚太/中东 —— 有量但渠道更分散，作第二梯队
+//   二级 36：EU 其余成员国 / 发达亚太 / 中东 / 南美 —— 有量但渠道更分散，作第二梯队
+//            ⚠️ 其中 24 国是 2026-09-03 新扩的**待验证市场**，一条真实数据都没有（见下面注释）
 //
 // ⚠️ 这是 UI 下拉 + 国家名显示 + cron 搜索面的**唯一真源**（前端 countryName 从 /api/stats
 //    的 allCountries 动态填，不再各写一份）。
@@ -69,6 +71,32 @@ export const COUNTRIES: Record<string, string> = {
   // ── 二级市场（12）──
   nz: "新西兰", it: "意大利", es: "西班牙", pt: "葡萄牙", pl: "波兰", cz: "捷克",
   jp: "日本", kr: "韩国", sg: "新加坡", ae: "阿联酋", lu: "卢森堡", gr: "希腊",
+
+  // ══ C5-47 扩容（Joe 2026-09-03：「补全欧盟，中东，南美」）：+24，二级市场 12 → 36 ══
+  //
+  // 🔴 **这 24 国是投石问路，不是已验证的好市场** —— 报告里别写成"扩了 24 个优质市场"。
+  //    中东和南美我们**一条真实数据都没有**；唯一的中东样本是阿联酋（合格率 54%，但只有 11 家，
+  //    样本刚够线）。而日本 3.4% 已经证明「发达市场 ≠ 合格率高」。
+  //    ⇒ 一轮扫完之后按合格率回看该收窄谁。
+  //
+  // ⚠️ 为什么值得扩：瓶颈**不是搜得慢，是搜索面搜干了** —— 09-03 搜索量翻到 4 倍
+  //    （461 → 1867），新线索反而从 588 掉到 115，因为 discovery 游标绕回来重搜老组合。
+  //    加预算换不来线索，**加国家/关键词才能**。组合数 702 → 1326。
+
+  // ── 补全欧盟（+11）：加完 COUNTRIES 覆盖 EU27 全员（原有 16 + 这 11）──
+  //    ⭐ 三块里最硬的一块：EU 的 IAQ/通风法规是全欧统一的，法规利好对新成员国同样成立。
+  bg: "保加利亚", hr: "克罗地亚", cy: "塞浦路斯", ee: "爱沙尼亚", hu: "匈牙利",
+  lv: "拉脱维亚", lt: "立陶宛", mt: "马耳他", ro: "罗马尼亚", sk: "斯洛伐克", si: "斯洛文尼亚",
+
+  // ── 中东（+7）；阿联酋 ae 已在上面 ──
+  //    ⛔ 叙利亚 sy / 伊朗 ir 不加（在 BLACKLIST_GL 里）。
+  //    ⚠️ tr 土耳其是欧亚交界，按 EMEA 商务习惯归在这批；若判定不该算，单独去掉它不影响其余。
+  sa: "沙特阿拉伯", qa: "卡塔尔", kw: "科威特", bh: "巴林", om: "阿曼", il: "以色列", tr: "土耳其",
+
+  // ── 南美（+6）──
+  //    ⛔ 委内瑞拉 ve 不加：制裁风险，性质同 BLACKLIST_GL 那批。要加需 Joe 明确点名。
+  //    ⭐ CCTLD_MAP 已含 .com.br/.br/.com.ar/.ar/.cl/.com.co/.com.pe/.pe ⇒ 这批的国家推断天然就通。
+  br: "巴西", ar: "阿根廷", cl: "智利", co: "哥伦比亚", pe: "秘鲁", uy: "乌拉圭",
 };
 
 /** 一级市场（优先级用，不是过滤器）—— 供 UI 分组显示。 */
@@ -77,7 +105,7 @@ export const TIER1_COUNTRIES = ["us","ca","gb","ie","de","fr","nl","be","at","ch
 // ⭐ 永不搜的市场：runDiscovery 里硬挡，双保险。
 //   名单沿用上游，理由与产品线无关：制裁 / 出口管制 / 冷邮件合规雷区。
 //   af by cn hk mo kp ru sy cu ir
-//   ⚠️ 现在的 COUNTRIES（27 国）本来就不含这些 —— 这道硬挡是**第二层**：
+//   ⚠️ 现在的 COUNTRIES（51 国）本来就不含这些 —— 这道硬挡是**第二层**：
 //      将来有人往表里加国家时它仍然拦得住。闸不能只有一层。
 export const BLACKLIST_GL = new Set(["af", "by", "cn", "hk", "mo", "kp", "ru", "sy", "cu", "ir"]);
 
@@ -154,15 +182,50 @@ async function searchSerper(env: Env, query: string, num: number, gl: string): P
 export const SERPER_DAILY_BUDGET_DEFAULT = 1000;
 
 // 找客户配置：目标国家 + 每关键词每国家取几条
+//
+// 🔴 **C5-47 改回来了：这里重新读 `search_countries`。**（下面那段旧注释是它的来历，别删）
+//   旧注释说「不再读它们」—— **那个决定在当时是对的，但已经过期，而没人回来改它**：
+//   当时勾选墙被删掉了，没有任何 UI 写这个 key，所以读它只会读到存量旧清单、把搜索面悄悄缩窄。
+//   ⚠️ 但 C5-44 把国家勾选 UI **加回来了**（`index.ts:2575` 一直在写这个 key）
+//   ⇒ 写的一侧接回来了、读的一侧还是没人 ⇒ **控件能点、能存、能忠实回显，机器完全不看。**
+//   Joe 取消勾选任何国家都毫无效果，而界面上那行「一个国家都没选，机器不会再找新客户」
+//   **是假的** —— 一个让人放心的假告警，比没有告警更坏。
+//   （站内那一族：「我以为在控制的」≠「真正在控制的」。判据要落在产出，不落在源码。）
+//
+// ⚠️ 上线顺序有依赖，不能反：**必须先把生产里那条存量 `search_countries` 删掉，再上这段读逻辑。**
+//   反了的话，上线那一刻 cron 会立刻按存量（27 码）缩窄，而当时目录已经是 51。
+//   2026-09-03 已执行：删前存档原值 = us,ca,gb,ie,de,fr,nl,be,at,ch,se,no,dk,fi,au,nz,it,es,pt,pl,cz,jp,kr,sg,ae,lu,gr
+//   删除是**零可见变化**（该值与当时的 DEFAULT_COUNTRIES 双向差集为空、顺序一致，已逐个核对）。
+//   ⭐ 为什么删存量而不是把它改写成 51 码：改写只修这一次，下次再加国家同一个 bug 原样复发；
+//      删掉恢复的是「未设 = 全量」这条**自维持的不变式**。修根不修症状。
+//
+//   单国定向不走这里（它是 runDiscovery 的 opts.countries 一次性覆盖，不写配置）。
+//
+// ── 下面是批㉑当时的原话，保留作来历 ──
 // ⭐⭐ 批㉑：cron 搜索面**永远是全量**（Joe 要"系统全包国家"）。
 //   旧的 `search_countries` / `country_list`（勾选墙写的）已**作废**：勾选墙删了，没人再写它们；
 //   这里也**不再读它们** —— 否则存量里那份 26 国旧清单会把新的全量搜索面**悄悄缩回 26**
 //   （正是总工提醒的"别让读不到/读到旧配置变成搜索面变窄"）。
-//   单国定向不走这里（它是 runDiscovery 的 opts.countries 一次性覆盖，不写配置）。
 export async function getSearchConfig(env: Env): Promise<{ countries: string[]; perKeyword: number }> {
   const pRow = await env.DB.prepare("SELECT value FROM settings WHERE key='search_per_keyword'").first<{ value: string }>();
   const perKeyword = Math.min(Math.max(Number(pRow?.value) || 8, 1), 100);   // #45 放开到 100，尊重滑块
-  return { countries: DEFAULT_COUNTRIES.slice(), perKeyword };   // 全量（已减去拉黑 8 国）
+
+  // ⚠️ **三态，不是两态** —— 必须与 index.ts:2519 的回显读法同构，否则界面和机器又会各说各的：
+  //   · 行不存在（从未设过）→ 全量。这是默认，也是删掉存量之后恢复的那条不变式。
+  //   · 有值            → 就按这几个国家（Joe 主动收窄）。
+  //   · 空串            → **真的一个都不选**，不是"读不到就全量"。
+  //     🔴 这一条最容易写错：把空串兜底成全量，等于把 Joe 明确的"全不选"悄悄改成"全搜"，
+  //        而界面上那行红字还在说"机器不会再找新客户" —— 又是一个说谎的告警。
+  //     ⚠️ 所以判据是**行在不在**（`row === null`），不是 `!value`。
+  const cRow = await env.DB.prepare("SELECT value FROM settings WHERE key='search_countries'").first<{ value: string }>();
+  if (!cRow) return { countries: DEFAULT_COUNTRIES.slice(), perKeyword };   // 从未设过 = 全量（已减去拉黑）
+
+  // 存量清洗：小写去空白 + 丢掉不在 COUNTRIES 里的死码（目录删过的国家）+ 再过一道黑名单。
+  // ⛔ 黑名单这层不能省 —— runDiscovery 里虽然还会再滤一次，但闸不能只有一层（见 BLACKLIST_GL 注释）。
+  const picked = String(cRow.value || "")
+    .split(",").map((s) => s.trim().toLowerCase())
+    .filter((x) => COUNTRIES[x] && !BLACKLIST_GL.has(x));
+  return { countries: picked, perKeyword };
 }
 
 function domainOf(url: string): string {

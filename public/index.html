@@ -4105,7 +4105,9 @@
       const el = $("#wheel-summary"); if (!el) return;
       if (!cfg) { el.textContent = "（读不到配置——展开看详情）"; return; }
       const kwN = Array.isArray(cfg.activeKeywords) ? cfg.activeKeywords.length : (cfg.keywords||[]).length;
-      const ccN = Object.keys(cfg.allCountries||{}).length;
+      // ⚠️ C5-47：这里要的是「机器实际会搜几国」，不是「目录里有几国」。
+      //   勾选接上线之后，allCountries（全目录 51）和实际搜索面会不一样。
+      const ccN = (cfg.effectiveCountries||[]).length;
       const bud = (cfg.serper && cfg.serper.budget != null) ? cfg.serper.budget : "–";
       el.textContent = `画像:${prof===null ? "读不到" : (prof ? "已自定义" : "默认")} · 关键词 ${kwN} · 市场 ${ccN} 国 · 预算 ${bud}/天 · 后台自动搜索:${cfg.discoveryEnabled ? "开" : "关"}`;
     }
@@ -5689,7 +5691,9 @@ ${esc(d.ours.body||'')}</div></details>`
       const tripped = !!(cfg.auto_send_tripped_at || '').trim();
       const unsubPct = br.window ? Math.round((br.rate || 0) * 1000) / 10 : 0;
       const kwN = scfgOk ? (scfg.keywords || []).length : 0;
-      const ccN = scfgOk ? Object.keys(scfg.allCountries || {}).length : 0;
+      // ⚠️ C5-47：分母 = 机器实际搜索面（effectiveCountries），⛔ 不是全目录 allCountries。
+      //   否则 Joe 一收窄国家，「找客户进度 x / y」的 y 就比真实组合数大，进度条当场说谎。
+      const ccN = scfgOk ? (scfg.effectiveCountries || []).length : 0;
       const rotTotal = kwN * ccN;
 
       const vitals =

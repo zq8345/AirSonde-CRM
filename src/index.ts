@@ -2537,6 +2537,12 @@ app.get("/api/settings/search", async (c) => {
     // 🔴 C5-44：国家 chip 要按一级/二级分组渲染。⛔ 前端不该自己维护一份国家分级 ——
     //   那就是第二份真源。分级的真源在 discover.ts 的 TIER1_COUNTRIES，出门时带上。
     tier1: TIER1_COUNTRIES,
+    // 🔴 C5-47：**机器实际会搜的那批国家**（= getSearchConfig 的返回值，唯一真源）。
+    //   为什么必须出这个字段：轮转分母原来前端算的是 `keywords × allCountries`，
+    //   注释里写着"后台轮转恒用全量" —— **那句话在 C5-47 之后不成立了**（勾选真的接上了线）。
+    //   ⇒ Joe 一收窄国家，分母就会比机器实际的组合数大，进度条读数当场变成假的。
+    //   ⚠️ 这就是站内那一族：改了真源没跟着改消费方，数字自己不会喊疼。
+    effectiveCountries: cfg.countries,
     keywords,                          // 生效关键词（用于透明度预估）
     activeKeywords,                    // #45 已勾选关键词（null=全部）
     // 🔴 2026-09-02：`discovery_enabled` 独立开关**已废**（Joe：单一总闸，开自动模式所有环节都工作）。
@@ -2544,7 +2550,8 @@ app.get("/api/settings/search", async (c) => {
     //     直接删字段会让它读到 undefined（那正是本仓刚抓过的"删了没跟着改引用"）。
     //   ⇒ 让它跟随总闸，语义与实际行为一致；等前端消费点清干净再删这个字段。
     discoveryEnabled: (await getSetting(c.env, "automation_enabled", "0")) === "1",
-    // 批⑳ 机器状态卡：轮转游标（只读）。前端算分母 = keywords × allCountries（后台轮转恒用全量），
+    // 批⑳ 机器状态卡：轮转游标（只读）。⚠️ C5-47 起分母要用上面的 `effectiveCountries`，
+    //   ⛔ 不再是 allCountries —— 「后台轮转恒用全量」那句话已经作废（勾选真的生效了）。
     //   与 discover.ts runDiscovery 的 totalC=combos.length 同口径。裸值即可，别在这里算 total（口径单源在轮转逻辑）。
     discoveryCursor: Number(S2("discovery_cursor", "0")) || 0,
     serper: serperU,   // P0-c 今日 Serper 用量 + 预算
