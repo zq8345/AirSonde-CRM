@@ -249,7 +249,8 @@
     .wrap { display:flex; gap:12px; padding:12px; height:calc(100vh - 64px); box-sizing:border-box; }
     .side { width:168px; background:var(--surface-2); border:.5px solid var(--border); border-radius:12px; padding:12px 8px; flex-shrink:0; overflow:auto;
             display:flex; flex-direction:column; }   /* 批③：flex 把底部⚙设置顶到底；nav-table-v2：栏宽 168、内 padding 12/8 */
-    .side-settings { margin-top:10px; padding-top:10px; border-top:1px solid var(--border); flex-shrink:0; display:block; }
+    /* 钉底块要不透明（同左栏 token），否则漏斗列表滚到底会从它底下透出来；负 margin 把左栏自己的 12px 底 padding 一并盖住（那条缝里也会透） */
+    .side-settings { margin:10px -8px -12px; padding:10px 8px 12px; border-top:1px solid var(--border); flex-shrink:0; display:block; background:var(--surface-2); border-radius:0 0 12px 12px; }
     .side-settings .gear-btn { width:100%; text-align:left; display:flex; align-items:center; gap:9px; }
     /* 账号菜单：原生 <details>，展开收起零 JS。收起态仍显示当前登录人（"我以谁的身份在操作"不能藏）。 */
       color:var(--text); padding:7px 12px; border-radius:8px; font-size:13px; display:flex; align-items:center;
@@ -444,6 +445,7 @@
           border-radius:10px; padding:8px 14px; min-height:46px; overflow:hidden; margin-bottom:12px; }
     .tb .ttl { font-size:15px; font-weight:700; white-space:nowrap; width:118px; flex-shrink:0; }
     .tb .cnt { font-size:13px; font-weight:400; color:var(--muted); margin-left:5px; }
+    .tb button .cnt { color:inherit; opacity:.8; margin-left:4px; }   /* 按钮里的 (N)：同款括号计数，随按钮字色、略淡 */
     .tb .sel { font-size:13px; color:var(--brand-strong); font-weight:600; width:52px; flex-shrink:0; }
     .tb .sel.none { color:var(--hint); font-weight:400; }
     .tb .div { width:1px; height:18px; background:var(--border-strong); opacity:.5; flex-shrink:0; }
@@ -1221,7 +1223,7 @@
     .side-nav { height:36px; padding:0 10px; margin:2px 0; border-radius:7px; cursor:pointer; color:var(--text); font-size:13px; display:flex; align-items:center; gap:0; white-space:nowrap; }   /* nav-table-v2：与 .tab 同一行高与图标列 */
     /* v8 补丁⑥：「设置」是 <button>，把原生按钮外观归零后与其它 side-nav 同一套；
        ⚠️ 特异性 (0,1,1) 低于 .side-nav.active (0,2,0)，选中态的底色/字重照常生效（第一版写成内联 style 把它们压掉了） */
-    button.side-nav { width:100%; border:0; background:none; font:inherit; font-size:13px; text-align:left; }
+    button.side-nav { width:100%; border:0; background:var(--surface-2); font:inherit; font-size:13px; text-align:left; }   /* 底色 = 左栏同一 token：钉底时漏斗列表不从它底下透出来（676 高视口实测） */
     /* C5-4v 附录 C.6：图标 stroke=currentColor ⇒ 选中/悬停不必再配第二份颜色 */
     .nav-ico { flex:0 0 auto; }   /* 总工裁定：图标不配硬编码 opacity/stroke 色，只跟 currentColor——选中即随文字变品牌绿 */
     .side-nav:hover { background:var(--panel); }
@@ -1268,7 +1270,7 @@
       <div class="hdr-status" id="hdr-status" style="margin-left:auto">
         <span id="task-chip" class="task" hidden></span>
         <button id="btn-find" class="find" onclick="openRestock()" title="找客户"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>找客户</button>
-        <button id="status-bar" class="sb-pill off" onclick="openMachineRoom()"><span class="dot"></span><span class="sb-badge">状态读不到</span></button>
+        <button id="status-bar" class="sb-pill off" onclick="openMachineRoom()"><span class="dot"></span><span class="sb-badge">读取中…</span></button>
         <div id="sb-pop" class="pop" hidden></div>
       </div>
     </div>
@@ -2345,17 +2347,19 @@
         s5: { t:"忽略", cls:"dan", fn:"toolStatusSel('ignored','忽略')" },
       },
       ready: {
-        s1: { t:"发邮件", cls:"pri", enabled:(p)=>p.withEmail>0?{ok:true}:{ok:false,why:"选中的都没邮箱"}, fn:"toolSendSel()" },
+        // Joe（09-03）：「发邮件」→「发选中」（只发勾选里有邮箱的，toolSendSel 不变）；详情页那颗单条「发邮件」不改
+        s1: { t:"发选中", cls:"pri", enabled:(p)=>p.withEmail>0?{ok:true}:{ok:false,why:"选中的都没邮箱"}, fn:"toolSendSel()" },
         // 手动触达：一家一家聊 → only1；勾选的那条有邮箱时 disabled + title（Joe 定的语义原样保留）
         s2: { t:"手动触达", cls:"sec", only1:true,
-              enabled:(p)=> p.withEmail>0 ? {ok:false,why:"这条有邮箱，用发邮件"} : {ok:true}, fn:"toolManualReach()" },
+              enabled:(p)=> p.withEmail>0 ? {ok:false,why:"这条有邮箱，用发选中"} : {ok:true}, fn:"toolManualReach()" },
         s4: { t:"退回待审批", cls:"sec", fn:"toolStatusSel('analyzed','退回待审批')" },
         s5: { t:"忽略", cls:"dan", fn:"toolStatusSel('ignored','忽略')" },
         // 右边三个数：发送 N = 本列表可发的（A 组）；免费抓 / 付费补 = 无联系方式（C 组）——
         //   ⚠️ 三个数从现有 readyGroupIds 谓词取，⛔ 没新造口径（库里没有"免费抓过"这个标记，
         //     所以免费抓 N 与付费补 N 目前是同一个 C 组计数；已如实报总工）。
         fleet: [
-          { t:()=>`发送 ${readyGroupIds('A').length}`, cls:"pri", fn:"toolSendReadyAll()" },
+          // Joe（09-03）：「发送 N」→「发全部 (N)」，N 仍 = readyGroupIds('A')：不用勾选，发本列表全部可发的；(N) 灰括号与工具栏标题同款
+          { t:"发全部", n:()=>readyGroupIds('A').length, cls:"pri", fn:"toolSendReadyAll()" },
           { t:()=>`免费抓 ${readyGroupIds('C').length}`, cls:"sec", fn:"toolFindMailsReadyC(false)" },
           { t:()=>`付费补 ${readyGroupIds('C').length}`, cls:"sec", fn:"toolFindMailsReadyC(true)" },
         ],
@@ -2640,7 +2644,8 @@
       // 右边区：本页全量动作（不看勾选）· 筛选开关 · 重置筛选永远最右
       const fleet = (def.fleet || []).map(f => {
         const t = typeof f.t === "function" ? f.t() : f.t;
-        return `<button class="b-${f.cls}" onclick="${f.fn}">${esc(t)}</button>`;
+        const n = typeof f.n === "function" ? `<span class="cnt">(${Number(f.n()) || 0})</span>` : "";   // 「发全部 (N)」：灰括号计数，与标题 (N) 同款
+        return `<button class="b-${f.cls}" onclick="${f.fn}">${esc(t)}${n}</button>`;
       }).join("");
       const filters = (def.filters || []).map(k => k === "due"
         ? `<label class="chk"><input type="checkbox" ${dueMode?'checked':''} onchange="toggleDueFilter(this.checked)"> 只看该跟进的</label>`
@@ -2770,7 +2775,7 @@
     }
     // 批⑩B：唯一的发送按钮。确认弹窗必须把"这一下到底会发几封"算给 Joe 看 ——
     // 批⑨ 之后「待联系」里会混着只有社媒的线索，"选了 30 条"和"会发 30 封"不再是一回事。
-      // ⭐⭐ 批⑬③：**只把有邮箱的送进发送队列** —— 按钮叫「📧 发邮件（22）」就必须只发那 22 条。
+      // ⭐⭐ 批⑬③：**只把有邮箱的送进发送队列** —— 按钮叫「发选中」就必须只发勾选里有邮箱的那几条。
       //   旧写法送的是全部选中 `ids`，靠**后端** sendApprovedBatch 的 `email IS NOT NULL` 兜底挡掉没邮箱的。
       //   那有两个问题（都是这批要修的病本身）：
       //     ① 按钮说"发 22"却把 122 个 id 塞给后端 —— **名实不符**，跟"发送选中(100) 却发不出"同族
@@ -2782,8 +2787,8 @@
         const noEmail   = picked.filter(l => !(l.email && String(l.email).trim()));
         const sendIds = withEmail.map(l => Number(l.id));
         if (!sendIds.length) { toolMsg("选中的这些都没邮箱 —— 用「💬 手动触达」一家家碰。"); return; }
-      doSend(sendIds, `发邮件 ${sendIds.length} 家`, (cap, left) => {
-        return `确认给 **${sendIds.length} 家有邮箱的** 发邮件：
+      doSend(sendIds, `发选中 ${sendIds.length} 家`, (cap, left) => {
+        return `确认给 **${sendIds.length} 家有邮箱的** 发信：
 
 `
           + (noEmail.length ? `· 你选中里还有 **${noEmail.length} 家只有社媒/无邮箱** —— 这个按钮**不碰它们**，去用「💬 手动触达」
@@ -3010,8 +3015,9 @@
         return isNaN(d) ? `${Number(m[1])}-${Number(m[2])}-${Number(m[3])}` : `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`; };
       const fmtMD = (s) => { const m = String(s||"").match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${Number(m[2])}-${Number(m[3])}` : ""; };
       // 第 8 列「本页专属」：列名与内容按页（SPEC §2 表）
-      // Joe：「把命中关键词从列表里去掉，在详情页里面显示即可」⇒ 全部/已忽略 → 触达方式（与待审批/待联系同一组件）· 待分析 → 状态
-      const OWN_HEAD = { all:"触达方式", unscored:"状态", ignored:"触达方式", noscore:"失败原因", review:"触达方式", ready:"触达方式", sent:"邮件 · 跟进", won:"邮件 · 跟进", replied:"回复", blacklisted:"原因" };
+      // Joe（09-03）：「触达方式干掉」⇒ 全部/待审批/待联系/已忽略 四页**没有第 8 列**（NO_OWN_PAGES，8 列，公司吸余）；
+      //   其它页第 8 列不动：待分析=状态 · 无官网=失败原因 · 已联系/已成交=邮件 · 跟进 · 已回复=回复 · 黑名单=原因
+      const OWN_HEAD = { unscored:"状态", noscore:"失败原因", sent:"邮件 · 跟进", won:"邮件 · 跟进", replied:"回复", blacklisted:"原因" };
       const ownCell = (l) => {
         switch (current) {
           case "unscored": {
@@ -3019,9 +3025,6 @@
             return n > 0 ? `<span class="pill retry" title="机器自动重试中，无需操作">⏳ 重试 ${n}/3</span>` : `<span class="t">排队中</span>`; }
           case "noscore":
             return `<span class="pill fail" title="${esc(l.reason||'')}">${esc(failCode(l.reason))}</span> <span class="t" title="${esc(l.reason||'')}">${esc(failShort(l.reason))}</span>`;
-          case "all": case "ignored": case "review": case "ready": {
-            const g = readyGroupOf(l);   // 现成谓词：A 有邮箱 / B 只有社媒 / C 都没有
-            return g === "A" ? `<span class="t">机器发信</span>` : g === "B" ? `<span class="t">手动 · 社媒</span>` : `<span class="pill fail">缺邮箱</span>`; }
           case "sent": case "won": {
             const n = Number(l.email_count) || 0, bits = [];
             if (n > 0) bits.push(`${n} 封`); else if (l.bench_channel) { const m = BENCH_CHANNEL_OPTS.find(([k]) => k === l.bench_channel); bits.push(`手动 · ${esc(m ? m[1] : l.bench_channel)}`); }
@@ -3040,6 +3043,7 @@
         }
       };
       { const lab = $("#th-own-lab"); if (lab) lab.textContent = OWN_HEAD[current] || "本页"; }   // 只改文字 span，别碰 th（拖线 .rz 在里面）
+      { const own = $("#th-own"); if (own) own.style.display = pageHasOwn() ? "" : "none"; }   // 四页没有第 8 列：th 连同它的拖线一起藏（td 由 rowHtml 不渲染）
       const rowHtml = (l) => { return `
         <tr class="row" data-id="${l.id}">
           ${/* ① 公司：复选框（v8 补丁① 的 20×20 方框 + 撑满两行块的热区）+ 公司名 13 + 域名 12 --brand */''}
@@ -3051,7 +3055,7 @@
           <td class="ac"${l.country ? ` data-cc="${esc(l.country)}"` : ""}>${l.country ? esc(countryName(l.country)) : mu}</td>
           <td title="${esc(l.email)||''}">${l.email ? esc(l.email) : mu}</td>
           <td class="ac chc">${chSlots(l)}</td>
-          <td class="ac">${ownCell(l)}</td>
+          ${pageHasOwn() ? `<td class="ac">${ownCell(l)}</td>` : ""}
           <td class="ac"><span class="t" title="${esc(l.stage_at)||''}">${fmtDay(l.stage_at)}</span></td>
         </tr>`; };
       // ⭐ 批⑲ 页面一：「待分析」换成**按下一步动作分组**的视图；其余格保持原来的平铺表格，一个字不动。
@@ -3119,9 +3123,19 @@
     //   规则：每列最小宽（公司 140 / 其它 48）；固定 8 列合计 > 容器宽 − 120 时按比例缩到放得下（只改落地，不改存的值），
     //   所以视口变小也不会把表撑出容器；第 8 列不写宽、吸余（table-layout:fixed + width:100%）。
     const COL_KEYS = ["company","stage","score","category","country","email","ch","own","time"];
-    const COL_MIN = { company:140 }, COL_MIN_DEF = 48, OWN_MIN = 120, COLW_LS = "crm.colw";
+    // Joe（09-03）：「触达方式干掉」—— 这四页没有第 8 列（8 列），空出的 120 给 公司 +50 · 分类 +30 · 邮箱 +40；其它六页 9 列位置不变。
+    //   8 列页的吸余列 = 公司（不写宽；1278 下算出来正好 240 = 190+50）；分类 114 · 邮箱 200 写死。列宽存另一套 key（n8:…），旧 key 照旧忽略。
+    const NO_OWN_PAGES = new Set(["all","review","ready","ignored"]);
+    const pageHasOwn = () => !NO_OWN_PAGES.has(current);
+    const COL_DEF8 = { stage:88, score:60, category:114, country:70, email:200, ch:150, time:80 };
+    const colKeysNow = () => pageHasOwn() ? COL_KEYS : COL_KEYS.filter(k => k !== "own");
+    const absorbKey = () => pageHasOwn() ? "own" : "company";
+    const ABSORB_MIN = { own:120, company:140 };
+    const lsKey = (k) => pageHasOwn() ? k : "n8:" + k;
+    const COL_MIN = { company:140 }, COL_MIN_DEF = 48, COLW_LS = "crm.colw";
     let COL_DEF = null;
     const colMin = (k) => COL_MIN[k] || COL_MIN_DEF;
+    // 9 列页的默认宽 = thead 里写死的；⚠️ 必须在第一次装配**之前**快照（buildHeaderFilters 里调），装配后 th.style.width 已不是默认值
     function colDefaults(){
       if (COL_DEF) return COL_DEF;
       COL_DEF = {};
@@ -3130,46 +3144,64 @@
     }
     function loadColW(){ try { const o = JSON.parse(localStorage.getItem(COLW_LS) || "{}"); return (o && typeof o === "object" && !Array.isArray(o)) ? o : {}; } catch { return {}; } }
     function saveColW(o){ try { localStorage.setItem(COLW_LS, JSON.stringify(o)); } catch {} }
+    // 装配：存的 ∪ 默认 → 放不下时**先把拖宽过的列收回默认**（按各自超出量分摊），还放不下才整体按比例缩。
+    //   🔴 生产实证（Joe 在宽窗口拖过 7 列，回到 1278）：原来一律按比例缩 ⇒ 时间列 80→48 显示「20…」、分类 84→48 ——
+    //   没拖过的列替拖过的列挨了刀。现在没拖过的列在默认宽以下不动，先收拖宽的那些。
     function applyColWidths(){
       const ths = [...document.querySelectorAll("#v-list thead th")]; if (ths.length !== COL_KEYS.length) return null;
       const card = document.querySelector("#v-list .table-card"), avail = card ? card.clientWidth : 0;
-      const def = colDefaults(), stored = loadColW(), fixedKeys = COL_KEYS.filter(k => k !== "own"), w = {};
-      fixedKeys.forEach(k => { const v = Number(stored[k]); w[k] = Math.max(colMin(k), (Number.isFinite(v) && v > 0) ? Math.round(v) : def[k]); });
+      const ab = absorbKey(), def = pageHasOwn() ? colDefaults() : COL_DEF8, stored = loadColW();
+      const fixedKeys = colKeysNow().filter(k => k !== ab), w = {};
+      fixedKeys.forEach(k => { const v = Number(stored[lsKey(k)]); w[k] = Math.max(colMin(k), (Number.isFinite(v) && v > 0) ? Math.round(v) : def[k]); });
       if (avail > 0) {   // 视图隐藏时 clientWidth = 0：跳过装配，等 loadList 再来
-        const maxFixed = avail - OWN_MIN;
-        let sum = fixedKeys.reduce((s, k) => s + w[k], 0);
-        for (let pass = 0; pass < 3 && sum > maxFixed; pass++) {
+        const maxFixed = avail - ABSORB_MIN[ab];
+        const sumOf = () => fixedKeys.reduce((s, k) => s + w[k], 0);
+        let sum = sumOf();
+        if (sum > maxFixed) {   // 第一刀：只收拖宽过的列，最多收回到默认
+          const over = fixedKeys.filter(k => w[k] > def[k]);
+          const excess = over.reduce((s, k) => s + (w[k] - def[k]), 0);
+          if (excess > 0) {
+            const take = Math.min(sum - maxFixed, excess);
+            over.forEach(k => { w[k] = Math.max(def[k], w[k] - Math.round(take * (w[k] - def[k]) / excess)); });
+            sum = sumOf();
+          }
+        }
+        for (let pass = 0; pass < 3 && sum > maxFixed; pass++) {   // 第二刀：默认都放不下才整体按比例缩
           const f = maxFixed / sum;
           fixedKeys.forEach(k => { w[k] = Math.max(colMin(k), Math.floor(w[k] * f)); });
-          sum = fixedKeys.reduce((s, k) => s + w[k], 0);
+          sum = sumOf();
         }
       }
-      ths.forEach((th, i) => { const k = COL_KEYS[i]; th.style.width = k === "own" ? "" : w[k] + "px"; });
+      ths.forEach((th, i) => { const k = COL_KEYS[i]; th.style.width = (k === "own" || k === ab) ? "" : w[k] + "px"; });
       return w;
     }
     function buildColResizers(){
       const ths = [...document.querySelectorAll("#v-list thead th")]; if (ths.length !== COL_KEYS.length) return;
+      colDefaults();   // ⚠️ 必须在第一次装配前快照默认宽：8 列页会把公司列的 style.width 清空，之后再快照就读到 NaN→80
       ths.forEach((th, i) => {
         if (i === ths.length - 1 || th.querySelector(".rz")) return;   // 最后一列右边没有下一列，不放线
         const k = COL_KEYS[i];
-        // 拖第 8 列右边那条线 = 改「时间」列（第 8 列吸余，所以方向相反）；其它线 = 改本列，余量从第 8 列进出
-        const tk = (k === "own") ? "time" : k, sign = (k === "own") ? -1 : 1;
+        // 拖吸余列右边那条线 = 改它右边那一列（吸余列自己跟着反向变）；其它线 = 改本列，余量从吸余列进出。
+        //   吸余列按页不同：9 列页 = 第 8 列（右边是时间）；8 列页 = 公司（右边是阶段）。都在事件里现算。
+        const targetOf = () => { const keys = colKeysNow(), ab = absorbKey(); if (!keys.includes(k)) return null; const tk = (k === ab) ? keys[keys.indexOf(k) + 1] : k; return tk ? { tk, sign: k === ab ? -1 : 1, ab } : null; };
         const rz = document.createElement("span"); rz.className = "rz"; rz.title = "拖动调整列宽 · 双击恢复默认";
         rz.addEventListener("click", e => e.stopPropagation());   // 别触发表头筛选菜单
-        rz.addEventListener("dblclick", e => { e.stopPropagation(); const s = loadColW(); delete s[tk]; saveColW(s); applyColWidths(); });
+        rz.addEventListener("dblclick", e => { e.stopPropagation(); const t = targetOf(); if (!t) return; const s = loadColW(); delete s[lsKey(t.tk)]; saveColW(s); applyColWidths(); });
         rz.addEventListener("pointerdown", e => {
           if (e.button !== 0) return;
           e.preventDefault(); e.stopPropagation();
-          const w0 = applyColWidths() || colDefaults();
-          const room = Math.max(0, ths[COL_KEYS.indexOf("own")].getBoundingClientRect().width - OWN_MIN);   // 第 8 列只能让出这么多
-          const start = w0[tk], lo = colMin(tk), hi = start + room, x0 = e.clientX, target = ths[COL_KEYS.indexOf(tk)];
+          const t = targetOf(); if (!t) return;
+          const w0 = applyColWidths() || {};
+          const target = ths[COL_KEYS.indexOf(t.tk)];
+          const room = Math.max(0, ths[COL_KEYS.indexOf(t.ab)].getBoundingClientRect().width - ABSORB_MIN[t.ab]);   // 吸余列只能让出这么多
+          const start = w0[t.tk] ?? Math.round(target.getBoundingClientRect().width), lo = colMin(t.tk), hi = start + room, x0 = e.clientX;
           let cur = start;
           rz.classList.add("drag"); document.body.classList.add("col-resizing");
-          const mv = ev => { cur = Math.round(Math.min(hi, Math.max(lo, start + sign * (ev.clientX - x0)))); target.style.width = cur + "px"; };
+          const mv = ev => { cur = Math.round(Math.min(hi, Math.max(lo, start + t.sign * (ev.clientX - x0)))); target.style.width = cur + "px"; };
           const up = () => {
             window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up);
             rz.classList.remove("drag"); document.body.classList.remove("col-resizing");
-            const s = loadColW(); s[tk] = cur; saveColW(s); applyColWidths();
+            const s = loadColW(); s[lsKey(t.tk)] = cur; saveColW(s); applyColWidths();
           };
           window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
         });
@@ -3684,7 +3716,7 @@
       const ids = [...selectedIds].map(Number);
       const picked = _loadedLeads.filter(l => selectedIds.has(String(l.id)));
       const noEmail = picked.filter(l => !(l.email && String(l.email).trim()));
-      if (!noEmail.length) { toolMsg("选中的这些都有邮箱 —— 用「📧 发邮件」就行。"); return; }
+      if (!noEmail.length) { toolMsg("选中的这些都有邮箱 —— 用「发选中」就行。"); return; }
       if (noEmail.length > 1) {
         toolMsg(`「💬 手动触达」是<b>一家一家聊</b>（LinkedIn/WhatsApp），请只勾选 <b>1 条</b>。` +
                 `<br><span class="hint">选中的 ${noEmail.length} 家都没邮箱 —— 它们每家的渠道和话术都不一样，没法批量。</span>`);
@@ -4030,6 +4062,7 @@
     //     前端只挑字：⛔ 不判"预算满没满"、⛔ 不算任何数（C5-54 那条规矩不变）。
     //   ⚠️ 读不到就说读不到（铁律三）：胶囊「状态读不到」+ 空心点，面板四行全「待命 · —」。
     let _sbTimer = null, _sbLast = null, _sbAt = null, _popShowT = null, _popHideT = null;
+    let _sbTried = false;   // 还没回过包 = 「读取中…」；回过包但读不到 = 「状态读不到」（两态不能长一样）
     const SB_WORD = { idle:'待命', run:'在跑', user:'你交办的在跑', blocked:'受阻', paused:'已暂停' };
     const SB_ACT_LABEL = { search:'找客户', analyze:'AI 分析', findmail:'补邮箱', send:'发信', reply:'收信' };
     const SB_ROW_KIND = { discover:'search', analyze:'analyze', send:'send', reply:'reply' };   // 引擎 id → activity.kind
@@ -4064,7 +4097,7 @@
       const d = _sbLast;
       const rows = d ? sbRows(d) : ['找客户','AI 分析','发信','收信'].map(n => ({ name:n, cls:'idle', word:SB_WORD.idle, num:'—', bar:null, raw:'' }));
       const stopped = d ? ((Number(d.stoppedCount) || 0) > 0 || !!d.detail) : false;
-      const footR = !d ? '状态读不到' : !d.auto ? '开关在自动化页' : stopped ? '恢复后自动变绿' : `${sbHHMM(_sbAt)} 更新`;
+      const footR = !d ? (_sbTried ? '状态读不到' : '读取中…') : !d.auto ? '开关在自动化页' : stopped ? '恢复后自动变绿' : `${sbHHMM(_sbAt)} 更新`;
       pop.innerHTML = rows.map(r => `<div class="row"><span class="d ${r.cls}"></span><span class="n">${esc(r.name)}</span><div class="b">`
           + `<div class="s${r.cls.startsWith('no') ? ' warn' : ''}">${r.word === SB_WORD.user ? `<b>${r.word}</b>` : esc(r.word)}${r.num ? ' · ' + esc(r.num) : ''}</div>`
           + (r.bar != null ? `<div class="bar"><i style="width:${r.bar}%"></i></div>` : '')
@@ -4085,6 +4118,7 @@
       sbBindHover();
       let d = null;
       try { d = await fetch('/api/activity').then(r => r.json()); } catch {}
+      _sbTried = true;   // 从这一刻起「读不到」才是真读不到
       const badge = el.querySelector('.sb-badge'), chip = document.getElementById('task-chip'), find = document.getElementById('btn-find');
       if (!d || !d.badge) {
         _sbLast = null; _sbAt = null;
