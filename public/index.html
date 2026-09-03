@@ -21,7 +21,7 @@
                #0c7a6b **不是我挑的，是从 logo PNG 像素里数出来的**：
                解 IDAT → 反滤波 → 统计非透明像素，173453 个像素是这个值，压倒性主色。
                ⚠️ 取色不许肉眼看图 —— 屏幕/截图/JPEG 都会偏，只有像素值是真源。 */
-            --brand:#0c7a6b; --brand-tint:#e6f2f0;
+            --brand:#0c7a6b; --brand-tint:#e6f2f0; --brand-strong:#0a6055; --hint:#8a94a0;
             /* ⚠️ `--blue` **整体重定向到品牌绿**，而不是逐处把 var(--blue) 换成 var(--brand)。
                理由：全站 73 处引用（57 个 --blue + 16 个 --tint-blue），**逐处替换必漏**，
                而漏掉的那几处会变成"大部分绿、个别蓝"，比全蓝更难看也更难查。
@@ -42,6 +42,44 @@
        不靠颜色单独承载信息（色觉差异 + 打印/截图都会丢失颜色）。 */
     /* v3 视觉密度：向 Linear 的"安静 chrome + 高密度"收一档。
        ⚠️ 只调密度与层次，⛔ 不碰深色主题（那是另一个工程），⛔ 不出附录 C 的 token 集。 */
+    /* ══ C5-44 自动化页：照 automation-mockup.html 像素落地 ══
+       ⚠️ 这些类名直接取自稿子（.row/.field/.box/.chip/.num…），
+          **值全部映射到仓里已有的 token**，不另起一套色板 —— 稿子本身也是用真 token 写的。 */
+    /* 标签固定列 + 值列：解决"输入框浮动、大间距、不对齐"（稿子第 1 条关键布局点） */
+    #v-machine .row { display:grid; grid-template-columns:120px 1fr; gap:12px; align-items:center;
+                      padding:8px 0; border-top:1px solid var(--border); }
+    #v-machine .row:first-of-type { border-top:none; }
+    #v-machine .field { font-size:13px; font-weight:600; }
+    #v-machine .inline { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    #v-machine .val { font-size:14px; }
+    /* 白输入框 —— ⛔ 稿子明确"不要黑框" */
+    #v-machine input.box, #v-machine .set-num, #v-machine input[type=number], #v-machine input[type=text] {
+      height:32px; border:1px solid var(--border-strong); border-radius:8px; background:#fff;
+      padding:0 10px; font-size:14px; color:var(--text); }
+    #v-machine input.box { width:88px; }
+    #v-machine input.box.sm, #v-machine .set-num { width:60px; }
+    /* 四段的绿圆号 */
+    #v-machine .subhead { display:flex; align-items:center; gap:8px; margin:20px 0 8px; }
+    #v-machine .num { font-size:13px; font-weight:700; color:var(--brand-strong); width:18px; height:18px;
+                      background:var(--brand-tint); border-radius:50%; display:inline-flex;
+                      align-items:center; justify-content:center; flex-shrink:0; }
+    #v-machine .sec-indent { margin-left:26px; }
+    #v-machine .toolbar { display:flex; gap:8px; margin-left:auto; }
+    /* chips（国家 + 关键词共用一套） */
+    #v-machine .grouplbl { font-size:12px; color:var(--muted); margin:12px 0 6px; }
+    #v-machine .chips { display:flex; flex-wrap:wrap; gap:8px; }
+    #v-machine .chip { font-size:13px; border:1px solid var(--brand); background:var(--brand-tint);
+                       color:var(--brand-strong); border-radius:8px; padding:5px 10px;
+                       display:inline-flex; align-items:center; gap:6px; cursor:pointer; user-select:none; }
+    #v-machine .chip .cbx { width:14px; height:14px; border-radius:3px; background:var(--brand); color:#fff;
+                            font-size:12px; display:inline-flex; align-items:center; justify-content:center; }   /* 12 = 闭集最小档 */
+    /* 未选中态：灰边灰字白底（稿子：点亮的才搜，灰的不搜） */
+    #v-machine .chip.off { border-color:var(--border-strong); background:#fff; color:var(--muted); }
+    #v-machine .chip.off .cbx { background:#fff; border:1px solid var(--border-strong); color:transparent; }
+    /* ⚠️ 全不选的红字提示：**按选中数真切显隐**，不写死（令里点名） */
+    #v-machine .warn { font-size:12px; color:var(--red); margin-top:8px; }
+    #v-machine .badge { font-size:12px; color:var(--brand-strong); background:var(--brand-tint);
+                        border-radius:20px; padding:2px 10px; }
     /* ══ C5-43 机器房：整合 + 视觉一次成型 ══
        ⚠️ Joe 指认"排版乱"，根因不是没调版，是**同一页有三套卡片语言在打架**：
           状态区灰底无框 kv / 控制区白底描边卡 / 维护纯文字折叠行。
@@ -1157,69 +1195,64 @@
       </div>
 
 <div class="set-card">
-        <div class="sec-title">
-          找客户策略<span class="gj-help" data-help title="机器按什么去找客户：客户画像决定打分标准，关键词×国家决定去哪搜，预算决定一天搜多少次。">(?)</span>
-        </div>
-        <!-- ⚠️ 「wheel-summary」那行折叠摘要**删了**（C5-43 整合）：
-             它是折叠时代的产物 —— 收起时用一行字概括里面有什么。现在方向盘常开、
-             而且行内已经有 mr-live-search 报「20 词 · 27 国 · 今日 N/M 次」，
-             摘要就成了**同一批数在同一张卡里报两遍**，正是这次整合要清的东西（铁律五）。
-             ⚠️ renderWheelSummary 保留但改为 no-op（见其定义处），⛔ 不删函数：
-                它有 3 个调用点，删函数要连着删调用，那是另一件事的风险。 -->
-        <div id="wheel-body" style="margin-top:16px">
-          <!-- 加载失败横幅：没有它，一次登录过期就让方向盘停在空壳态，看着像"配置全丢了" -->
+        <div class="sec-title">找客户策略</div>
+        <div id="wheel-body">
+          <!-- 加载失败横幅：没有它，一次登录过期就让这一块停在空壳态，看着像"配置全丢了" -->
           <div class="load-error" id="fc-loaderr" style="display:none;margin-bottom:12px"></div>
 
-          <div class="sec-row"><span class="sec-title" style="margin:0">客户画像 · 打分标准</span>
-            <span class="hint" id="fc-profile-badge" style="margin:0"></span></div>
-          <div class="hint" id="fc-profile-summary" style="margin:4px 0;cursor:pointer" onclick="toggleProfile()">（加载中…）</div>
-          <!-- ⚠️ 默认收起（Joe：整段 AirSonde 描述占屏）。折叠机制本来就有（toggleProfile），
-               只是没设默认态 —— 加 fc-collapsed 让它一进来就是"一行摘要，点开才看全文"。 -->
-          <textarea id="fc-profile" class="fc-collapsed" placeholder="描述你的理想客户；留空用内置默认画像"></textarea>
-          <span id="fc-profile-caret" hidden></span>
-
-          <div class="sec-row" style="margin-top:16px"><span class="sec-title" style="margin:0">关键词</span>
-            <span class="sec-tools"><button class="mini" type="button" onclick="fcKwAll(true)">全选</button><button class="mini" type="button" onclick="fcKwAll(false)">全不选</button><button class="mini" type="button" id="fc-kw-manage" onclick="fcToggleManage('kw')">管理</button></span></div>
-          <!-- data-user-content：⚠️ 这里面是 **Joe 自己填的关键词**，不是页面对他说的话。
-               闸的冻结口径原话「预算管的是页面自己说的话，不是客户名字」——26 个词与客户名字同类。
-               ⛔ 这个标记只能挂在"作者是 Joe"的内容上；挂到解释文案上就是把豁免变成漏洞
-                  （guard-design 里配了反向自检：页面自话超预算必须仍然报红）。 -->
-          <div id="dp-kwlist" data-user-content style="margin:6px 0"></div>
-          <div id="kw-archived"></div>
-          <div id="fc-kw-editrow" style="display:none;gap:8px;margin-top:6px">
-            <input id="dp-kwnew" class="inlinput" placeholder="新增关键词，如 HVAC controls integrator">
-            <button id="dp-kwadd" class="primary">添加</button>
-            <button id="dp-kwseed">载入默认</button>
+          <!-- ① 我是谁 · 找什么客户 -->
+          <div class="subhead" style="margin-top:4px"><span class="num">1</span>
+            <span class="field" style="font-size:14px">我是谁 · 找什么客户</span>
+            <span class="badge" id="fc-profile-badge"></span>
+            <button class="btn-secondary mini" type="button" style="margin-left:auto" onclick="toggleProfile()">编辑</button></div>
+          <div class="sec-indent">
+            <div class="hint" id="fc-profile-summary" style="margin:0 0 4px;cursor:pointer" onclick="toggleProfile()">（加载中…）</div>
+            <textarea id="fc-profile" class="fc-collapsed" placeholder="描述你的理想客户；留空用内置默认画像"></textarea>
+            <span id="fc-profile-caret" hidden></span>
           </div>
 
-          <div class="sec-row" style="margin-top:16px"><span class="sec-title" style="margin:0">后台自动搜索</span></div>
-          <!-- #S1：**勾选即存**，且**绝不跟着「保存配置」一起提交**。
-               它是引擎开关（运行状态），不是配置。以前被 saveSearchCfg 捎带提交 ——
-               Joe 存一次关键词，只要这个勾当时没打上，整个自动找客户就被静默写成 0，界面零提示。
-               生产真发生过。这条防线迁移时一字不动。 -->
-          <label style="display:flex;align-items:center;gap:7px;margin-top:6px;cursor:pointer;font-size:13px">
-            <input type="checkbox" id="dp-auto" class="cfg-live"> 开启后台每小时自动搜索新客户
-            <span class="gj-help" data-help title="默认关闭。开启后每小时跑一小批，用量受下面那条「搜索预算上限」封顶，不会自己越界。">(?)</span>
-          </label>
-          <div class="set-numrow" style="margin-top:12px">
-            <span style="font-size:13px">搜索预算上限</span>
-            <input id="fc-serper-budget" type="number" min="0" max="2500" step="10" class="set-num" style="width:96px">
-            <span class="hint">次/天</span>
-            <span class="gj-help" data-help title="到了这个数当天就自动停，手动搜和后台自动搜共用这一个额度。今日已用多少，在自动化里看。">(?)</span>
-            <!-- C5-29④：「保存预算」已删 —— 全页统一由页头那颗「保存」提交。 -->
-          <span class="mr-live" id="mr-live-search"></span></div>
+          <!-- ② 找哪些国家（C5-44 新增：原来只显数字、没法选）-->
+          <div class="subhead"><span class="num">2</span>
+            <span class="field" style="font-size:14px">找哪些国家</span>
+            <span class="toolbar"><button class="mini" type="button" onclick="fcCcAll(true)">全选</button><button class="mini" type="button" onclick="fcCcAll(false)">全不选</button></span></div>
+          <div class="sec-indent" id="fc-cc-block"></div>
 
+          <!-- ③ 用什么关键词 -->
+          <div class="subhead"><span class="num">3</span>
+            <span class="field" style="font-size:14px">用什么关键词</span>
+            <span class="toolbar"><button class="mini" type="button" onclick="fcKwAll(true)">全选</button><button class="mini" type="button" onclick="fcKwAll(false)">全不选</button><button class="mini" id="fc-kw-manage" type="button" onclick="fcToggleManage()">管理</button></span></div>
+          <div class="sec-indent">
+            <div id="dp-kwlist" data-user-content style="margin:6px 0"></div>
+            <div id="kw-archived"></div>
+            <div id="fc-kw-editrow" style="display:none;gap:8px;margin-top:6px">
+              <input id="dp-kwnew" class="box" style="width:auto;flex:1" placeholder="输入新关键词，回车添加">
+              <button id="dp-kwadd" class="primary">添加</button>
+              <button id="dp-kwseed" class="mini">载入默认</button>
+            </div>
+          </div>
 
-          <!-- C5-29④：「保存方向盘」已删 —— 页头那颗「保存」统一提交全页（含画像/关键词/预算）。
-               ⚠️ `dp-save-msg` 这个 span 保留：saveSearchCfg 的结果提示仍写它（删了会抛空引用）。 -->
-          <span class="hint" id="dp-save-msg" style="display:none"></span>
+          <!-- ④ 搜索预算上限 ——⛔ 这里**没有**「每 N 小时」也**没有**「开启后台搜索」独立开关：
+               Joe 定的是单一总闸（开自动模式所有环节都工作）+ 预算是唯一旋钮。 -->
+          <div class="subhead"><span class="num">4</span>
+            <span class="field" style="font-size:14px">搜索预算上限</span></div>
+          <div class="sec-indent inline">
+            <input id="fc-serper-budget" type="number" min="0" max="20000" step="100" class="box">
+            <span class="val">次 / 天</span>
+            <span class="hint" id="mr-live-search"></span>
+          </div>
+          <div id="dp-save-msg" class="hint sec-indent" style="margin-top:6px"></div>
         </div>
       </div>
 
       <div class="set-card">
         <div class="sec-title">飞书通知</div>
         <div id="notify-status" class="transparency"></div>
-        <label style="display:flex;gap:8px;align-items:center;cursor:pointer;margin:0 0 16px"><input type="checkbox" id="ntf-enabled"> <span class="k">有热回复时推飞书</span></label>
+        <label style="display:flex;gap:8px;align-items:center;cursor:pointer;margin:0 0 16px"><input type="checkbox" id="ntf-enabled"> <span class="k">有热回复时推飞书</span>
+              <!-- ⚠️ 这一句必须留在正文、⛔ 不进悬浮：它说的是「这个开关**不受总开关管**」，
+                   而那正是 Joe 最容易误解的地方（关了自动模式会不会连回信都收不到）。
+                   Joe 定的语义是「关的是机器的嘴和手，不关它的耳朵」—— 那句话要在屏幕上，
+                   不能藏在一个他不会去点的问号里。 -->
+              <span class="hint" style="margin:0">· 收信和通知永远在线，不跟随自动模式开关</span></label>
         <div class="set-numrow" style="margin-bottom:0">
           <button class="btn-secondary" id="ntf-test">发送测试</button>
           <span class="hint" id="ntf-result" style="margin:0"></span>
@@ -3748,6 +3781,46 @@
 
     // ===== 找客户配置面板（#45 国家/关键词 勾选框 + 增删 + 全选/全不选 + 持久化）=====
     let _fcAllCountries = {};          // 目录 { gl: 中文名 }
+    let _fcTier1 = [];                 // 一级市场 gl 列表（真源在后端 TIER1_COUNTRIES，前端不自己维护）
+    let _fcCcChecked = new Set();      // 当前勾选的国家 gl
+
+    // ══ C5-44 国家块：27 国可勾选（原来只显数字、没法选）══
+    //
+    // 🔴 三态口径（总调度拍板，代码里必须分得清）：
+    //   · 从没设过 → **全部亮着**。因为行为上机器就是全搜 —— **UI 要和机器实际做的一致**。
+    //   · 明确全不选 → 允许，但**必须出红字提示**：一个都没选 = 机器不再找新客户。
+    //     ⛔ 没有提示的话这是一个**静默停机开关** —— Joe 以为自己在收窄，实际把找客户关了，
+    //        而库存不动他会归因到别处（今天他刚问过一次"自动化是不是停了"）。
+    //   · 选了具体几个 → 就那几个。
+    // ⚠️ 后端 `countries` 字段已经把"从没设过"翻译成了全量（见 /api/settings/search 里
+    //   `__UNSET__` 那段），所以前端**直接用它初始化**即可，不需要再判一次。
+    function renderCountries(){
+      const box = document.getElementById('fc-cc-block'); if (!box) return;
+      const all = Object.keys(_fcAllCountries);
+      if (!all.length) { box.innerHTML = '<div class="hint">这次没读到国家清单</div>'; return; }
+      const t1 = all.filter(c => _fcTier1.includes(c));
+      const t2 = all.filter(c => !_fcTier1.includes(c));
+      const chip = (gl) => {
+        const on = _fcCcChecked.has(gl);
+        return `<span class="chip${on ? '' : ' off'}" data-gl="${esc(gl)}" onclick="fcCcToggle('${esc(gl)}')">` +
+               `<span class="cbx">${on ? '✓' : ''}</span>${esc(_fcAllCountries[gl] || gl)}</span>`;
+      };
+      const group = (label, list) => list.length
+        ? `<div class="grouplbl">${esc(label)}（${list.length}）</div><div class="chips">${list.map(chip).join('')}</div>`
+        : '';
+      box.innerHTML = group('一级市场', t1) + group('二级市场', t2)
+        + (_fcCcChecked.size === 0
+            ? `<div class="warn">⚠ 一个国家都没选，机器不会再找新客户</div>`
+            : '');
+    }
+    window.fcCcToggle = (gl) => {
+      if (_fcCcChecked.has(gl)) _fcCcChecked.delete(gl); else _fcCcChecked.add(gl);
+      renderCountries();
+    };
+    window.fcCcAll = (on) => {
+      _fcCcChecked = on ? new Set(Object.keys(_fcAllCountries)) : new Set();
+      renderCountries();
+    };
     // 批㉑：国家勾选墙删了 → _fcCountryList / _fcCountryChecked 一并去掉（搜索面全量由后端定）
     let _fcKwRows = [];                // 关键词行（含 stats）
     let _fcKwChecked = new Set();      // 勾选(本轮使用)的关键词字符串
@@ -3914,6 +3987,11 @@
       const cfg = g.data;
       if (errBox) { errBox.style.display = 'none'; errBox.innerHTML = ''; }   // 上次失败过、这次成功 → 收起横幅
       _fcAllCountries = cfg.allCountries||{};
+      // C5-44：国家勾选态从后端来。⚠️ `cfg.countries` 已把"从没设过"翻译成全量（后端 __UNSET__ 那段），
+      //   所以这里直接用，⛔ 前端不再判一次"是不是没设过" —— 判两次就是两份口径。
+      _fcTier1 = cfg.tier1 || [];
+      _fcCcChecked = new Set(cfg.countries || []);
+      renderCountries();
       // 单国定向下拉：从 allCountries 填（默认"全部市场"）
       { const sel = $("#fc-one-country");
         if (sel) {
@@ -3928,17 +4006,10 @@
       // 它是"引擎开关"（运行状态），不是配置。以前它被 saveSearchCfg 捎带提交 ——
       // Joe 保存一次关键词/国家，只要这个勾当时没打上，**整个自动找客户就被静默关掉**，
       // 界面上一点提示都没有。生产真发生过（discovery_enabled 被写成 0，没人知道）。
-      { const au=$("#dp-auto"); if(au){
-          au.checked = !!cfg.discoveryEnabled;
-          au.onchange = async () => {
-            // 关掉 = 停掉进货引擎，必须显式二次确认；反悔就勾回去、什么都不写
-            if (!au.checked && !confirm("这会停止「自动找客户」——后台每小时的新线索来源就没有了。\n确定要关闭吗？")) {
-              au.checked = true; return;
-            }
-            await fetch("/api/settings/search",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({discoveryEnabled:au.checked})});
-            const m=$("#dp-msg"); if(m){ m.textContent = au.checked?"✅ 已开启自动找客户":"⚠️ 已关闭自动找客户"; setTimeout(()=>{ if(m) m.textContent=""; },2500); }
-          };
-      } }
+      // 🔴 C5-44：「开启后台自动搜索」这个独立开关**连同它的绑定一起删了**（Joe 定单一总闸：
+      //   开自动模式所有环节都工作）。搜索现在跟随 automation_enabled，不再有第二个开关。
+      // ⚠️ **元素和绑定必须一起删** —— 只删元素留绑定，正是本仓一天抓到三次的那个洞
+      //   （`if (el)` 把"元素永远没了"伪装成"什么都没发生"）。死绑定闸会验这一点。
       renderBacklog(cfg.backlog);   // 批④ 积压刹车条
       // C5-4v（总工裁定）：「每周自动刷新免费目录」的 JS 接线**连 confirm 逻辑一并删除**。
       //   它的 label 早在 C2-A 就撤了，抓取函数 C5-3 也删了 ⇒ 这段是**孤立接线**：
@@ -4074,6 +4145,12 @@
       const prof = $("#fc-profile"); if (prof) await fetch("/api/settings/profile", {method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({profile:prof.value})}).catch(()=>{});
       // 🔴 搜索预算并进主保存（2026-09-02 修缺陷 b）：它原来靠一个**已被删除的按钮**提交，
       //   改了存不进去且零提示。⚠️ 这里是**唯一**能存它的地方了，别再给它开第二条路。
+      // C5-44：国家勾选一并存（与预算同一个接口，一次提交）。
+      //   ⚠️ **空数组是合法值**（Joe 明确全不选）—— 所以这里不能用 `if (arr.length)` 守卫，
+      //     那会让"全不选"永远存不进去，变成一个点了没反应的开关。
+      { const cc = [..._fcCcChecked];
+        await fetch("/api/settings/search", { method:"POST", headers:{"content-type":"application/json"},
+          body: JSON.stringify({ countries: cc }) }); }
       { const sb = $("#fc-serper-budget");
         if (sb && sb.value !== "") {
           const v = Number(sb.value) || 1000;
@@ -5656,9 +5733,11 @@ ${esc(d.ours.body||'')}</div></details>`
       live('mr-live-gap', (() => { const g = Number(cfg.send_interval_seconds || 0);
         return g > 0 ? `约 <b>${Math.floor(3600 / g)}</b> 封/小时` : '不限速'; })());
       live('mr-live-review', `待审批 <b>${(today && today.reviewCount) || 0}</b> 家`);
+      // C5-44：这一行现在住在「④ 搜索预算上限」旁边，说的是**这个预算此刻的实际表现**。
+      //   ⛔ 不再报"N 词 · M 国"——那两个数已经由 ②③ 两段的 chip 自己说了（铁律五）。
       live('mr-live-search', scfgOk
-        ? `${kwN} 词 · ${ccN} 国 · 今日 <b>${serper.usedToday ?? 0}</b>/${serper.budget ?? '-'} 次`
-        : '<span class="hint">这次没读到搜索配置</span>');
+        ? `· 自动模式开着时<b>全速找客户</b>，用完当天停 · 今日 <b>${serper.usedToday ?? 0}</b>/${serper.budget ?? '-'}`
+        : '· 这次没读到搜索配置');
       live('mr-live-ntf', ign.capabilities && (ign.capabilities.find(c => /飞书群/.test(c.label)) || {}).ignited
         ? '● 已连接' : '○ 未配 webhook');
     };

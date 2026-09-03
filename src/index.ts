@@ -13,7 +13,7 @@ import { sendLead, sendApprovedBatch, sendFollowupBatch, sendWarmFollowupNow, un
 // 系统发信上限可设的最大值。Joe 拍板 1000 → 老的 500 clamp 会静默截断，故放宽到 2000 留余量。
 // （不设无穷：手滑多打一个 0 就把域名烧了，这类不可逆代价才值得一个上限。）
 const LIMIT_MAX = 2000;
-import { runDiscovery, getKeywords, seedDefaultKeywords, getSearchConfig, COUNTRIES, DEFAULT_COUNTRIES, recomputeKeywordStats, inferCountryFromWebsite, getSerperUsage, runNmeaDiscovery, runLinkHarvest, runDirectoryRefresh, RVWITHTITO_URL, RVWITHTITO_BLACKLIST, SERPER_DAILY_BUDGET_DEFAULT, findDuplicateLead } from "./discover";
+import { TIER1_COUNTRIES, runDiscovery, getKeywords, seedDefaultKeywords, getSearchConfig, COUNTRIES, DEFAULT_COUNTRIES, recomputeKeywordStats, inferCountryFromWebsite, getSerperUsage, runNmeaDiscovery, runLinkHarvest, runDirectoryRefresh, RVWITHTITO_URL, RVWITHTITO_BLACKLIST, SERPER_DAILY_BUDGET_DEFAULT, findDuplicateLead } from "./discover";
 import { findLeadEmail, diagnoseSite, type PageProbe } from "./findemail";
 import { ingestReplies, matchReplyToLead } from "./replies";
 import { ensureReplyColumns, stripQuoted, previewOf, isNoiseReply, tabOf, type InboxTab } from "./reply-inbox";
@@ -2534,6 +2534,9 @@ app.get("/api/settings/search", async (c) => {
     countryList,                       // #45 国家清单（chips）
     perKeyword: cfg.perKeyword,
     allCountries: COUNTRIES,           // { gl: 中文名 } 全目录（供"添加国家"下拉）
+    // 🔴 C5-44：国家 chip 要按一级/二级分组渲染。⛔ 前端不该自己维护一份国家分级 ——
+    //   那就是第二份真源。分级的真源在 discover.ts 的 TIER1_COUNTRIES，出门时带上。
+    tier1: TIER1_COUNTRIES,
     keywords,                          // 生效关键词（用于透明度预估）
     activeKeywords,                    // #45 已勾选关键词（null=全部）
     // 🔴 2026-09-02：`discovery_enabled` 独立开关**已废**（Joe：单一总闸，开自动模式所有环节都工作）。
