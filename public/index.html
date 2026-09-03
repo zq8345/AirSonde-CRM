@@ -68,6 +68,17 @@
       padding:0 10px; font-size:14px; color:var(--text); }
     #v-machine input.box { width:88px; }
     #v-machine input.box.sm, #v-machine .set-num { width:60px; }
+    /* 🔴 v10.1（Joe：「只读模式不显示输入框，点击编辑才显示」）：只读态把数值渲染成**纯文字**。
+       ⚠️ 这条必须写在这里、并且带 `#v-machine`：上面那条 `#v-machine .set-num{border:1px solid…;background:#fff}`
+         带 id ⇒ 特异性 (1,1,0)，**压过**全局的 `.cfg-form.preview input:not(...)`（0,3,1）——
+         所以只读态那些框在机器房**看起来仍然是输入框**（实测 border solid 1px / bg #fff）。
+         判据落在**渲染出来的样子**上（我量了 computed border/background 才发现），⛔ 不是"我写过 preview 规则了"。
+       ⚠️ 数值用 600 字重（稿子如此：只读是文字、编辑才是框）；编辑态这条不生效，框照常出现。 */
+    #v-machine .cfg-form.preview input:not(.cfg-live):not([type=checkbox]),
+    #v-machine .cfg-form.preview textarea {
+      border:0 !important; background:transparent !important; box-shadow:none !important;
+      padding-left:0; padding-right:0; width:auto; min-width:0; height:auto;
+      font-weight:600; color:var(--text); pointer-events:none; }
     /* 四段的绿圆号 */
     #v-machine .subhead { display:flex; align-items:center; gap:8px; margin:20px 0 8px; }
     #v-machine .num { font-size:13px; font-weight:700; color:var(--brand-strong); width:18px; height:18px;
@@ -98,8 +109,7 @@
           17 页标题 > 15 板块标题 > 14 卡标题 > 13 字段名（12 只给 hint）。
        ⚠️ 间距一律 8 的倍数（8/12/16/24），⛔ 不再出现 10/14/18 这种。 */
     #v-machine .mr-vitals,
-    #v-machine .set-card,
-    #v-machine .mr-rare-card {                 /* ← 一套白卡：三板块同款 */
+    #v-machine .set-card {                     /* ← 一套白卡：五张卡同款（.mr-rare-card 随「产能与班次」一并删） */
       background:var(--bg); border:1px solid var(--border); border-radius:12px;
       padding:16px; margin:0 0 16px; max-width:820px;
     }
@@ -108,7 +118,7 @@
       margin:24px 0 8px; padding-top:16px; border-top:1px solid var(--border);
     }
     #v-machine .set-card > .sec-title,
-    #v-machine .mr-rare-card > .sec-title {    /* 卡标题：14px（第三级） */
+    #v-machine .mr-vitals .sec-title {         /* 卡标题：14px（第三级） */
       font-size:14px; font-weight:600; margin:0 0 8px;
     }
     #v-machine .set-card .k,
@@ -127,8 +137,29 @@
          看到"运行中"的那一眼，就是要停它的那一眼。⛔ 别再往这一区加第二个控件。
          原来那句"这一区没有任何可编辑控件"已作废，⛔ 不留说谎的注释。 */
     .mr-vitals { padding:16px 18px; }
-    .mr-lamps-row { display:flex; align-items:flex-start; gap:16px; margin-bottom:14px; }
-    .mr-lamps-row .mr-lamps { margin-bottom:0; flex:1; }
+    /* v10.1 卡一「机器现在」四行：[圆点][环节名][状态词 · 数字][动作链接]。⚠️ 两盏灯 .mr-lamps* 与四格大数 .mr-bigs* 已删。 */
+    .mr-eng { display:flex; align-items:baseline; gap:10px; padding:9px 0; border-top:1px solid var(--border); font-size:13px; }
+    .mr-eng:first-of-type { border-top:none; }
+    .mr-d { width:8px; height:8px; border-radius:50%; background:var(--border-strong); flex-shrink:0; align-self:center; }
+    .mr-d.ok { background:var(--brand); }
+    .mr-d.no { background:var(--amber); }
+    .mr-d.idle { background:var(--border-strong); }
+    .mr-n { width:64px; flex-shrink:0; color:var(--muted); }
+    .mr-w { flex:1; min-width:0; color:var(--muted); }
+    .mr-w b { color:var(--text); font-weight:600; }
+    .mr-w.warn, .mr-w.warn b { color:var(--amber); }
+    .mr-m { color:var(--hint); }
+    .mr-eng a { font-size:12px; color:var(--brand); cursor:pointer; white-space:nowrap; flex-shrink:0; }
+    .mr-eng a:hover { text-decoration:underline; }
+    /* 各卡「工具」行：一行说清这一环用了谁（原「环节与工具」整表已删，12 条拆到各卡，一条不少） */
+    .mr-tools { display:flex; flex-wrap:wrap; align-items:center; gap:14px; margin-top:12px; padding-top:10px;
+                border-top:1px solid var(--border); font-size:12px; color:var(--muted); }
+    .mr-tools .mr-tk { color:var(--hint); }
+    .mr-tools b { color:var(--text); font-weight:600; }
+    .mr-tools .miss { color:var(--amber); }
+    .mr-tools code { font-size:12px; background:var(--panel); border-radius:4px; padding:1px 5px; }
+    /* 只读态零输入框（Joe 定）⇒ 编辑态才出的元素统一用 .cfg-editonly（预览态隐藏，见 setSettingsMode） */
+    .cfg-form.preview .cfg-editonly { display:none !important; }
     /* 自动模式总开关：真开关，不是勾选框。开 = logo 绿填充+钮在右，关 = 灰+钮在左。 */
     .tgl { display:inline-flex; align-items:center; gap:8px; cursor:pointer; flex-shrink:0; user-select:none; }
     .tgl input { position:absolute; opacity:0; width:0; height:0; }
@@ -145,30 +176,9 @@
     .tgl-sm .tgl-track { width:34px; height:20px; border-radius:10px; }
     .tgl-sm .tgl-knob { width:16px; height:16px; }
     .tgl-sm input:checked + .tgl-track .tgl-knob { transform:translateX(14px); }
-    .mr-lamps { display:flex; flex-wrap:wrap; gap:16px; margin-bottom:14px; }
-    .mr-lamp { font-size:13px; font-weight:600; }
-    .mr-lamp.on  { color:var(--green); }
-    .mr-lamp.off { color:var(--muted); }
-    /* C5-48：四个指标**各自进一个容器**，三行（大数／标签／灰色小字）。
-       ⚠️ 原来是四组裸数字挤在一行，副标贴在标签后面 —— Joe 指认"很乱"的就是那个。 */
-    .mr-bigs { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
-    .mr-big { background:var(--panel); border-radius:10px; padding:14px 16px; }
-    .mr-big.star { background:var(--brand-tint); }          /* 北极星那一格 */
-    .mr-big-n { font-size:22px; font-weight:600; color:var(--text); line-height:1.2; }
-    .mr-big.star .mr-big-n { color:var(--brand-strong); }
-    .mr-big-u { font-size:13px; font-weight:400; color:var(--muted); }
-    .mr-big-l { font-size:12px; color:var(--muted); margin-top:3px; }
-    .mr-big-s { font-size:12px; color:var(--hint); margin-top:1px; }
-    .mr-big-l .hint { margin:0; }
-    @media (max-width:760px){ .mr-bigs { grid-template-columns:repeat(2,1fr); } }
-    /* C5-48 API 配置表：左=这一环干什么，右=接的是谁（⛔ 不再是那两个什么都没说的字「已配」） */
-    .cap-tab { width:100%; border-collapse:collapse; font-size:13px; }
-    .cap-tab td { padding:7px 0; border-bottom:1px solid var(--border); }
-    .cap-tab tr:last-child td { border-bottom:none; }
-    .cap-core { font-size:12px; color:var(--brand-strong); background:var(--brand-tint);
-                border-radius:4px; padding:1px 6px; margin-left:6px; }
-    .cap-ok { color:var(--brand-strong); font-weight:700; }
-    /* Joe（09-03）：「零成本」小标全删（.cap-free 随之删）；⛔ 这张卡上仍不写单价——价格会过期，过期的价格比没有价格更坏。 */
+    /* v10.1：两盏灯（.mr-lamps/.mr-lamp）· 四格大数（.mr-bigs/.mr-big*）· 环节与工具表（.cap-tab/.cap-core/.cap-free）
+       整套已删 —— 灯与大数的信息进了卡一四行，工具表拆成各卡 .mr-tools 一行。⛔ 这张页仍不写单价（价格会过期）。 */
+    .cap-ok { color:var(--brand-strong); font-weight:700; }   /* 仍被点火面板（设置页）的能力清单用着 */
     /* 板块二 行内实时表现：旋钮说"你设了多少"，它说"这个设定此刻的实际表现"。
        ⚠️ 它**永远只读**，不随两态切换 —— 事实不是配置，不该跟着编辑态变样子。 */
     .kw-arch > summary { cursor:pointer; font-size:12px; color:var(--muted); padding:4px 0; }
@@ -204,9 +214,8 @@
          `#mr-status` 里装的是 `.page-card`（自带 16），容器再给 16 就会叠加/塌陷，
          到底出多少取决于有没有 padding —— **那种"看情况"的间距正是量出来才知道的**。
          ⇒ 容器清零，间距只有一个出处。 */
-    #v-machine .cfg-form .set-card,
-    #mr-rare .set-card { margin:0 0 16px; }
-    #mr-status, #mr-rare { margin:0; }
+    #v-machine .cfg-form .set-card { margin:0 0 16px; }
+    #mr-status { margin:0; }   /* v10.1：#mr-rare 整个容器已删（产能与班次 / 环节与工具两张卡不存在了） */
     #v-machine > *:last-child { margin-bottom:0; }
     .db-block { padding:16px 18px; margin-bottom:10px; }        /* 卡间距压一档（原 24/16） */
     .db-t { font-size:13px; font-weight:600; letter-spacing:.02em; margin-bottom:10px; }
@@ -1383,161 +1392,23 @@
        ⚠️ 判据（总调度定）：**机器房显示的东西一个字都没变、每个现有交互行为不变。**
           我在改之前抓了一份基线（683 字 · 4 个可交互元素），改完逐字比。 -->
   <div id="v-machine" style="display:none">
-    <!-- 状态区：只读监控，由 openMachineRoom 动态写入（C5-42a 建立） -->
+    <!-- ══ 自动化页 v10.1（真源 airsonde-dispatch/machine-v10/machine-mockup.html，Joe 已定稿）══
+         Joe 原话：「一个环节一张卡」「只读模式不显示输入框，点击编辑才显示」「零成本这种字干掉」
+                  「今日预算 5000/5000 是多余的」「再精简，把说明性描述性文字干掉」
+         五张卡固定顺序：机器现在 → 找客户 → 分析与批准 → 发信 → 收信与通知。
+         ⚠️ 每张可改卡是**独立的 .cfg-form**（各自 编辑/取消/保存，C5-49 不变）：
+            data-cfg-group = search / score / params / inbox，保存只提交自己那组的字段。
+            后端每个写入都带 `!= null` 守卫（index.ts:2517 起）⇒ 部分提交不会清掉没提交的键。
+         ⚠️ 删掉的（元素+绑定+实现三处）：两盏灯 lamp() · 四格大数 mr-bigs/metric() ·
+            整张「产能与班次」capCard · 整张「环节与工具」apiCard/.cap-tab（12 行拆回各卡工具行，一条不少）·
+            「零成本」cap-free · mr-live-search 里的今日预算 · 所有 .hint 常驻说明句（→ (?) title）· #mr-rare。 -->
+    <!-- 卡一「机器现在」：只读四行，由 openMachineRoom 动态写入（数据与顶栏悬停面板同一份 sbRows 口径） -->
     <div id="mr-status"></div>
 
-    <!-- ══ 控制区（C5-42b 从设置页迁入）══
-         ⚠️ 容器只加 `cfg-form`（状态：两态+加载置灰），**不加 `set-page`**（那是设置页的版式）——
-            这正是 C5-42a 把两个类拆开的目的：谁要两态谁加 cfg-form，与住在哪个页面无关。
-         ⚠️ 迁入的是**原样的静态节点**，59 个 id 一个没改：事件绑定 / 两态 / 统一保存全部照旧生效。
-         🔴 提取方式记一笔：第一版我**按行号切**，切出来的块「<div> 数 == </div> 数」，
-            但那是 `</div>…<div>` 那种平衡 —— **括号数相等不等于结构正确**。
-            结果 tsc 绿、重复 id 扫描绿、node --check 绿，而浏览器解析时提前闭合了容器，
-            ④方向盘整块从 DOM 里消失。改成**按 div 深度走**并断言"任何前缀深度不为负"才抓住。 -->
-    <!-- 🟡 分区标题（Joe 指认"维护折叠行下面直接冒出控制字样"）：
-         三段之间要**视觉分明** —— 状态区(只读监控) ↔ 控制区(可改) ↔ 维护区(危险操作)。
-         ⚠️ 标题里带上"点编辑可改"：这一区默认只读，**光有一个「编辑」按钮不够**，
-            按钮说的是"能做什么"，标题说的是"现在是什么状态"。两句都要有。 -->
-    <!-- 🔴 C5-48：「机器怎么干」这个中间标题层**已删**。
-         它是多余的一层 —— 下面每张卡自己就有标题，再套一个上位标题只是把内容往下推。
-         ⚠️ 上面那段注释讲的是"三段之间要视觉分明"，那个目的现在由**卡片本身**承担：
-           状态卡 / 运行参数 / 找客户策略 / API 配置 / 产能与班次 = 五张卡，边界就是分区。
-         ⚠️ 这句话原来写的是「…/ 平时不碰的 = 四张卡」—— 同一次改动里那一层已经拆成两张卡了，
-           注释却停在旧结构上。**改结构要连着描述结构的注释一起改**，否则下一个人按它去找。 -->
-    <div class="cfg-form preview" data-cfg-group="params" style="max-width:820px">
-      <!-- 🔴 加载失败横幅（2026-09-02 补回）：C5-42a 我写了"控制区读不到配置就出横幅"，
-           **而这个元素在我重构板块二时被自己删掉了** —— `$("#mr-cfg-loaderr")` 拿不到，
-           `if (eb)` 把它静默吞掉 ⇒ 配置读不到时是一片空框，Joe 会以为那就是他的设置。
-           ⚠️ 和 fc-serper-save、关键词恢复完全同源：**删元素没跟着删/改绑定，
-              而防御式的 `if (el)` 把"元素不见了"伪装成"什么都没发生"。**
-              三个洞、三个不同的人写的时间，同一个形状 —— 这不是巧合，是这种写法的必然产物。 -->
-      <div class="load-error" id="mr-cfg-loaderr" style="display:none;margin-bottom:12px"></div>
-<div class="set-card">
-        <!-- 🔴 C5-48：编辑/取消/保存从"悬在卡片外面的一行"搬进**卡头右侧**（稿子如此）。
-             ⚠️ 全页**只有这一组** —— 它切换的是整个 `.cfg-form` 的两态，
-               在「找客户策略」卡头再放一个就是同一个控件的第二处，那是本仓刚在治的病。
-               ⇒ 稿子上「找客户策略」那个「编辑」我**没有照做**，理由写在那张卡的注释里。 -->
-        <div class="pr-head">
-          <span class="sec-title" style="margin:0">运行参数</span>
-          <span class="sec-tools" style="margin-left:auto">
-            <button class="mini js-cfg-edit" id="mr-cfg-edit" type="button">编辑</button>
-            <button class="mini js-cfg-cancel" id="mr-cfg-cancel" type="button" style="display:none">取消</button>
-            <button class="primary mini js-cfg-save" id="mr-save-cfg" type="button" style="display:none">保存</button>
-          </span>
-        </div>
-        <!-- ⭐ C5-22（Joe 拍板）：两个勾选框（自动批准/自动发送）合成**一个总开关**。
-             他的原话是"所有环节都动起来""都是立即执行"——那是**一个意图**，不该让他勾两个格子
-             再自己在脑子里做与运算。底层仍是那两个位，总开关是架在其上的与门（见 send.ts）。
-             ⚠️ 关掉时**耳朵不关**：收信/分类/飞书通知照常——错过回信只有损失没有风险。
-             ⚠️ C5-48：分数线现在是「打分线」那一行的**输入框** `#cfg-approve-min`（可改，后端一直收
-                auto_approve_min）。旧的只读展示位 `rb-hi` 已删 —— ⛔ 别再照这句旧话去找它。
-             ⚠️ C5-25 砍字纪律：解释一律进 (?)（data-help，闸的 measure 会剔除它，不占预算），
-                页面正文只留「这是什么 + 现在是多少」（铁律一）。**删掉的是解释，不是能力。** -->
-        <!-- 🔴 C5-48：自动模式的**开关本体已搬到板块一「机器现在在干什么」那张卡的右上**
-               （稿子如此，Joe 认的是稿子）。⛔ 这里不再放第二个 —— 一个开关只能有一处，
-               两处并存就破了整合机器房时定的"删重复"，也是本仓铁律五。
-             ⚠️ 留下的只有「为什么现在没在发信」这一行**只读理由**：它讲的是发信这一步的状态，
-               归属发信闸门是对的，而且它不是控件，不构成第二个开关。 -->
-        <div class="hint" id="cfg-automation-why"></div>
-
-        <div class="pr-row"><span class="pr-k">每天最多发</span>
-          <span class="pr-v"><input id="cfg-limit" type="number" min="1" class="set-num"><span class="hint">封</span>
-            <span id="cfg-limit-badge" class="pill" style="display:none"></span>
-            <span class="gj-help" data-help title="手动 + 自动 + 跟进 共用这一个上限，跨全部发件域计数。">(?)</span><span class="mr-live" id="mr-live-limit"></span></span></div>
-
-        <!-- ⭐ 魔法值改明控件：后端「0/空 = 跟随系统闸」的约定没变，变的是**它不再暴露给 Joe**。
-             🔴 C5-48：两个 radio（cfg-auto-follow / cfg-auto-custom）**已删**，改成一个开关：
-               开 = 另设一个自己的上限；关 = 不另设限，用满上面那个（后端仍收 0）。
-             ⚠️ 两个 radio 表达的是**一个二选一**，用两个控件说一件事本来就多了一个。 -->
-        <div class="pr-row"><span class="pr-k">机器自己发</span>
-          <span class="pr-v">
-            <label class="tgl tgl-sm"><input type="checkbox" id="cfg-auto-on"><span class="tgl-track"><span class="tgl-knob"></span></span></label>
-            <span class="hint">最多</span>
-            <input id="cfg-auto-limit" type="number" min="1" class="set-num"><span class="hint">封/天 · 关掉就不另设限，用满上面那个</span>
-            <span class="hint" id="cfg-auto-used"></span>
-            <!-- ⚠️ 实时位必须是**兄弟节点**，不能塞进 #cfg-auto-used 里 ——
-                 fillSettingsFields 会重写那个元素的内容，会把嵌在里面的 span 冲掉
-                 （实测：元素在 markup 里、getElementById 却拿不到）。
-                 挂在别人会整块重写的容器里 = 静默消失。 -->
-            <span class="mr-live" id="mr-live-auto"></span></span></div>
-
-        <div class="pr-row"><span class="pr-k">每封间隔</span>
-          <span class="pr-v"><input id="cfg-send-gap" type="number" min="0" class="set-num"><span class="hint">秒</span>
-            <span class="pill" id="cfg-gap-src" style="display:none"></span>
-            <span class="gj-help" data-help title="两封开发信之间至少隔这么久。0 = 不限速。留空 = 用系统默认。机器每分钟检查一次是否该发，这个数决定它多久才真发一封。">(?)</span><span class="mr-live" id="mr-live-gap"></span></span></div>
-
-        <div class="pr-row"><span class="pr-k">新域保护</span>
-          <span class="pr-v"><label class="tgl tgl-sm"><input id="cfg-ramp" type="checkbox"><span class="tgl-track"><span class="tgl-knob"></span></span></label>
-            <span class="gj-help" data-help title="新域名一上来就大量发信会被判垃圾。开启后每天的实际上限 = max(起步值, 昨天发出量 × 倍数)，慢慢爬上你设的「每天最多发」。建议开着。">(?)</span>
-            <span class="hint">起步</span><input id="cfg-ramp-floor" type="number" min="1" class="set-num">
-            <span class="hint">封 · 每天 ×</span><input id="cfg-ramp-factor" type="number" min="1" step="0.1" class="set-num">
-            <span class="hint">· 关掉就直接按上面的上限发</span>
-            <span class="pill" id="cfg-ramp-src" style="display:none"></span></span></div>
-
-        <div class="pr-row"><span class="pr-k">退订就停</span>
-          <span class="pr-v"><span class="hint">最近</span><input id="cfg-brk-win" type="number" min="5" class="set-num">
-            <span class="hint">封里超过</span><input id="cfg-brk-th" type="number" min="1" max="90" class="set-num"><span class="hint">% 就停</span>
-            <span class="pill" id="cfg-brk-src" style="display:none"></span>
-            <span class="gj-help" data-help title="自动发出的开发信里退订占比超过阈值就自动停发（只停自动发信，分析/批准/手动发送不受影响），停了不会自动恢复，要你在这里手动重开。样本不足时不熔断——5 封里 2 封退订说明不了任何事。">(?)</span><span class="mr-live" id="mr-live-brk"></span></span></div>
-
-        <!-- 🔴 C5-48：打分线搬到这里，并且**改成可编辑** ——
-             我上一版判它"只读"是**错的**：后端 `POST /api/settings/sending` 一直收 `auto_approve_min`
-             （index.ts:2356，带 APPROVE_MIN_SCORE~100 夹取）。⛔ 判"有没有这个能力"要去看写路径，
-             不能看"页面上现在有没有输入框"——页面没有只说明没人接线。
-             ⚠️ 中段/低段两个数是**从这一个数推出来的**，仍然只读（改一个数派生两个，不是三个真源）。 -->
-        <div class="pr-row"><span class="pr-k">打分线</span>
-          <span class="pr-v"><span class="hint">≥</span><input id="cfg-approve-min" type="number" min="1" max="100" class="set-num"><span class="hint">批准</span>
-            <span class="hint">· <b id="rb-mid">…</b> 你来看 · ≤<b id="rb-lo">…</b> 建议忽略</span>
-            <span class="gj-help" data-help title="≥高分线：建议批准，自动模式开着时机器直接收走。中段：需要你人工看一眼，多为信息不全（AI 没看清 ≠ 不合格）。≤低分线：建议忽略；忽略随时可从「已忽略」退回。三个数都从后端真值来，不是写死的。">(?)</span><span class="mr-live" id="mr-live-review"></span></span></div>
-
-        <div class="pr-row"><span class="pr-k">无回复跟进</span>
-          <span class="pr-v"><label class="tgl tgl-sm"><input type="checkbox" id="fu-enabled"><span class="tgl-track"><span class="tgl-knob"></span></span></label>
-            <input id="fu-delay" type="number" min="1" max="60" class="set-num"><span class="hint">天后 · 点过链接的</span>
-            <input id="fu-engaged-delay" type="number" min="1" max="60" class="set-num"><span class="hint">天 · 最多</span>
-            <input id="fu-max" type="number" min="1" max="5" class="set-num"><span class="hint">次 · 放弃</span>
-            <input id="fu-noreply" type="number" min="1" max="90" class="set-num"><span class="hint">天</span>
-            <span class="gj-help" data-help title="几天后跟进：建议 3-5 天，太快像催、太慢对方已经忘了你是谁。点过链接的：那个人此刻正在关注你，建议 1-2 天。最多跟几次：建议 1-2 次，跟太多次会从提醒变成骚扰。多久后放弃：跟满还没回音就归档，不再占你的待办。">(?)</span></span></div>
-
-        <!-- ⚠️ 飞书通知那句「不跟随自动模式开关」必须留在正文、⛔ 不进悬浮：
-             它说的是「这个开关**不受总开关管**」，而那正是 Joe 最容易误解的地方
-             （关了自动模式会不会连回信都收不到）。Joe 定的语义是「关的是机器的嘴和手，
-             不关它的耳朵」—— 那句话要在屏幕上，不能藏在一个他不会去点的问号里。 -->
-        <!-- 🔴 C5-48 上线后当场发现并修：这一行原来同时放了 `#mr-live-ntf`（"● 已连接"）
-             和下面的 `#notify-status`（"● 已连接(?)"）—— **同一个事实两处**，铁律五。
-             ⇒ 留信息更全的那个（`#notify-status` 带 (?) 解释与配置指引），
-               把 `#mr-live-ntf` 收进这一行**末尾**当兜底位（live() 仍会写它，⛔ 不删元素留绑定）。
-             ⚠️ 两个都留着的时候，屏幕上那条孤零零的绿横条正是 Joe 会问"这是什么"的东西。 -->
-        <div class="pr-row"><span class="pr-k">飞书通知</span>
-          <span class="pr-v"><button class="btn-secondary mini" id="ntf-test">发送测试</button>
-            <label class="tgl tgl-sm"><input type="checkbox" id="ntf-enabled"><span class="tgl-track"><span class="tgl-knob"></span></span></label>
-            <span class="hint">有热回复时推群</span>
-            <span class="hint" id="ntf-result"></span>
-            <span class="hint">· 收信和通知永远在线，不跟随自动模式开关</span>
-            <span class="mr-live" id="mr-live-ntf" hidden></span></span>
-          <span class="pr-k"></span><span id="notify-status" class="hint" style="margin:0"></span></div>
-      </div>
-    </div>
-
-    <!-- 🔴 C5-49（Joe 拍板）：**每个板块只负责自己的编辑和保存，不要越权**。
-         ⇒ 两张卡各自是一个独立的 `.cfg-form`：
-           · 点谁的「编辑」，只有谁变可编辑、只有谁的卡头出现取消/保存
-           · 点谁的「保存」，只提交谁的字段
-         ⚠️ 拆开之前它们共用一个容器 + 一颗保存 ⇒ 点「运行参数」的编辑，这张卡也跟着解锁了
-           （Joe 截图里的现场），而那颗保存会把**两张卡的字段一起**提交。
-         🔴 后者才是真正危险的那一半：**A 卡的保存顺手把 B 卡的值按 DOM 里的旧内容写回去** ——
-           静默数据损坏，而且界面上什么都不会说。 -->
+    <!-- ══ 卡二 · 找客户 ══ -->
     <div class="cfg-form preview" data-cfg-group="search" style="max-width:820px">
-<div class="set-card">
-        <!-- 🔴 C5-49：这颗「编辑」是**补回来的，我上一版没加是错的**。
-             我当时的理由是"同一控件的第二处入口 = 重复"—— ⛔ 那个判断错在把**可发现性**当成了重复。
-             后果是真的：这张卡里的加词框、搜索预算、26 个关键词勾选框，在预览态**全部是死的**
-             （`.cfg-form.preview` 会把非 .cfg-live 的输入设 readOnly、勾选框设 disabled），
-             而唯一的开关远在上面那张卡的卡头 —— **Joe 一上手就用不了，还以为坏了。**
-             ⭐ 教训：**控件露出来了，就必须把打开它的那个开关一起露出来。**
-                两张卡各有一颗入口 ≠ 两套状态；它们切的是**同一个** `.cfg-form` 两态（见 setSettingsMode）。
-             ⚠️ 下面「① 我是谁·找什么客户」那行自带的「编辑」是**另一件事**（展开画像文本框），⛔ 别合并。 -->
-        <div class="pr-head"><span class="sec-title" style="margin:0">找客户策略</span>
-          <span class="hint" style="margin:0">· 机器按什么找客户</span>
+      <div class="set-card">
+        <div class="pr-head"><span class="sec-title" style="margin:0">找客户</span>
           <span class="sec-tools" style="margin-left:auto">
             <button class="mini js-cfg-edit" type="button">编辑</button>
             <button class="mini js-cfg-cancel" type="button" style="display:none">取消</button>
@@ -1547,53 +1418,24 @@
           <!-- 加载失败横幅：没有它，一次登录过期就让这一块停在空壳态，看着像"配置全丢了" -->
           <div class="load-error" id="fc-loaderr" style="display:none;margin-bottom:12px"></div>
 
-          <!-- ① 我是谁 · 找什么客户 -->
-          <!-- header-v3 追加（Joe 三条）：① 行右侧那颗小「编辑」删了（卡头已有整卡编辑，重复）；
-               ② 画像文字预览态**全文可读**（多行自动换行），编辑态仍是原 textarea（随整卡 编辑/取消 切换，见 setSettingsMode）；
-               ③ 「按当前标准重刷全库」搬到本行最右端（原小编辑按钮的位置），图标走 ICON 工厂（refresh-cw），⛔ 不用 emoji；
-                  它下面那句「改完上面这段之后用 · 会重置 N 条…」说明留在原位。 -->
-          <div class="subhead" style="margin-top:4px"><span class="num">1</span>
-            <span class="field" style="font-size:14px">我是谁 · 找什么客户</span>
-            <span class="badge" id="fc-profile-badge"></span>
-            <button class="btn-secondary mini js-danger" id="btn-rescan" type="button" style="margin-left:auto;display:inline-flex;align-items:center;gap:5px" onclick="startRescan()">按当前标准重刷全库</button></div>
-          <div class="sec-indent">
-            <div id="fc-profile-summary" class="fc-profile-full">（加载中…）</div>
-            <textarea id="fc-profile" class="fc-collapsed" placeholder="描述你的理想客户；留空用内置默认画像"></textarea>
-            <!-- 🔴 C5-48：改完画像之后要有地方"让它对存量生效"，否则新标准只作用于以后搜到的。
-                 ⚠️ 后果那句里的条数是**后端真算**的（/api/today 的 rescoreScope），⛔ 不写死 ——
-                   这是 Joe 按下去之前唯一能看到的代价，写错等于骗他点。 -->
-            <div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-              <span class="hint" id="fc-rescan-note" style="margin:0">改完上面这段之后用 · 正在算影响面…</span>
-            </div>
-          </div>
+          <!-- 搜索预算：⛔ 不再拼「今日 x/y」（Joe：「今日预算 5000/5000 是多余的」——顶栏面板与卡一那行已经在报） -->
+          <div class="pr-row"><span class="pr-k">搜索预算</span>
+            <span class="pr-v"><input id="fc-serper-budget" type="number" min="0" max="20000" step="100" class="set-num"><span class="hint">次 / 天</span>
+              <span class="gj-help" data-help title="Serper 每次搜索算 1 次。预算 = 你愿意每天花多少次；找到多少家取决于关键词 × 国家的组合数。用满就停到明天。">(?)</span>
+              <span class="mr-live" id="mr-live-search"></span></span></div>
 
-          <!-- ② 找哪些国家（C5-44 新增：原来只显数字、没法选）-->
-          <div class="subhead"><span class="num">2</span>
-            <span class="field" style="font-size:14px">找哪些国家</span>
-            <span class="toolbar"><button class="mini" type="button" onclick="fcCcAll(true)">全选</button><button class="mini" type="button" onclick="fcCcAll(false)">全不选</button></span></div>
-          <div class="sec-indent" id="fc-cc-block"></div>
+          <!-- 找哪些国家：只读态只显「N 个」+ chip；编辑态才出 全选/全不选（C5-49 三层锁不变） -->
+          <div class="pr-row"><span class="pr-k">找哪些国家</span>
+            <span class="pr-v"><span class="mr-live" id="mr-live-cc"></span>
+              <span class="cfg-editonly" style="margin-left:auto"><button class="mini" type="button" onclick="fcCcAll(true)">全选</button><button class="mini" type="button" onclick="fcCcAll(false)">全不选</button></span></span></div>
+          <div id="fc-cc-block"></div>
 
-          <!-- ③ 用什么关键词 -->
-          <div class="subhead"><span class="num">3</span>
-            <span class="field" style="font-size:14px">用什么关键词</span>
-            <span class="toolbar"><button class="mini" type="button" onclick="fcKwAll(true)">全选</button><button class="mini" type="button" onclick="fcKwAll(false)">全不选</button><button class="mini" id="fc-kw-manage" type="button" onclick="fcToggleManage()">管理</button></span></div>
-          <!-- 🔴 C5-50（Joe：「这个按钮没有保留的价值，反而误导人」）：「载入默认」按钮**已删**。
-               三条依据，逐条查过：
-               ① 它此刻**恒无效**：`DEFAULT_KEYWORDS` 逐字等于库里那批词，点了什么都不会发生。
-               ② C5-50 之后它会变成**误导**：它恢复的那份"默认"里含我们刚用数据证明该扔的 5 个
-                  （0% / 2.6% / 4.2% / 12.1% / 13.3%），却不含新增的 12 个 ——「默认」这个词从此是错的。
-               ③ 它有一个**名字没说的副作用**：点完会把 `_fcKwChecked` 重置成全选，
-                  Joe 特意取消过的勾选一点就全回来了，而且没有二次确认。
-             ⚠️ **后端那条路径保留**（`POST /api/keywords {seedDefaults:true}` → `seedDefaultKeywords`）：
-               grep 出它有**第二个调用方** —— 本文件 ~4210 行「关键词表为空时自动灌入默认词」。
-               ⇒ 它不是死码，删了新库就进不去初始页面。**判死码要查调用方，⛔ 不看它长得像不像没人用。** -->
-          <div class="sec-indent">
-            <!-- 🔴 C5-48：加词那一行**改成常显**（原来藏在「管理」态后面）。
-                 理由：加一个关键词是**可逆**动作（加错了删掉即可），把它藏起来的成本
-                 高于收益 —— 而「管理」态继续 gate 住真正不可逆的那半（删词）。
-                 ⚠️ 输入框必须**白底**：Joe 明确骂过黑输入框。这里走 .set-num 同一套皮
-                   （background:var(--bg)），⛔ 别再用 .box —— 它在 #v-machine 下有另一套宽度规则。 -->
-            <div style="display:flex;gap:8px;margin:8px 0 10px">
+          <div class="pr-row"><span class="pr-k">用什么关键词</span>
+            <span class="pr-v"><span class="mr-live" id="mr-live-kw"></span>
+              <span class="cfg-editonly" style="margin-left:auto"><button class="mini" type="button" onclick="fcKwAll(true)">全选</button><button class="mini" type="button" onclick="fcKwAll(false)">全不选</button><button class="mini" id="fc-kw-manage" type="button" onclick="fcToggleManage()">管理</button></span></span></div>
+          <div>
+            <!-- 加词框：只在编辑态出（只读态零输入框，Joe 定）。⛔ 后端 seedDefaultKeywords 那条路仍在（C5-50 查过第二个调用方） -->
+            <div class="cfg-editonly" style="display:flex;gap:8px;margin:8px 0 10px">
               <input id="dp-kwnew" class="set-num" style="width:auto;flex:1;text-align:left;padding:0 12px" placeholder="输入新关键词，回车添加…">
               <button id="dp-kwadd" class="primary">添加</button>
             </div>
@@ -1601,23 +1443,127 @@
             <div id="kw-archived"></div>
           </div>
 
-          <!-- ④ 搜索预算上限 ——⛔ 这里**没有**「每 N 小时」也**没有**「开启后台搜索」独立开关：
-               Joe 定的是单一总闸（开自动模式所有环节都工作）+ 预算是唯一旋钮。 -->
-          <div class="subhead"><span class="num">4</span>
-            <span class="field" style="font-size:14px">搜索预算上限</span></div>
-          <div class="sec-indent inline">
-            <input id="fc-serper-budget" type="number" min="0" max="20000" step="100" class="box">
-            <span class="val">次 / 天</span>
-            <span class="hint" id="mr-live-search"></span>
+          <!-- 我是谁·找什么客户：画像全文常显（预览态可读全文），编辑态换 textarea；重刷按钮在行末 -->
+          <div class="pr-row"><span class="pr-k">我是谁 · 找什么客户</span>
+            <span class="pr-v"><span class="badge" id="fc-profile-badge"></span>
+              <button class="btn-secondary mini js-danger" id="btn-rescan" type="button" style="margin-left:auto;display:inline-flex;align-items:center;gap:5px" onclick="startRescan()">按当前标准重刷全库</button></span></div>
+          <div>
+            <div id="fc-profile-summary" class="fc-profile-full">（加载中…）</div>
+            <textarea id="fc-profile" class="fc-collapsed" placeholder="描述你的理想客户；留空用内置默认画像"></textarea>
+            <!-- 重刷的后果句：条数是后端真算的（/api/today.rescoreScope），⛔ 不写死 —— 这是 Joe 按下去前唯一能看到的代价 -->
+            <div class="hint" id="fc-rescan-note" style="margin-top:8px">改完上面这段之后用 · 正在算影响面…</div>
           </div>
-          <div id="dp-save-msg" class="hint sec-indent" style="margin-top:6px"></div>
+          <div id="dp-save-msg" class="hint" style="margin-top:6px"></div>
+          <!-- 工具行（pipeline 的「找客户（搜公司）」+「目录源采集」两条） -->
+          <div class="mr-tools" id="mr-tools-search"></div>
         </div>
       </div>
     </div>
 
-    <!-- 板块三 · 平时不碰的（由 openMachineRoom 填充）。放在控制区之后 ——
-         **DOM 顺序 = 视觉顺序**：状态 → 控制 → 折叠。⚠️ 别夹在状态和控制中间（Joe 指认过）。 -->
-    <div id="mr-rare"></div>
+    <!-- ══ 卡三 · 分析与批准 ══ -->
+    <div class="cfg-form preview" data-cfg-group="score" style="max-width:820px">
+      <div class="set-card">
+        <div class="pr-head"><span class="sec-title" style="margin:0">分析与批准</span>
+          <span class="sec-tools" style="margin-left:auto">
+            <button class="mini js-cfg-edit" type="button">编辑</button>
+            <button class="mini js-cfg-cancel" type="button" style="display:none">取消</button>
+            <button class="primary mini js-cfg-save" type="button" style="display:none">保存</button>
+          </span></div>
+        <!-- 打分线：一个真源派生三段（中/低两段只读）。后端一直收 auto_approve_min（index.ts） -->
+        <div class="pr-row"><span class="pr-k">打分线</span>
+          <span class="pr-v"><span class="hint">≥</span><input id="cfg-approve-min" type="number" min="1" max="100" class="set-num"><span class="hint">批准 · <b id="rb-mid">…</b> 你来看 · ≤<b id="rb-lo">…</b> 忽略</span>
+            <span class="gj-help" data-help title="≥线：自动模式开着时机器直接批准进待联系。中段：多为资料不全，AI 没看清 ≠ 不合格，你看一眼再批。≤低线：建议忽略，随时可从「已忽略」退回。三个数都从后端真值来。">(?)</span>
+            <span class="mr-live" id="mr-live-review"></span></span></div>
+        <!-- 工具行（抓官网 / AI 评分 / 补邮箱 / 补邮箱兜底 四条） -->
+        <div class="mr-tools" id="mr-tools-score"></div>
+      </div>
+    </div>
+
+    <!-- ══ 卡四 · 发信 ══ -->
+    <div class="cfg-form preview" data-cfg-group="params" style="max-width:820px">
+      <!-- 加载失败横幅（2026-09-02 补回）：读不到配置时必须说出来，⛔ 不留一片空框假装正常（铁律八） -->
+      <div class="load-error" id="mr-cfg-loaderr" style="display:none;margin-bottom:12px"></div>
+      <div class="set-card">
+        <div class="pr-head">
+          <span class="sec-title" style="margin:0">发信</span>
+          <span class="sec-tools" style="margin-left:auto">
+            <button class="mini js-cfg-edit" id="mr-cfg-edit" type="button">编辑</button>
+            <button class="mini js-cfg-cancel" id="mr-cfg-cancel" type="button" style="display:none">取消</button>
+            <button class="primary mini js-cfg-save" id="mr-save-cfg" type="button" style="display:none">保存</button>
+          </span>
+        </div>
+        <!-- 「为什么现在没在发信」只读理由（不是控件，不构成第二个开关；自动模式开关在卡一右上） -->
+        <div class="hint" id="cfg-automation-why"></div>
+
+        <div class="pr-row"><span class="pr-k">每天最多发</span>
+          <span class="pr-v"><input id="cfg-limit" type="number" min="1" class="set-num"><span class="hint">封</span>
+            <span id="cfg-limit-badge" class="pill" style="display:none"></span>
+            <span class="gj-help" data-help title="手动 + 自动 + 跟进 共用这一个上限，跨全部发件域计数。系统物理上跑得动多少见 (?) 里的产能数，超出的顺延不会丢。">(?)</span><span class="mr-live" id="mr-live-limit"></span></span></div>
+
+        <div class="pr-row"><span class="pr-k">机器自己发</span>
+          <span class="pr-v">
+            <label class="tgl tgl-sm"><input type="checkbox" id="cfg-auto-on"><span class="tgl-track"><span class="tgl-knob"></span></span></label>
+            <span class="hint">最多</span>
+            <input id="cfg-auto-limit" type="number" min="1" class="set-num"><span class="hint">封/天</span>
+            <span class="gj-help" data-help title="开 = 另给自动通道设一个自己的上限；关 = 不另设限，用满上面那个「每天最多发」。">(?)</span>
+            <span class="hint" id="cfg-auto-used"></span>
+            <!-- ⚠️ 实时位必须是**兄弟节点**：fillSettingsFields 会重写 #cfg-auto-used 的内容，嵌进去会被冲掉 -->
+            <span class="mr-live" id="mr-live-auto"></span></span></div>
+
+        <div class="pr-row"><span class="pr-k">每封间隔</span>
+          <span class="pr-v"><input id="cfg-send-gap" type="number" min="0" class="set-num"><span class="hint">秒</span>
+            <span class="pill" id="cfg-gap-src" style="display:none"></span>
+            <span class="gj-help" data-help title="两封开发信之间至少隔这么久。0 = 不限速。留空 = 用系统默认。机器每分钟检查一次是否该发。">(?)</span><span class="mr-live" id="mr-live-gap"></span></span></div>
+
+        <div class="pr-row"><span class="pr-k">新域保护</span>
+          <span class="pr-v"><label class="tgl tgl-sm"><input id="cfg-ramp" type="checkbox"><span class="tgl-track"><span class="tgl-knob"></span></span></label>
+            <span class="hint">起步</span><input id="cfg-ramp-floor" type="number" min="1" class="set-num">
+            <span class="hint">封 · 每天 ×</span><input id="cfg-ramp-factor" type="number" min="1" step="0.1" class="set-num">
+            <span class="gj-help" data-help title="新域名一上来就大量发信会被判垃圾。开着时每天实际上限 = max(起步值, 昨天发出量 × 倍数)，慢慢爬到你设的「每天最多发」。关掉就直接按上限发。建议开着。">(?)</span>
+            <span class="pill" id="cfg-ramp-src" style="display:none"></span></span></div>
+
+        <div class="pr-row"><span class="pr-k">退订就停</span>
+          <span class="pr-v"><span class="hint">最近</span><input id="cfg-brk-win" type="number" min="5" class="set-num">
+            <span class="hint">封里超过</span><input id="cfg-brk-th" type="number" min="1" max="90" class="set-num"><span class="hint">% 就停</span>
+            <span class="pill" id="cfg-brk-src" style="display:none"></span>
+            <span class="gj-help" data-help title="只停自动发信，分析 / 批准 / 手动发不受影响。停了不会自动恢复，这里会出现「恢复自动发信」按钮。样本不足时不判——5 封里 2 封退订说明不了任何事。">(?)</span><span class="mr-live" id="mr-live-brk"></span>
+            <!-- 熔断态：这一行右端出绿实心「恢复自动发信」（走现有重开路径），只在真熔断时插入 -->
+            <span id="mr-resume-slot" style="margin-left:auto"></span></span></div>
+
+        <div class="pr-row"><span class="pr-k">无回复跟进</span>
+          <span class="pr-v"><label class="tgl tgl-sm"><input type="checkbox" id="fu-enabled"><span class="tgl-track"><span class="tgl-knob"></span></span></label>
+            <input id="fu-delay" type="number" min="1" max="60" class="set-num"><span class="hint">天后 · 点过链接</span>
+            <input id="fu-engaged-delay" type="number" min="1" max="60" class="set-num"><span class="hint">天 · 最多</span>
+            <input id="fu-max" type="number" min="1" max="5" class="set-num"><span class="hint">次 ·</span>
+            <input id="fu-noreply" type="number" min="1" max="90" class="set-num"><span class="hint">天放弃</span>
+            <span class="gj-help" data-help title="几天后跟进：建议 3-5 天，太快像催、太慢对方已经忘了你是谁。点过链接的：那个人此刻正在关注你，建议 1-2 天。最多跟几次：建议 1-2 次，跟太多次会从提醒变骚扰。多久后放弃：跟满还没回音就归档。">(?)</span></span></div>
+        <!-- 工具行（AI 写开发信 / 发开发信 两条 + 发件地址） -->
+        <div class="mr-tools" id="mr-tools-send"></div>
+      </div>
+    </div>
+
+    <!-- ══ 卡五 · 收信与通知（卡头副标只留这 7 个字：Joe 定的语义——关的是机器的嘴和手，不关耳朵）══ -->
+    <div class="cfg-form preview" data-cfg-group="inbox" style="max-width:820px">
+      <div class="set-card">
+        <div class="pr-head"><span class="sec-title" style="margin:0">收信与通知</span>
+          <span class="hint" style="margin:0">· 不跟随自动模式</span>
+          <span class="sec-tools" style="margin-left:auto">
+            <button class="mini js-cfg-edit" type="button">编辑</button>
+            <button class="mini js-cfg-cancel" type="button" style="display:none">取消</button>
+            <button class="primary mini js-cfg-save" type="button" style="display:none">保存</button>
+          </span></div>
+        <div class="pr-row"><span class="pr-k">收客户回复</span>
+          <span class="pr-v"><b>每小时</b><span class="mr-live" id="mr-live-reply"></span></span></div>
+        <div class="pr-row"><span class="pr-k">飞书群通知</span>
+          <span class="pr-v"><label class="tgl tgl-sm"><input type="checkbox" id="ntf-enabled"><span class="tgl-track"><span class="tgl-knob"></span></span></label>
+            <span class="mr-live" id="mr-live-ntf"></span>
+            <span class="hint" id="ntf-result"></span>
+            <span id="notify-status" class="hint" style="margin:0"></span>
+            <button class="btn-secondary mini" id="ntf-test" style="margin-left:auto">发送测试</button></span></div>
+        <!-- 工具行（收客户回复 / 飞书群通知 / 飞书应用机器人 / 官网询盘接入 四条 + 接钥匙 (?)） -->
+        <div class="mr-tools" id="mr-tools-inbox"></div>
+      </div>
+    </div>
   </div>
   <div id="v-settings" style="display:none">
     <!-- nav-table-v2 追加①（Joe）：四个导航页（待办/看板/自动化/设置）是左栏一级页，不是从列表点进来的详情 ⇒ 「← 返回列表」删；只有线索详情页保留返回 -->
@@ -5399,9 +5345,20 @@
     //     按 DOM 里当时的内容一起写回去**。如果那些框正显示着旧值或别处刚改过的值，
     //     就是**一次静默的数据覆盖** —— 界面上什么都不会说。
     document.querySelectorAll('.js-cfg-save').forEach(btn => { btn.onclick = async () => {
-      const grp = (btn.closest('.cfg-form') || {}).dataset?.cfgGroup;   // undefined = 页头那颗 = 全提交
-      const doParams = !grp || grp === 'params';
+      const grp = (btn.closest('.cfg-form') || {}).dataset?.cfgGroup;   // undefined = 设置页页头那颗 = 全提交
+      // v10.1：机器房拆成四张可改卡 ⇒ 四个组，每组只提交自己那几个字段。
+      //   params = 发信卡（上限/自己发/间隔/新域/退订就停 + 无回复跟进）· score = 打分线 ·
+      //   inbox = 飞书通知 · search = 找客户卡 · 无 grp = 设置页那颗（公司信息 + 全部，语义不变）。
+      // 🔴 顺带修掉一个**跨页写风险**：原来 params 的请求体里带着 `#cfg-company/#cfg-address/#cfg-selling/
+      //   #cfg-chatscript/#cfg-bcc` —— 那五个输入框住在**设置页**。在机器房点保存就会把它们
+      //   按 DOM 里当时的值一起写回去；今天只是因为 openMachineRoom 恰好会 fillSettingsFields
+      //   才没出事（"碰巧对"不是对）。⇒ 公司那五个字段只由设置页那颗保存提交。
+      const doSend   = !grp || grp === 'params';
+      const doScore  = !grp || grp === 'score';
+      const doInbox  = !grp || grp === 'inbox';
       const doSearch = !grp || grp === 'search';
+      const doCompany = !grp;
+      const doParams = doSend || doScore;   // 这两组都要打 /api/settings/sending
       // ⛔ 没成功加载过就不许保存 —— 空表单一存就是把公司名/地址/卖点抹成空串。
       //   （按钮已 disabled，这里是第二道：防止有人用键盘/脚本绕过 disabled。闸不能只有一层。）
       if (!_cfgLoaded) {
@@ -5422,25 +5379,29 @@
         //   生产实锤：`auto_send_resumed_at = 2026-07-17 08:36:42`（该字段只在 关→开 时写），
         //   之后 3 天自动发了 17 封，直到今天才被发现。
         //   → 开关改成**勾选即存 + 二次确认**（见下方 renderAutomation），不再搭这趟车。
-        body:JSON.stringify({ daily_send_limit:Number($("#cfg-limit").value), company_name:$("#cfg-company").value, company_address:$("#cfg-address").value, company_website:$("#cfg-website").value, selling_points:$("#cfg-selling").value, chat_script:$("#cfg-chatscript").value, bcc_archive:$("#cfg-bcc").value, send_ramp_enabled:$("#cfg-ramp").checked,
-          // ⚠️ 传的是**原始字符串**不是 Number()：空框 Number("") = 0，会把"我不想管这个"
-          //   写成"设成 0 秒/0 封"——那就是又造了一个魔法值。空串交给后端删行回落。
-          send_interval_seconds: $("#cfg-send-gap").value.trim(),
-          send_ramp_floor:       $("#cfg-ramp-floor").value.trim(),
-          send_ramp_factor:      $("#cfg-ramp-factor").value.trim(),
-          breaker_window:        $("#cfg-brk-win").value.trim(),
-          breaker_threshold:     (()=>{ const v=$("#cfg-brk-th").value.trim(); return v===""?"":String(Number(v)/100); })(),
-          // C5-2：单选 → 后端语义。后端「0/空 = 跟随系统闸」的约定没变，
-          //   变的是**这个约定不再暴露给 Joe** —— 他看到的是两个说人话的选项。
-          // C5-48：开关取代两个 radio。关 = 0（后端语义"跟随系统闸"），开 = 用户填的数。
-          auto_send_daily_limit: $("#cfg-auto-on").checked ? (Number($("#cfg-auto-limit").value) || 0) : 0,
-          // C5-48 打分线：⚠️ 空框**不提交**（`!= null` 那道后端守卫只在字段存在时才写），
-          //   ⛔ 别把空串变成 0 —— 那会把打分线设成 0，等于所有线索都自动批准。
-          ...(($("#cfg-approve-min").value.trim() === "") ? {} : { auto_approve_min: Number($("#cfg-approve-min").value) }) }) }));
-      const fu = !doParams ? {} : await jf(fetch("/api/settings/followup", { method:"POST", headers:{"content-type":"application/json"},
+        // 后端每个写入都带 `!= null` 守卫（index.ts:2517 起）⇒ 只放本组该提交的键，没放的键一个不动。
+        body:JSON.stringify({
+          // ── 公司信息：只有设置页那颗保存才提交（那五个输入框住在设置页）──
+          ...(!doCompany ? {} : { company_name:$("#cfg-company").value, company_address:$("#cfg-address").value,
+            company_website:$("#cfg-website").value, selling_points:$("#cfg-selling").value,
+            chat_script:$("#cfg-chatscript").value, bcc_archive:$("#cfg-bcc").value }),
+          // ── 发信卡那几行 ──
+          ...(!doSend ? {} : { daily_send_limit:Number($("#cfg-limit").value), send_ramp_enabled:$("#cfg-ramp").checked,
+            // ⚠️ 传的是**原始字符串**不是 Number()：空框 Number("") = 0，会把"我不想管这个"
+            //   写成"设成 0 秒/0 封"——那就是又造了一个魔法值。空串交给后端删行回落。
+            send_interval_seconds: $("#cfg-send-gap").value.trim(),
+            send_ramp_floor:       $("#cfg-ramp-floor").value.trim(),
+            send_ramp_factor:      $("#cfg-ramp-factor").value.trim(),
+            breaker_window:        $("#cfg-brk-win").value.trim(),
+            breaker_threshold:     (()=>{ const v=$("#cfg-brk-th").value.trim(); return v===""?"":String(Number(v)/100); })(),
+            // C5-48：开关取代两个 radio。关 = 0（后端语义"跟随系统闸"），开 = 用户填的数。
+            auto_send_daily_limit: $("#cfg-auto-on").checked ? (Number($("#cfg-auto-limit").value) || 0) : 0 }),
+          // ── 分析与批准卡：打分线。⚠️ 空框**不提交** ——⛔ 别把空串变成 0，那等于所有线索都自动批准。
+          ...((!doScore || $("#cfg-approve-min").value.trim() === "") ? {} : { auto_approve_min: Number($("#cfg-approve-min").value) }) }) }));
+      const fu = !doSend ? {} : await jf(fetch("/api/settings/followup", { method:"POST", headers:{"content-type":"application/json"},
         body:JSON.stringify({ enabled:$("#fu-enabled").checked, delay_days:Number($("#fu-delay").value), engaged_delay_days:Number($("#fu-engaged-delay").value), max_followups:Number($("#fu-max").value), no_reply_days:Number($("#fu-noreply").value) }) }));
-      const ntf = !doParams ? {} : await saveNotifyCfg();
-      if (doParams && res.ok) _chatScript = $("#cfg-chatscript").value || DEFAULT_CHAT;
+      const ntf = !doInbox ? {} : await saveNotifyCfg();   // 飞书通知归「收信与通知」卡
+      if (doCompany && res.ok) _chatScript = $("#cfg-chatscript").value || DEFAULT_CHAT;   // 话术只有设置页那颗提交
       const bad = [ res.error && `发信设置：${res.error}`, fu.error && `跟进设置：${fu.error}`, ntf.error && `飞书通知：${ntf.error}` ].filter(Boolean);
       // 🔴🔴 C5-53：方向盘（画像 / 国家 / 关键词 / 搜索预算）**必须在这里提交** ——
       //   它原来排在提示语**之后**，且异常只 `console.error` ⇒ 屏幕上恒显示「✅ 已保存」。
@@ -5459,13 +5420,15 @@
         ? `<br><span style="color:var(--amber)">⚠️ 你输入的是 ${esc(String($("#cfg-limit").value))}，超过系统上限 ${res.daily_send_limit_max}，已按 <b>${res.daily_send_limit}</b> 存入。</span>`
         : "";
       // ⚠️ 提示语要说**这一次真提交了什么**，⛔ 别在只存了找客户策略时说"已保存（发信+跟进+飞书通知）"。
-      const okMsg = doParams && doSearch ? "✅ 已保存（发信 + 跟进 + 飞书通知 + 找客户策略）"
-                  : doParams ? "✅ 已保存（运行参数：发信 + 跟进 + 飞书通知）"
-                  : "✅ 已保存（找客户策略：画像 + 国家 + 关键词 + 搜索预算）";
+      const okMsg = !grp ? "✅ 已保存（公司信息 + 发信 + 跟进 + 飞书通知 + 找客户）"
+                  : grp === "params" ? "✅ 已保存（发信 + 无回复跟进）"
+                  : grp === "score"  ? "✅ 已保存（打分线）"
+                  : grp === "inbox"  ? "✅ 已保存（飞书通知）"
+                  : "✅ 已保存（找客户：预算 + 国家 + 关键词 + 画像）";
       $("#sendcfg-result").innerHTML = (bad.length
         ? `<span style="color:var(--danger,#c0392b)">⚠️ 有 ${bad.length} 段没存上：${esc(bad.join("；"))}</span>`
         : okMsg) + clampNote;
-      if (doParams && !bad.length) renderAutomation(await fetch("/api/settings/sending").then(r=>r.json()).catch(()=>({})));   // 熔断/已发数回读，别让页面停在旧值
+      if (doSend && !bad.length) renderAutomation(await fetch("/api/settings/sending").then(r=>r.json()).catch(()=>({})));   // 熔断/已发数回读，别让页面停在旧值
       // C5-30②：保存成功才回预览态。⚠️ **有段没存上就留在编辑态** ——
       //   把他打回只读会让"没存上的那几个字"看起来像已经存好了。
       //   🔴 C5-49：只把**自己这张卡**打回预览态，⛔ 别顺手把另一张卡也关掉（那也是越权）。
@@ -6436,183 +6399,165 @@ ${esc(d.ours.body||'')}</div></details>`
       const br = cfg.breaker || {};
       const scfgOk = !!scfg;
 
-      // ══════════ 板块一 · 机器现在在干什么（只读生命体征，⛔ 无任何可编辑控件）══════════
+      // ══════════ 卡一 · 机器现在（v10.1：四行 = 找客户 / AI 分析 / 发信 / 收信）══════════
       //
-      // 🔴 这一版是**整合，不是搬迁**（Joe 原话："这是迁移不是整合，做得不用心"）。
-      //   上一版的病：状态区只读报一遍数、控制区可编辑再报一遍 —— 同一个数说两次。
-      //   那不只是难看，它**违反本仓铁律五「同一个事实只准有一个展示位」**，
-      //   而那条铁律的原话就是："重复不是多说一遍，它是下一次界面说谎的温床。"
+      // 🔴 数据与顶栏悬停面板**同一份**：直接调 `sbRows(act)`（那是四行的唯一口径），
+      //   ⛔ 这里不另算一遍状态词/数字。上一版是两处各拼一遍 —— 那正是铁律五要防的。
+      //   ⇒ 顶栏与这张卡同 tick 必然相等（验收就是对照这一点）。
+      // ⚠️ 额外的"业务数"（今日新找到 / 待审批 / 可发 / 今日收信）不在 activity 里，
+      //   从 /api/today 与 facets 取，各自读不到就不说那半句（⛔ 不用 || 0 伪装成真的是 0）。
+      // ⚠️ 删掉的：两盏灯 lamp()、四格大数 metric()/.mr-bigs（北极星 → 看板已有）。
+      //   自动模式开关原样留在这张卡右上（同一个 id + data-act 委托，元素与绑定一起搬）。
       //
-      // ⚠️ 所以这一区的判据很硬：**凡是控制区能调的，这里一律不再只读重复一遍。**
-      //   这里只留"生命体征"——他扫一眼就知道机器活着没、今天干了多少、健不健康。
-      //   ⛔ 原来那 9 行「今天能发多少」流水账（天花板/生效上限/冷发/自动通道/产能/发件域…）
-      //      全部撤掉：其中能调的合进板块二那一行，不能调的沉进板块三。
-      const lamp = (on, txt, hint) =>
-        `<span class="mr-lamp ${on ? 'on' : 'off'}" title="${esc(hint || '')}">${on ? '●' : '○'} ${esc(txt)}</span>`;
-      // 🔴 C5-48 指标格：**三行**（大数 / 标签 / 灰色小字），各自进一个 --panel 容器。
-      //   `star=true` = 北极星那一格（--brand-tint 底 + 绿数字）。
-      const metric = (n, unit, label, sub, star) =>
-        `<div class="mr-big${star ? ' star' : ''}"><div class="mr-big-n">${n}<span class="mr-big-u">${esc(unit || '')}</span></div>` +
-        `<div class="mr-big-l">${esc(label)}</div>${sub ? `<div class="mr-big-s">${esc(sub)}</div>` : ''}</div>`;
-
       const autoOn = !!cfg.automation_enabled;
       const tripped = !!(cfg.auto_send_tripped_at || '').trim();
-      // ⚠️ C5-48：「退订率」指标格已撤（它下面「退订就停」那一行已经在报"未触发/已触发"，
-      //   同一个事实两处 = 铁律五禁的重复）。⇒ `unsubPct` 一并删掉，⛔ 不留算了不用的量。
-      //   「找客户进度」也撤了（搜索游标是机器内部数，Joe 拿它做不了任何决定）⇒ `rotTotal` 同删。
-      const kwN = scfgOk ? (scfg.keywords || []).length : 0;
-      // ⚠️ C5-47：分母 = 机器实际搜索面（effectiveCountries），⛔ 不是全目录 allCountries。
-      //   否则 Joe 一收窄国家，「找客户进度 x / y」的 y 就比真实组合数大，进度条当场说谎。
-      const ccN = scfgOk ? (scfg.effectiveCountries || []).length : 0;
+      window._mrBreaker = br;   // 恢复自动发信的确认框要引用真实熔断原因（⛔ 不在那儿另编一句）
 
-      // ══ C5-48 四个指标的真值来源（判据：零写死，每个数说得出取自哪个字段）══
-      //   ⚠️ 每一处都带"读不到就说读不到"的兜底 —— ⛔ 不许用 `|| 0` 把"没读到"伪装成"真的是 0"。
-      //     那正是铁律三禁的事，而且这四个数里有三个**真值本来就可能是 0**（今天没发信/没找到/没回信）。
-      const fn = (today && today.replyFunnel) || null;              // 后端 /api/today.replyFunnel（口径冻在后端注释里）
-      const sentToday = cfg.cold_sent_today ?? '—';                 // /api/settings/sending.cold_sent_today
-      const sendCap   = cfg.effective_send_limit ?? cfg.daily_send_limit ?? '—';   // 生效上限（新域保护压过之后的）
-      // 「今天还能发 N 封」= 生效上限 − 今日已发。⚠️ 两个数任一读不到就**不说这句话**，不猜。
-      const roomLeft = (Number.isFinite(Number(sendCap)) && Number.isFinite(Number(sentToday)))
-        ? `今天还能发 ${Math.max(0, Number(sendCap) - Number(sentToday))} 封` : '读不到今天的上限';
-      const newToday = (today && today.todayWork && today.todayWork.newLeads != null)
-        ? today.todayWork.newLeads : '—';                            // /api/today.todayWork.newLeads（date(created_at)=today）
-      // 「预算用了多少」取 serper 真实记账，⛔ 不是"我以为搜了几次"。
-      //   ⚠️ 字段名是 `usedToday` **不是** `used`（discover.ts:642 `getSerperUsage` 的返回）——
-      //     写成 used 会得到一个恒 undefined、界面上恒显示"读不到"的假读数，而且看着完全合理。
-      const budgetNote = (serper && serper.usedToday != null && serper.budget != null)
-        ? (serper.usedToday >= serper.budget ? `预算已用满 ${serper.usedToday}/${serper.budget}` : `预算 ${serper.usedToday}/${serper.budget}`)
-        : '读不到搜索预算';
-
-      // 🔴 C5-48：自动模式总开关放在这一行的**右端**（稿子如此）。
-      //   ⚠️ 它带 id="cfg-automation" —— **和原来那个勾选框是同一个 id**，因为
-      //     `renderAutomation` 的状态回填（`$("#cfg-automation").checked = …`）还要认它。
-      //     ⛔ 这就是"元素和绑定一起搬"：换了位置、换了皮，标识和绑定一个都没丢。
-      //   ⚠️ 点击走**事件委托**（data-act），⛔ 不用 onchange：这张卡每次刷新都是整段 innerHTML
-      //     重写，onchange 会被冲掉 —— 那正是"删元素没删绑定"的镜像：留着元素丢了绑定。
+      // ── 卡一四行：状态词/数字直接取 sbRows（顶栏面板的唯一口径）──
+      // ⚠️ sbRows 要一份 activity 数据。⛔ 不复用 `_sbLast`（那可能是几十秒前那一 tick 的），
+      //   本页自己拉一次 /api/activity ⇒ 与顶栏"同 tick 相等"这条验收才有意义。
+      const act = await fetch('/api/activity').then(r => r.ok ? r.json() : null).catch(() => null);
+      const engRows = act && act.badge ? sbRows(act) : null;
+      // 业务侧补充数（不在 activity 里）：今日新找到 / 待审批 / 可发 / 今日收信。⛔ 读不到就不说那半句。
+      const newToday = (today && today.todayWork && today.todayWork.newLeads != null) ? today.todayWork.newLeads : null;
+      const reviewN  = (today && today.reviewCount != null) ? today.reviewCount : null;
+      const sendableN = (today && today.sendable != null) ? today.sendable : null;
+      const replyToday = (today && today.todayWork && today.todayWork.replies != null) ? today.todayWork.replies : null;
+      const MR_EXTRA = {
+        '找客户':  newToday   != null ? `· 今日新找到 ${newToday}` : '',
+        'AI 分析': reviewN    != null ? `· 待审批 ${reviewN}` : '',
+        '发信':    sendableN  != null ? `· 可发 ${sendableN}` : '',
+        '收信':    replyToday != null ? `· 今日 ${replyToday}` : '',
+      };
+      // 动作链接：按状态给"现在能做的那一件事"。⛔ 没有可做的就不给链接（不放死链）。
+      const mrAction = (r) => {
+        if (r.name === '找客户' && r.cls.startsWith('no')) return `<a onclick="mrJump('fc-serper-budget')">调预算 ↓</a>`;
+        if (r.name === '发信' && tripped) return `<a onclick="mrJump('mr-resume-slot')">恢复自动发信 ↓</a>`;
+        if (r.name === 'AI 分析') return `<a onclick="gotoGroup('review')">去待审批 →</a>`;
+        if (r.name === '发信') return `<a onclick="gotoGroup('ready')">去待联系 →</a>`;
+        if (r.name === '收信' && r.cls.startsWith('no')) return `<a onclick="mrJump('mr-live-reply')">看原因</a>`;
+        return '';
+      };
+      const engHtml = engRows
+        ? engRows.map(r => {
+            const extra = MR_EXTRA[r.name] || '';
+            return `<div class="mr-eng"><span class="mr-d ${esc(r.cls)}"></span><span class="mr-n">${esc(r.name)}</span>`
+              + `<span class="mr-w${r.cls.startsWith('no') ? ' warn' : ''}"><b>${esc(r.word)}</b>${r.num ? ' · ' + esc(r.num) : ''}`
+              + (extra ? ` <span class="mr-m">${esc(extra)}</span>` : '') + `</span>${mrAction(r)}</div>`;
+          }).join('')
+        // 读不到就说读不到（铁律三）：⛔ 不画四行"待命"假装机器好着
+        : `<div class="mr-eng"><span class="mr-w warn">机器状态这次没读到 —— 上面显示的不是实况，刷新再看</span></div>`;
       const vitals =
-        `<div class="mr-lamps-row">
-           <div class="mr-lamps">
-             ${lamp(autoOn, autoOn ? '自动模式 运行中' : '自动模式 已停', autoOn ? '机器在自己找客户、打分、发信' : '机器的嘴和手都停着，但耳朵还在收信')}
-             ${lamp(ign.coreReady, `核心功能 ${ign.ignitedCount}/${ign.total} 已就绪`, ign.coreReady ? '核心链路已通' : '有核心钥匙没配，那几环根本没在跑')}
-             ${tripped ? lamp(false, '已熔断', '退订率过高，自动发信已停 —— 要你手动重开') : ''}
-           </div>
-           <label class="tgl" title="开：机器连续地找客户、分析、批准（≥分数线）、写信发信、跟进，不等整点。关：这些出站动作全停，但收回信、AI 分类和飞书通知照常在线——错过回信只有损失没有风险。改一下就生效，不用按保存。">
+        `<div class="pr-head"><span class="sec-title" style="margin:0">机器现在</span>
+           <label class="tgl" style="margin-left:auto" title="开：机器连续地找客户、分析、批准（≥分数线）、写信发信、跟进，不等整点。关：这些出站动作全停，但收回信、AI 分类和飞书通知照常在线——错过回信只有损失没有风险。改一下就生效，不用按保存。">
              <span class="tgl-lbl">自动模式</span>
              <input type="checkbox" id="cfg-automation" class="cfg-live" data-act="toggle-automation"${autoOn ? ' checked' : ''}>
              <span class="tgl-track"><span class="tgl-knob"></span></span>
-           </label>
-         </div>
-         <div class="mr-bigs">
-           ${metric(fn ? fn.replied : '—', fn ? ` / ${fn.contacted}` : '', '收到回信 / 已联系', '这台机器到底有没有用', true)}
-           ${metric(sentToday, ` / ${sendCap}`, '今日发信', roomLeft)}
-           ${metric(newToday, ' 家', '今日新找到', budgetNote)}
-           ${metric(today && today.sendable != null ? today.sendable : '—', ' 家', '待联系弹药', '明天有货可发')}
-         </div>`;
-
-      // ══════════ C5-48 板块三/四：原「平时不碰的」拆成两张平铺的白卡 ══════════
-      // 🔴 折叠全部去掉：Joe 的原话是那两个字「已配」什么都没说 —— 他要看的是**这一环接的是谁**。
-      //   而藏在折叠里的东西，等于不存在（本仓刚栽过：没展开的元素在扫描器眼里也是"合格"的）。
-      //
-      // ⚠️ AI 这一行在**界面上**拆成「AI 评分」「AI 写信」两行（Joe 要的），
-      //   但 `CAPABILITIES` 里它**仍然只有一条** —— 钥匙是同一把（OPENROUTER_API_KEY）。
-      //   ⛔ 别去后端把它拆成两个能力：拆了就会出现"配了一半"这种不存在的状态。
-      //   ⇒ 拆分只发生在这一层渲染，并在卡底注明"两项走同一个钥匙"。
-      // ⚠️ 模型名取 `today.aiModels`（后端 `scoreModel(env)`/`emailModel(env)` 真读，env 可覆盖），
-      //   ⛔ 不写死、也不读 DEFAULT_* 常量。
-      // ⭐⭐ C5-55：这张卡从「钥匙清单」改成**「每个环节用了什么工具」的全景**。
-      //   Joe 原话：「涉及到工具使用的都放在这里，**我好知道哪个环节使用了什么工具**」
-      //   🔴 原来只列需要钥匙的 8 项 ⇒ 抓官网 / 补邮箱 / 目录源**根本没出现**，
-      //     而留白会让人以为漏了。**"这一环不用外部工具"本身就是答案。**
-      //   ⭐ 它顺带永久回答了 Joe 专门问过的那个问题：**抓官网不是 Serper，是自研抓取。**
-      //   ⚠️ 数据全部来自后端 `ign.pipeline`（engines.ts 的 `pipelineTools`），⛔ 前端不拼任何一行。
-      // ⚠️ C5-55b（Joe：「不要总是写的很啰嗦」）：**友好名和技术名只留一个**。
-      //   原来是 `deepseek v4 flash  deepseek/deepseek-v4-flash-0731` —— 同一件事说了两遍。
-      //   ⇒ 只留模型 id，并去掉 `deepseek/` 这个供应商前缀（左边"AI 评分"已经说明是什么环节了）。
-      //   ⚠️ 值仍从 `scoreModel(env)/emailModel(env)` 真读，⛔ 这里只改**显示**不改来源。
-      const shortModel = (m) => String(m || '').split('/').pop();
-      const toolCell = (t) => {
-        // ⭐ 同一把尺子过全表：`note` 里若是模型 id 就**取代**服务名显示，⛔ 不并排写两个。
-        if (t.state === 'ok') return t.note && /\//.test(t.note)
-          ? `<b class="cap-ok">${esc(shortModel(t.note))}</b>`
-          : `<b class="cap-ok">${esc(t.tool)}</b>${t.note ? ` <span class="hint">${esc(t.note)}</span>` : ''}`;
-        if (t.state === 'none')    return `<b class="cap-ok">${esc(t.tool)}</b>`;   // Joe（09-03）：「零成本」小标全删，只留工具名（页脚那句"不花钱"保留）
-        if (t.state === 'idle')    return `<b>${esc(t.tool)}</b> <span class="hint">· ${esc(t.note)}</span>`;
-        return `<span class="hint">未接 · </span><code>${esc(t.note)}</code>`;   // missing
-      };
-      const apiRows = (ign.pipeline || []).map(t =>
-        `<tr><td>${esc(t.step)}</td><td style="text-align:right">${toolCell(t)}</td></tr>`);
-
-      const apiCard =
-        `<div class="pr-head"><span class="sec-title" style="margin:0">环节与工具</span>
-           <span class="hint" style="margin:0">· 每一步用了什么</span></div>
-         <table class="cap-tab"><tbody>${apiRows.join('')}</tbody></table>
-         <p class="hint" style="margin:10px 0 0">「自研抓取」= 我们自己的代码直接读网页，不经过第三方、不花钱 · AI 两项走同一个 OpenRouter 钥匙 · 接钥匙：<code>npx wrangler secret put &lt;钥匙名&gt;</code></p>`;
-
-      // 🔴 作废文案已修（2026-09-03 实测：`isSearchRound` 那道 0/6/12/18 门已随全速化删除，
-      //   index.ts:4366 原话「已随 discovery 搬进 fastTick 一并删除」）。
-      //   ⚠️ 但 `hourUtc % 6 === 0` 这道门**还活着**，只是它现在守的是**目录抓取**（index.ts:4367
-      //   的 `isDirectoryRound`）—— 所以那句话不是删掉，是**搬到它真正描述的那一行上去**。
-      const capCard =
-        `<div class="pr-head"><span class="sec-title" style="margin:0">产能与班次</span>
-           <span class="hint" style="margin:0">· 很少看</span></div>
-         <div class="mr-kv"><span>系统产能</span><b>${cfg.capacity ? `约 ${cfg.capacity.perDay} 封/天` : '—'}</b>
-           <span class="hint">物理上跑得动多少，超出的顺延不会丢</span></div>
-         <div class="mr-kv"><span>后台班次</span><b>每分钟一轮</b>
-           <span class="hint">找客户全速跑，烧完当天预算就停</span></div>
-         <div class="mr-kv"><span>目录源</span><b>${scfgOk && scfg.dirAutoRefresh ? '每周自动刷新' : '未启用'}</b>
-           <span class="hint">免费线索源，零搜索预算 · 抓取只在 0/6/12/18 点（守对方站的 Crawl-delay）</span></div>
-         <div class="mr-kv"><span>发件域今日</span><b>${cfg.primary_sent_today ?? 0} 封</b>
-           <span class="hint">全部走 ${esc(cfg.sender_email || 'sales@airsonde.net')}</span></div>`;
+           </label></div>
+         ${engHtml}`;
 
       $("#mr-status").innerHTML = pageHeader('自动化','')
-        + `<div class="page-card mr-vitals">${vitals}</div>`;
+        + `<div class="page-card mr-vitals" style="max-width:820px">${vitals}</div>`;
 
-      // DOM 顺序 = 视觉顺序：状态 → 运行参数 → 找客户策略 → API 配置 → 产能与班次
-      { const box = $("#mr-rare"); if (box) box.innerHTML =
-          `<div class="set-card">${apiCard}</div><div class="set-card">${capCard}</div>`; }
+      // ── 各卡工具行：12 条 pipeline 按环节归卡，**一条不少**（原「环节与工具」整表已删）──
+      // ⚠️ 数据仍只来自后端 `ign.pipeline`（engines.ts pipelineTools），⛔ 前端不拼任何一行的内容。
+      //   归卡靠 step 名字匹配；⚠️ 归不进任何一卡的**兜进最后一卡**，⛔ 不许静默丢（那就是"删了一条没人发现"）。
+      const shortModel = (m) => String(m || '').split('/').pop();
+      const toolOne = (t) => {
+        const name = (t.state === 'ok' && t.note && /\//.test(t.note)) ? shortModel(t.note) : t.tool;
+        const val = t.state === 'missing'
+          ? `<span class="miss">未接</span> <code>${esc(t.note)}</code>`
+          : `<b>${esc(name)}</b>`;
+        return `<span title="${esc(t.note || '')}">${esc(t.step.replace(/（.*?）/g, ''))} ${val}</span>`;
+      };
+      const TOOL_CARD = [
+        ['mr-tools-search', ['找客户', '目录源']],
+        ['mr-tools-score',  ['抓官网', 'AI 评分', '补邮箱']],
+        ['mr-tools-send',   ['AI 写开发信', '发开发信']],
+        ['mr-tools-inbox',  ['收客户回复', '飞书群通知', '飞书应用', '官网询盘']],
+      ];
+      {
+        const rest = [...(ign.pipeline || [])];
+        const put = (box, items, tail) => {
+          const el = document.getElementById(box); if (!el) return;
+          el.innerHTML = `<span class="mr-tk">工具</span>` + items.map(toolOne).join('') + (tail || '');
+        };
+        for (const [box, keys] of TOOL_CARD) {
+          const mine = [];
+          for (let i = rest.length - 1; i >= 0; i--) if (keys.some(k => rest[i].step.startsWith(k))) mine.unshift(rest.splice(i, 1)[0]);
+          const tail = box === 'mr-tools-send'
+            ? `<span title="所有外发都走这个地址">发件 <b>${esc(cfg.sender_email || 'sales@airsonde.net')}</b></span>`
+            : box === 'mr-tools-inbox'
+              ? `<span class="gj-help" data-help title="接钥匙：npx wrangler secret put <钥匙名>，接上后这里自动变成已接">(?)</span>`
+              : box === 'mr-tools-search'
+                // ⚠️ openDashboard 是**局部函数不在 window 上** ⇒ 内联 onclick 调它会 ReferenceError。
+                //   点那颗既有的隐藏按钮（#btn-dashboard，它的 onclick 已绑好）—— ⛔ 不为此把函数挂上 window 再造第二个入口。
+                ? `<span style="margin-left:auto"><a onclick="document.getElementById('btn-dashboard').click()" style="color:var(--brand);cursor:pointer">回信率 → 看板</a></span>`
+                : '';
+          put(box, mine, tail);
+        }
+        // 兜底：没归进任何一卡的（后端加了新环节而这里没认）挂到收信卡末尾，**宁可难看也不静默丢**
+        if (rest.length) { const el = document.getElementById('mr-tools-inbox');
+          if (el) el.innerHTML += rest.map(toolOne).join(''); }
+      }
 
-      // ══ 板块二的「行内实时表现」：把当前值填进每个旋钮旁边的只读位 ══
-      // ⚠️ 这些是**同一个数的另一半** —— 旋钮说"你设了多少"，它说"这个设定此刻的实际表现"。
-      //   ⛔ 它们不是重复：重复是"同一个数在两处各显示一遍"，这里是"配置 + 该配置的结果"焊成一行。
+      // ══ 行内实时位：旋钮说"你设了多少"，它说"这个设定此刻的实际表现" ══
       const live = (id, html) => { const e = document.getElementById(id); if (e) e.innerHTML = html; };
-      // C5-48「重刷全库」的后果句 —— 条数取后端真算的 `rescoreScope`（/api/today）。
-      //   ⚠️ 读不到就**说读不到**，⛔ 不写一个看起来正常的数字：这句话是 Joe 按下去之前
-      //     唯一能看到的代价，编一个数等于骗他点。
+      // 「重刷全库」的后果句 —— 条数取后端真算的 rescoreScope。⛔ 读不到就说读不到，不编一个数骗他点。
       { const e = document.getElementById('fc-rescan-note');
         if (e) e.innerHTML = (today && today.rescoreScope != null)
-          ? `改完上面这段之后用 · 会重置 <b>${today.rescoreScope} 条</b>（待分析／待审批／待联系）的分析结果<b>和你的批准状态</b>；已联系／已成交／已忽略不动 · 很慢`
-          : `改完上面这段之后用 · <b>读不到影响面</b>，请先刷新页面再决定`; }
-      // ⚠️ 这一行**什么都不报**，故意的。
-      //   「每天最多发」这一行已经有两半了：旋钮（你设了多少）+ `#cfg-limit-badge`（今天实际能发多少）。
-      //   而"今天已经发了多少"是**板块一那个大数字的口径** —— 在这儿再报一遍就是跨板块重复。
-      //   ⛔ 我第一版正是这么写的（"今日生效 N · 已发 M"），两处重复全占了，靠机械对账才抓出来。
-      //   ⇒ 留空。一个不显示的实时位，好过一个正确但重复的实时位。
-      live('mr-live-limit', '');
+          ? `重刷会重置 <b>${today.rescoreScope} 条</b>（待分析／待审批／待联系）的分析与批准 · 很慢`
+          : `<b>读不到影响面</b>，请先刷新页面再决定`; }
+      live('mr-live-limit', '');   // 「今天已发多少」归卡一那行，这里不重复（铁律五）
       live('mr-live-auto', tripped ? '<b style="color:var(--red)">已熔断，自动发信停了</b>' : '');
-      // 🔴 最后一处跨板块重复，机械对账才抓出来：
-      //   板块一「今日发信 N」是**总量**，`#cfg-auto-used`「今天已自动发 N」是**自动通道**。
-      //   概念上不同 —— 但**当前 100% 的发信都走自动通道，两个数永远相等**，
-      //   Joe 看到的就是同一个数报了两遍（铁律五要防的正是这个）。
-      //   ⇒ 两数相等时把下面那处清空（板块一已经报过了）；**真的分叉时才显示**，
-      //     那时它才是新信息（"总共发了 50，其中自动 30"）。
       { const el = document.getElementById('cfg-auto-used');
         if (el && (cfg.auto_sent_today ?? 0) === (cfg.cold_sent_today ?? 0)) el.textContent = ''; }
-      // ⚠️ 这里**故意不再报一遍退订率** —— 板块一的大数字已经在报它了，
-      //   在这儿复述就是我自己刚删掉的那种重复（铁律五）。
-      //   这一行只说"这条闸此刻的状态"，那是板块一没有的信息。
-      live('mr-live-brk', tripped ? '<b style="color:var(--red)">已触发，自动发信已停</b>'
-        : (br.window ? '未触发' : '样本还不够，暂不判定'));
+      live('mr-live-brk', tripped ? '<b style="color:var(--red)">· 已触发 · 自动发信已停</b>'
+        : (br.window ? '· 未触发' : '· 样本还不够，暂不判定'));
+      // 熔断态：「退订就停」那一行右端出绿实心「恢复自动发信」。
+      // ⚠️ 走的是**现有的那条重开路径**：`POST /api/settings/sending {auto_send_enabled:true}`
+      //   —— 后端在 关→开 那一跳里清 tripped_at + 把熔断窗口起点挪到此刻（index.ts:2585，
+      //   不挪起点熔断就不可恢复：一重开又拿同一批老数据再熔断）。⛔ 不新造端点、不前端清标记。
+      { const slot = document.getElementById('mr-resume-slot');
+        if (slot) slot.innerHTML = tripped ? `<button class="primary mini" onclick="mrResumeAutoSend()">恢复自动发信</button>` : ''; }
       live('mr-live-gap', (() => { const g = Number(cfg.send_interval_seconds || 0);
-        return g > 0 ? `约 <b>${Math.floor(3600 / g)}</b> 封/小时` : '不限速'; })());
-      live('mr-live-review', `待审批 <b>${(today && today.reviewCount) || 0}</b> 家`);
-      // C5-44：这一行现在住在「④ 搜索预算上限」旁边，说的是**这个预算此刻的实际表现**。
-      //   ⛔ 不再报"N 词 · M 国"——那两个数已经由 ②③ 两段的 chip 自己说了（铁律五）。
-      live('mr-live-search', scfgOk
-        ? `· 自动模式开着时<b>全速找客户</b>，用完当天停 · 今日 <b>${serper.usedToday ?? 0}</b>/${serper.budget ?? '-'}`
-        : '· 这次没读到搜索配置');
+        return g > 0 ? `· 约 <b>${Math.floor(3600 / g)}</b> 封/小时` : '· 不限速'; })());
+      live('mr-live-review', '');   // 待审批 N 已在卡一「AI 分析」那行，这里不再报（铁律五）
+      // 搜索预算的实时位：⛔ 不再拼「今日 x/y」（Joe：多余，卡一与顶栏面板都在报）
+      live('mr-live-search', scfgOk ? '' : '· 这次没读到搜索配置');
+      // 国家 / 关键词的只读计数（原来靠 chip 自己说，v10.1 行首要有个数）
+      live('mr-live-cc', scfgOk ? `<b>${ccN}</b> 个` : '读不到');
+      live('mr-live-kw', scfgOk
+        ? `<b>${kwN}</b> 个${(() => { const on = (scfg.keywords || []).filter(k => !k.archived).length; return on !== kwN ? ` · 在用 ${on}` : ''; })()}`
+        : '读不到');
+      // 收信那一行：上次成功拉取 + 今日收到（口径与顶栏面板同源 act.replyLastPollAt / today）
+      live('mr-live-reply', (() => {
+        const last = act && act.replyLastPollAt ? `· 上次 ${sbHHMM(act.replyLastPollAt)}` : '· 未拉取过';
+        return `${last}${replyToday != null ? ` · 今日 ${replyToday}` : ''}`;
+      })());
       live('mr-live-ntf', ign.capabilities && (ign.capabilities.find(c => /飞书群/.test(c.label)) || {}).ignited
-        ? '● 已连接' : '○ 未配 webhook');
+        ? '已连接' : '未配 webhook');
     };
+    // 熔断后手动重开自动发信。⚠️ 这是**对外发信的开关**，必须二次确认（uiConfirm，⛔ 无原生弹窗）。
+    //   只提交 auto_send_enabled 这一个字段：后端每个写入都带 `!= null` 守卫，别的设置一个不碰。
+    window.mrResumeAutoSend = async () => {
+      const br = (window._mrBreaker || {});
+      if (!(await uiConfirm({ title: "恢复自动发信？",
+        body: `自动发信此刻是**停着**的（${esc(br.tripReason || "退订率超阈值")}）。\n\n`
+          + `· 恢复后机器会继续给「待联系」里有邮箱的线索发开发信\n`
+          + `· 熔断窗口**从此刻重新开始攒**，攒够样本再判（⛔ 不拿停之前那批旧数据再判一次）\n`
+          + `⚠️ 先确认过线索来源与开发信内容再恢复 —— 退订率高通常说明发错了人或信写得不对。`,
+        confirmText: "恢复自动发信" }))) return;
+      const r = await fetch("/api/settings/sending", { method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ auto_send_enabled: true }) }).then(r => r.json()).catch(e => ({ error: String(e) }));
+      if (r.error) { const s = document.getElementById('mr-resume-slot'); if (s) s.innerHTML = `<span class="hint" style="color:var(--red)">恢复失败：${esc(r.error)}</span>`; return; }
+      openMachineRoom();   // 重开本页 → 熔断行/卡一那行跟着变回正常
+    };
+    // 卡一动作链接：滚到本页某个元素（调预算 / 恢复自动发信 / 看原因）
+    window.mrJump = (id) => { const el = document.getElementById(id); if (!el) return;
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const box = el.closest('.pr-row') || el; box.style.transition = 'background .2s';
+      box.style.background = 'var(--brand-tint)'; setTimeout(() => { box.style.background = ''; }, 1200); };
 
     $("#btn-today").onclick = openToday;
     $("#today-overlay").onclick = (e) => { if (e.target.id==="today-overlay") closeToday(); };
