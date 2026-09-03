@@ -271,7 +271,9 @@
     .tab.active:hover { background:var(--tint-blue); }
     .tab .cnt { color:var(--muted); font-size:12px; }
     .tab.active .cnt { color:var(--blue); }
-    .main { flex:1; overflow:auto; padding:16px 20px; background:var(--panel); border-radius:12px; }
+    /* 工具栏 v8：scrollbar-gutter:stable —— 竖滚动条的 16px 永远预留。否则行多的页（全部 1407 行）滚动条吃掉宽度，
+       靠右对齐的「重置筛选」比行少的页左移 16px（实测 1293 vs 1309），违反"横坐标 10 页不许变"。 */
+    .main { flex:1; overflow:auto; scrollbar-gutter:stable; padding:16px 20px; background:var(--panel); border-radius:12px; }
     /* C5-4v 附录 C.5：.main 是**画布**（灰），内容各自成白卡 —— 原来它自己是"灰底+边框"的一张卡，
        于是设置页有卡片层次、别的页没有（Joe 点名的正是这个）。 */
     .page-card { background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:24px; margin-bottom:16px; }
@@ -393,6 +395,39 @@
     .bulk-bar { background:var(--bg); border:1px solid var(--border); border-radius:10px;
                 padding:10px 12px; margin-bottom:12px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;
                 box-shadow:0 2px 10px -6px rgba(16,20,24,.4); }
+    /* ══⭐⭐ 工具栏 v8（Joe 2026-09-03，真源 = airsonde-dispatch/toolbar-v8/toolbar-mockup.html）══
+       一行 = [标题(条数)][已选 N] │ 5 个固定宽槽 ……… [本页全量动作] │ [筛选] [重置筛选]
+       🔴 尺寸/字号/颜色/间距**逐字照 mockup**：.ttl 118 · .sel 52 · 槽 s1 86 / s2 80 / s4 88 / s5 52 / s6 74 · gap 7。
+          同一动作永远同一槽 ⇒ 未选/已选、10 个页面横坐标完全相同（验收量 getBoundingClientRect）。
+       字号只用 12/13/15（附录 C.1 闭集）。绿色只留给「已选」和主按钮。 */
+    .tb { display:flex; align-items:center; gap:8px; background:var(--bg); border:1px solid var(--border);
+          border-radius:10px; padding:8px 14px; min-height:46px; overflow:hidden; margin-bottom:12px; }
+    .tb .ttl { font-size:15px; font-weight:700; white-space:nowrap; width:118px; flex-shrink:0; }
+    .tb .cnt { font-size:13px; font-weight:400; color:var(--muted); margin-left:5px; }
+    .tb .sel { font-size:13px; color:var(--brand-strong); font-weight:600; width:52px; flex-shrink:0; }
+    .tb .sel.none { color:var(--hint); font-weight:400; }
+    .tb .div { width:1px; height:18px; background:var(--border-strong); opacity:.5; flex-shrink:0; }
+    /* 左：看勾选的 5 个固定槽 */
+    .tb .zB { display:flex; gap:7px; flex-shrink:0; }
+    .tb .zB.off { opacity:.4; }
+    .tb .s1 { width:86px; } .tb .s2 { width:80px; } .tb .s4 { width:88px; } .tb .s5 { width:52px; } .tb .s6 { width:74px; }
+    .tb .s1, .tb .s2, .tb .s4, .tb .s5, .tb .s6 { flex-shrink:0; display:inline-block; }
+    /* 右：不看勾选的全量动作 + 筛选；重置筛选永远最右 */
+    .tb .zR { display:flex; align-items:center; gap:8px; margin-left:auto; flex-shrink:0; }
+    .tb button { font-size:13px; line-height:1; border-radius:7px; padding:7px 6px; white-space:nowrap; cursor:pointer; width:100%; }
+    .tb .b-pri { background:var(--brand); border:1px solid var(--brand); color:#fff; font-weight:600; }
+    .tb .b-sec { background:var(--bg); border:1px solid var(--border-strong); color:var(--text); }
+    .tb .b-dan { background:var(--bg); border:1px solid var(--border); color:var(--red); }
+    .tb button:disabled, .tb .b-off { opacity:.45; cursor:not-allowed; }
+    .tb .zR button { width:auto; padding:7px 12px; }
+    .tb .b-qui { background:transparent; border:1px solid var(--border); color:var(--muted); font-size:12px; padding:6px 10px !important; }
+    .tb .skip { font-size:12px; color:var(--hint); text-align:center; line-height:32px; display:inline-block; }
+    .tb .chk { display:inline-flex; align-items:center; gap:5px; font-size:12px; color:var(--muted); white-space:nowrap; cursor:pointer; }
+    .tb .none-txt { font-size:12px; color:var(--hint); line-height:32px; text-align:center; }
+    .tb #bulk-msg { font-size:12px; color:var(--muted); white-space:nowrap; }
+    /* 分析进行中（toolAnalyzeSel 给 #tb 加 .analyzing）：沿用旧批量条的琥珀语言 */
+    .tb.analyzing { border-color:var(--amber); }
+    .tb.analyzing #bulk-msg b { color:var(--amber); }
     .toolbar { display:flex; gap:10px; margin-bottom:10px; align-items:center; flex-wrap:wrap; }
     input,select,textarea,button { font:inherit; }
     /* C5-28 打磨④：240px 装不下「搜索公司 / 邮箱 / 域名…」这句占位文案（Joe 实测显示不全）。
@@ -1147,23 +1182,21 @@
           <select id="f-email"><option value="">全部邮箱</option><option value="yes">有邮箱</option><option value="no">缺邮箱</option></select>
           <select id="f-score"><option value="">全部评分</option></select>
         </span>
-        <!-- 批③C：🔔待跟进 已移到左栏做独立视图；🔥最近参与 已删（与「已查看」格重复，排序保留在该格内部按 last_engaged_at）。
-             这两个的 handler 里写死 current="all" 会把用户踢回全部页，是"操作不清晰"的根源，一并删除。每页只留 重置筛选/重置列宽。 -->
-        <!-- C5-4v A：这两个降为次级小按钮，不与主动作平级（Joe：它们不该抢眼） -->
-        <button id="f-reset" class="mini btn-quiet">重置筛选</button>
-        <button id="f-resetcol" class="mini btn-quiet" title="恢复默认列宽">↔ 重置列宽</button>
-        <span class="muted" id="active-filters" style="font-size:12px"></span>
-        <span class="muted" id="batch-status"></span>
-        <!-- C5-4v A：「➕ 补货」从批量条里搬出来 —— 它**与选中集无关**，
-             挤在「已选 0 条」旁边是语义错位（那条是"对选中的做什么"）。
-             这里是页面级动作位：右侧、primary。 -->
-        <button id="btn-restock" class="primary" style="margin-left:auto;display:none;align-items:center;gap:6px" onclick="openRestock()"></button>
+        <!-- 工具栏 v8（Joe 2026-09-03，真源 = airsonde-dispatch/toolbar-v8/toolbar-mockup.html）：
+             原来这一行的「重置筛选」「↔ 重置列宽」「已筛：…」「批量状态」「➕ 找客户」全部撤出 ——
+             · 重置筛选 → 搬进下面那一行的最右（永远最右，10 页横坐标相同）
+             · 重置列宽 → 删（Joe 定；连同 resetColWidths 绑定一起删，别只删元素留绑定）
+             · 找客户   → 搬进下面那一行的右边区，仍只在「全部」页出现
+             · 已筛：… → 收进「重置筛选」按钮的 title
+             这个 .filters 容器只剩隐藏 select（它们是列头 ▾ 菜单的状态容器，保留）。 -->
       </div>
       <div id="hdrmenu" class="hdrmenu"></div>
       <!-- 批③D：绿横幅已撤出列表页（提示搬进待办事项、动作归待审批格） -->
-      <!-- 批③C 分格工具栏：每格 = 这一格的出口动作（靠什么排空），由 renderGroupTools() 按 current 渲染。
-           全部页/已成交 无工具栏。选中类动作未选时禁用；全量类动作始终可用。 -->
-      <div id="group-tools" class="bulk-bar" style="display:none"></div>
+      <!-- ⭐⭐ 工具栏 v8：**每页只有这一行** = [标题(条数)][已选 N] │ 5 个固定宽槽 ……… [本页全量动作] │ [筛选] [重置筛选]
+           由 renderGroupTools() 按 current 渲染（GROUP_TOOLS 是槽位表）。
+           🔴 同一动作永远同一槽：忽略永远第④槽、加黑名单永远第⑤槽、重置筛选永远最右；
+              槽宽固定（s1 86 / s2 80 / s4 88 / s5 52 / s6 74，gap 7），未选/已选、10 页横坐标不变。 -->
+      <div id="tb" class="tb"></div>
       <!-- 批㉓ 组间跳转条：仅在三个分组视图（待分析/待审批/待联系）出现，renderGroupJump 按 current+leads 填真值 -->
       <div id="grp-jump" class="grp-jump" style="display:none"></div>
       <!-- 批⑤B 翻牌堆：在「待审批」格选「<60 翻牌堆」时，**顶掉表格**换成按"被杀原因"分组的复核视图。
@@ -1670,6 +1703,11 @@
     const TABS = [
       { key:"all", label:"全部" },
       { key:"unscored", label:"待分析" },
+      // ⭐ 工具栏 v8（Joe 2026-09-03）：「官网抓不到」升为左栏独立一格，紧跟待分析。
+      //   判据在后端 NO_SCORE_WHERE（analyzed/pending 且无分 = recordFetchFailure 连续 3 次失败归档的那批）。
+      //   ⚠️ 它以前是待分析里的"只看 B 组"子筛选（批⑭②）—— 那个入口随工具栏分段筛选一起撤了，
+      //     能力（改网址/重新分析/忽略）原样搬进这一格的固定槽位。
+      { key:"noscore", label:"官网抓不到" },
       { key:"review", label:"待审批" },
       // ⭐ 批⑨②③：「待发送」→「待联系」、「已发送」→「已联系」，「已查看」并入「已联系」。
       //
@@ -1982,7 +2020,7 @@
       // 批㉑：国家名从后端 COUNTRIES 单源填（列表页 countryName 用它显示 vg/pg… 的中文名，不裸码）
       if (s.allCountries) for (const [k,v] of Object.entries(s.allCountries)) COUNTRY_NAMES[k.toUpperCase()] = v;
       const bs = s.byStatus || {};
-      const groupCount = { unscored:0, review:0, ready:0, sent:0, replied:0, won:0, ignored:0, blacklisted:0, all:s.total };
+      const groupCount = { unscored:0, noscore:0, review:0, ready:0, sent:0, replied:0, won:0, ignored:0, blacklisted:0, all:s.total };
       const map = { new:"unscored",analyzed:"review",pending:"review",approved:"ready",
         queued:"ready",sent:"sent",replied:"replied",won:"won",ignored:"ignored",
         blacklisted:"blacklisted",unsubscribed:"blacklisted",bounced:"blacklisted" };
@@ -1995,6 +2033,10 @@
       if (typeof s.reviewScored === "number") groupCount.review = s.reviewScored;
       // ⭐ 批⑭②：「待分析」同理用后端真值覆盖 —— map 只数到 status='new'，漏 analyzed-无分。
       if (typeof s.unscoredShow === "number") groupCount.unscored = s.unscoredShow;
+      // 工具栏 v8：「官网抓不到」独立一格，真值同样只有后端算得出（lead_analysis 维度）。
+      if (typeof s.noscoreShow === "number") groupCount.noscore = s.noscoreShow;
+      // 工具栏标题的「(条数)」与左栏同一份数据 —— 暴露出去给 renderGroupTools 读，⛔ 别在那边再算一遍。
+      window._groupCount = groupCount;
       // ⭐ 批⑨③：「已查看」删格 → **这里的互斥扣减必须一起停掉**。
       //   原来：已发送 = sent 总 − 已查看（两格互斥）。格子没了还扣的话，
       //   「已联系」会**少掉所有点过链接的那批** —— 而那批恰恰是最该看的（🔥 强意向）。
@@ -2024,16 +2066,16 @@
       // C2-D：机器房排在最后 —— 它是"需要时才进去"的页，不是每天要看的
       + `<div class="side-nav" data-nav="machine" onclick="openMachineRoom()">${ICON.machine}<span>自动化</span></div>`
         + `<div class="side-div"></div>`;
-      // C5-4v A：页面级「补货」按钮 —— 只在「全部」页出现（给整个库进货，不属于某一格）
-      { const rb=$("#btn-restock");
-        if(rb){ rb.innerHTML = `${ICON.plus}<span>找客户</span>`;
-                rb.style.display = (current==='all') ? 'inline-flex' : 'none'; } }
+      // 工具栏 v8：「找客户」页面级按钮已从 #btn-restock 搬进工具栏右边区（renderGroupTools 按 current==='all' 渲染），
+      //   这里那段 innerHTML/display 控制随元素一起删（别只删元素留绑定）。
       $("#side").innerHTML = navTop + tabHtml(TABS[0]) + `<div class="side-div"></div>` +
         chain.map((t,i) => tabHtml(t) + (i < chain.length - 1 ? `<div class="side-arrow">↓</div>` : "")).join("");
       document.querySelectorAll(".tab").forEach(el =>
         el.onclick = () => { current = el.dataset.k; dueMode = false; clearReadyFilter();
           showMainView('list'); loadStats(); loadList(); });   // 点漏斗格=退出待跟进视图 + 清掉待联系页的分组筛选
       refreshNavHighlight();   // #42 侧栏重渲后校正高亮（跟随 activeView，而非只看 current）
+      // 工具栏 v8：标题里的「(条数)」读的就是上面这份 groupCount —— 计数一更新，工具栏跟着重画。
+      renderGroupTools();
       // 批③D：绿横幅已撤，无需再加载
     }
     // #42 左栏高亮唯一真源：视图=某导航页→点亮该 side-nav 并清空漏斗 active；视图=列表/详情→点亮 current 漏斗 tab、清空 side-nav
@@ -2078,6 +2120,8 @@
     const hf = { stage:"", ch:"" };
     // A1 排序模式：'' 默认按价值(评分降序) / 'score_asc' 评分升序 / 'engaged' 最近参与（互斥）
     let sortMode = "";
+    // 工具栏 v8：「已筛：…」摘要（原 #active-filters 常驻文字）—— 现在只作「重置筛选」按钮的 title
+    let _activeFilterTxt = "";
     // B1 多选状态（存字符串 id）；_loadedIds = 当前已加载行 id，用于"全选当前"
     const selectedIds = new Set(); let _loadedIds = [];
     let _viewedCount = 0;    // 批⑨③：点过链接的家数（「已查看」删格后仍要它：待办卡用）
@@ -2096,108 +2140,87 @@
     }
     // ===== 批③C 分格工具栏：每格 = 这一格的出口动作 =====
     // sel:true = 选中类（未选中时禁用，标题带条数）；否则 = 全量类（对当前格全体，始终可用）
+    // ══⭐⭐ 工具栏 v8 槽位表（Joe 2026-09-03；真源 = airsonde-dispatch/toolbar-v8/toolbar-mockup.html）══
+    //
+    // Joe 原话：「同样的按钮，在不同的页面，位置应该也是一样的」「把工具栏还有页面标题都集成到一行去」
+    //
+    // 每页 = 左边 5 个**固定宽槽**（看勾选） + 右边全量动作/筛选（不看勾选）：
+    //   s1 ① 主动作（绿）· s2 ② 次要 · s4 ③ 回退 · s5 ④ 忽略 · s6 ⑤ 加黑名单
+    //   🔴 同一动作永远同一槽：忽略永远 s5、加黑名单永远 s6、重置筛选永远最右。这页没有的槽**留空但占位**。
+    //
+    // 槽定义 `{ t, cls, fn, only1, enabled }`：
+    //   · t：按钮名（**照表压短**：分析 / 批准 / 免费抓 N / 付费补 N，别改回长名）；可以是函数（拿选中集算数）
+    //   · cls：pri（绿实心）/ sec（描边）/ dan（红字）
+    //   · only1 / enabled：与旧 toolGate 语义一致；不可用时**灰 + title 说原因**（⛔ 不再把原因烤进按钮文字）
+    //   · text:true ⇒ 这一槽是说明文字不是按钮（待审批「跳过 M」、已成交「流程终点」）
+    // 业务语义**一个没改**：每个 fn 仍指向原来那条路径（toolStatusSel / toolAnalyzeSel / …）。
+    //   忽略 = 现有 ignore 动作，扩到全部页面（Joe 定：删除统一用忽略，不做物理删除）。
+    //   加黑名单 = toolStatusSel('blacklisted')（全部 / 已回复 / 已忽略 三页）。
     const GROUP_TOOLS = {
-      // C5-4v A：「➕ 补货」已从这里**搬到页面级动作位**（#btn-restock，筛选行右侧）——
-      //   它与选中集无关，混在批量条里语义错位（那条说的是"对选中的做什么"）。
-      //   留空 ⇒「全部」页的批量条只在真有选中时才出现。
-      all: [],
-      // ⭐⭐ 批⑭②：「待分析」现在装 new + analyzed无分（抓不到官网）两类混合 → 工具栏要覆盖两者的出口。
-      //   · 立即分析：new 是首次打分，无分的是重抓重试 —— 同一个动作（toolAnalyzeSel 内部按 status 走）
-      //   · 🔗 改网址：无分那批的主出口（官网可能写错/换域名了）—— 改完退回 new，cron 下轮会重抓
-      //   · ✅ 人工批准：批⑭① 开的口子 —— 抓不到官网但 Joe 凭公司名+国家+邮箱判得了，直接批准去联系
-      //   · 忽略：确认不是目标的
-      unscored: [
-        { t:"立即分析选中", cls:"primary", sel:true, fn:"toolAnalyzeSel()" },
-        { t:"🔗 改网址", cls:"", sel:true, only1:true, fn:"toolEditWebsite()" },
-        { t:"✅ 人工批准去联系", cls:"btn-green", sel:true, fn:"toolHumanApproveSel()" },
-        { t:"忽略选中", cls:"btn-amber", sel:true, fn:"toolStatusSel('ignored','忽略')" },
-      ],
-      review: [
-        // ⭐ 批⑲ 页面二：两个"整段"动作已经**搬到段头**（① 全部批准 / ③ 全部忽略），
-        //   工具栏只留**选中类**，别让同一件事在页面上出现两次 —— Joe 抱怨的正是"按钮太多不知道点哪个"。
-        //   「批量补邮箱」已挪到「待联系」：待审批只回答"值不值得跟"，不管联系方式。
-        { t:(p)=>mixLabel("✅ 批准选中", p.hi, p.n - p.hi, `低分/未打分`, p.n), cls:"btn-green", sel:true,
-          enabled:(p)=>p.hi>0?{ok:true}:{ok:false,why:`选中的都 <${APPROVE_MIN} 分或未打分`}, fn:"toolStatusSel('approved','批准')" },
-        { t:"忽略选中", cls:"btn-amber", sel:true, fn:"toolStatusSel('ignored','忽略')" },
-      ],
-      // ⭐⭐ 批⑬③：一个撒谎的按钮 → 两个诚实的按钮。
-      //
-      // Joe 实测撞出来的："100 条没有邮件的在待联系里面合适吗？"
-      // 合适 —— **它们该在这一格**（`approved` = 批准触达，不是批准发邮件；批⑨① Joe 定的
-      // "邮箱和社媒都只是手段"）。**方向是对的，错的是把两种活混进了一个按钮**：
-      //   旧的「发送选中 (100)」—— **那 100 条一封也发不出去**（没邮箱）。按钮在说谎。
-      //
-      // 拆成两个，正好切在 Joe 自己的分工线上：
-      //   > "凡是能批量化的事情都是 AI 来做，凡是没办法批量化或者需要决策的事情我来做。"
-      //   **📧 发邮件 = AI 的活**（批量发信）· **💬 手动触达 = Joe 的活**（LinkedIn/WhatsApp 一个个聊）
-      //
-      // ⚠️ 数字**按当前选中集实时算**，不是写死的 —— 所以 `t` 是函数不是字符串（见 renderGroupTools）。
-      //    写死就又是一个会过期的假数字。
-      ready: [
-        // C5-12：原来长在分组横带上的整组动作搬到这里，成为 fleet 按钮（不依赖选中）。
-        //   ⚠️ `fn` 只是取 id 的包装，转调的还是横带用的 `grpSendAll` / `grpFindMails` —— **同一条路径**。
-        //   ⚠️ 数字实时取自 `_loadedLeads` 的分组谓词 `readyGroupOf`，与页顶「跳到」的计数**同源**。
-        { t:()=>`✉ 发送（${readyGroupIds('A').length} 封）`, cls:"btn-green", fleet:true,
-          hideIf:()=>readyGroupIds('A').length===0, fn:"toolSendReadyAll()" },
-        // 这两颗**仅当"没有联系方式"组非空时出现**（总调度点名）：组空时它们不通向任何动作。
-        { t:()=>`🔍 免费抓一轮（${readyGroupIds('C').length}）`, cls:"", fleet:true,
-          hideIf:()=>readyGroupIds('C').length===0, fn:"toolFindMailsReadyC(false)" },
-        { t:()=>`💳 Hunter 补邮箱（${readyGroupIds('C').length}）`, cls:"", fleet:true,
-          hideIf:()=>readyGroupIds('C').length===0, fn:"toolFindMailsReadyC(true)" },
-        // ⚠️ 名字保留"选中"语义：这是**不可撤销**动作。"批准≠发送"那次事故就是名字不精准造成的。
-        // 批⑲ 规则1+2：不再用 hideIf「藏起来」，改成**永远显示 + 混选说清跳过几条 + 不可用时说明原因**。
-        { t:(p)=>mixLabel("📧 发邮件", p.withEmail, p.noEmail, "无邮箱", p.n), cls:"btn-green", sel:true,
-          enabled:(p)=>p.withEmail>0?{ok:true}:{ok:false,why:"选中的都没邮箱"}, fn:"toolSendSel()" },
-        // ⭐ 批⑲b 规则3：手动触达是**一家一家聊**（每条渠道/话术都不同）→ `only1`，多选直接灰「只能单条操作」。
-        //   之前做成了批量并显示「（113 条…）」——那是个不存在的批量语义（113 家一起"手动触达"没有含义），
-        //   Joe 截图撞出来的、总工验收也看走眼了。改回单条。
-        { t:"💬 手动触达", cls:"primary", sel:true, only1:true,
-          enabled:(p)=> p.withEmail>0 ? {ok:false,why:"这条有邮箱，用发邮件"} : {ok:true}, fn:"toolManualReach()" },
-        // ⭐ 批⑲：「批量补邮箱」从「待审批」**挪到这里**（待审批只管"值不值得跟"，不管联系方式）。
-        //   ⚠️ 挪走和落地必须在**同一个 commit** —— 否则两次提交之间这个能力就凭空消失了
-        //     （「别把能力跟着入口一起删掉」，这坑踩过）。
-        //   ⚠️⚠️ 它是**全量类**按钮，故意**不加 `sel`**：`toolFindMails()` 压根不看选中集 ——
-        //     它 POST `{limit:30}`，由**后端**挑"缺邮箱的最多 30 家"。
-        //     给它挂一个「（2 条）」会是**假数字**（你选 2 条，它实际跑 30 家），
-        //     直接违反规则4「数字永远是真的」。
-        //   ⭐ 页面三定稿后它**升级**成了「③ 没有联系方式」组头上的两个按钮
-        //     （`grpFindMails` 按本组 ids 精确作用 → 数字是真的、范围也是准的），
-        //     所以工具栏这里**不再重复摆一个**：同一件事在页面上出现两次，正是 Joe 抱怨的"按钮太多"。
-        { t:"退回待审批", cls:"", sel:true, fn:"toolStatusSel('analyzed','退回待审批')" },
-      ],
-      // ⭐ 批⑨③④：「已查看」格已删 → 它的动作并到这里。「已联系」= 碰过了等回音，🔥 点过链接的置顶。
-      //   · 「跟进选中」**不再要 Joe 自己分辨冷热**：传 null = 按每条的 has_click 自动选变体
-      //     （点过链接的用「趁热」暖话术）。原来两个格子各有一个跟进按钮，差别只有 warm 参数 ——
-      //     那是**我们的**实现细节漏给了 Joe，让他替我们记住"这个格该点哪个"。
-      //   · 「💬 他回了」是批⑨④ 新增：批⑥C 只做在了详情页，列表页也要有 ——
-      //     Joe 今天就是因为列表上没这个按钮才来问总工的。
-      // ⭐⭐ 批⑬②：「AI 没判成」那格的出口。**没有出口就是死胡同** —— 那正是这批要修的病本身
-      //   （它们卡在 'analyzed' 里，cron 不捡、Joe 批不了、也没法忽略，就永远躺着）。
-      //   三个出口：改网址（只许 1 条 —— 网址是每家不一样的事实，批量改没有意义）、
-      //   立即重新分析（复用既有 toolAnalyzeSel）、忽略。
-      noscore: [
-        { t:"🔗 改网址", cls:"primary", sel:true, only1:true, fn:"toolEditWebsite()" },
-        { t:"立即重新分析选中", cls:"btn-green", sel:true, fn:"toolAnalyzeSel()" },
-        { t:"忽略选中", cls:"btn-amber", sel:true, fn:"toolStatusSel('ignored','忽略')" },
-      ],
-      sent: [
-        { t:"跟进选中", cls:"primary", sel:true, fn:"toolFollowupSel(null)" },
-        { t:"💬 他回了", cls:"btn-green", sel:true, only1:true, fn:"toolMarkReplied()" },
-        { t:"放弃选中 → 已忽略", cls:"btn-amber", sel:true, fn:"toolStatusSel('ignored','放弃')" },
-      ],
-      replied: [   // 批③追加2：回复箱并入本页 —— 每行=线索+最新回复摘要+AI分类徽章，起草回复在这里
-        { t:"标记成交", cls:"btn-won", sel:true, fn:"toolStatusSel('won','标记成交')" },
-        { t:"婉拒归档 → 已忽略", cls:"btn-amber", sel:true, fn:"toolStatusSel('ignored','婉拒归档')" },
-        { t:"🤖 起草回复", cls:"", sel:true, fn:"toolDraftReply()" },
-        { t:"⟳ 拉取新回复", cls:"", fleet:true, fn:"toolFetchReplies()" },   // fleet=全量动作，不依赖选中
-      ],
-      won: [],          // 终点，无出口动作
-      ignored: [
-        { t:"恢复到待审批", cls:"primary", sel:true, fn:"toolStatusSel('analyzed','恢复到待审批')" },
-      ],
-      blacklisted: [
-        { t:"转已忽略", cls:"btn-amber", sel:true, fn:"toolStatusSel('ignored','转已忽略')" },
-      ],
+      all: {
+        s5: { t:"忽略", cls:"dan", fn:"toolStatusSel('ignored','忽略')" },
+        s6: { t:"加黑名单", cls:"dan", fn:"toolStatusSel('blacklisted','加黑名单')" },
+        // 找客户：从 #btn-restock 搬进右边区，仍只在「全部」页出现；弹窗内容不动
+        fleet: [ { t:"找客户", cls:"pri", fn:"openRestock()" } ],
+      },
+      unscored: {
+        s1: { t:"分析", cls:"pri", fn:"toolAnalyzeSel()" },
+        s2: { t:"批准", cls:"sec", fn:"toolHumanApproveSel()" },
+        s5: { t:"忽略", cls:"dan", fn:"toolStatusSel('ignored','忽略')" },
+      },
+      // 「官网抓不到」（新页）：批⑬② 那三个出口原样搬进槽位（改网址只许 1 条 —— 网址是每家不一样的事实）
+      noscore: {
+        s1: { t:"改网址", cls:"pri", only1:true, fn:"toolEditWebsite()" },
+        s2: { t:"重新分析", cls:"sec", fn:"toolAnalyzeSel()" },
+        s5: { t:"忽略", cls:"dan", fn:"toolStatusSel('ignored','忽略')" },
+      },
+      review: {
+        // 批准 N：N = 勾选里可批的（有分且 ≥APPROVE_MIN，toolGate 现有判定）；跳过 M 是说明文字不是按钮，M=0 时留空但宽度不变
+        s1: { t:(p)=> p.n ? `批准 ${p.hi}` : "批准", cls:"pri",
+              enabled:(p)=>p.hi>0?{ok:true}:{ok:false,why:`选中的都 <${APPROVE_MIN} 分或未打分`}, fn:"toolStatusSel('approved','批准')" },
+        s2: { text:true, t:(p)=> (p.n && p.n - p.hi > 0) ? `跳过 ${p.n - p.hi}` : "" },
+        s5: { t:"忽略", cls:"dan", fn:"toolStatusSel('ignored','忽略')" },
+      },
+      ready: {
+        s1: { t:"发邮件", cls:"pri", enabled:(p)=>p.withEmail>0?{ok:true}:{ok:false,why:"选中的都没邮箱"}, fn:"toolSendSel()" },
+        // 手动触达：一家一家聊 → only1；勾选的那条有邮箱时 disabled + title（Joe 定的语义原样保留）
+        s2: { t:"手动触达", cls:"sec", only1:true,
+              enabled:(p)=> p.withEmail>0 ? {ok:false,why:"这条有邮箱，用发邮件"} : {ok:true}, fn:"toolManualReach()" },
+        s4: { t:"退回待审批", cls:"sec", fn:"toolStatusSel('analyzed','退回待审批')" },
+        s5: { t:"忽略", cls:"dan", fn:"toolStatusSel('ignored','忽略')" },
+        // 右边三个数：发送 N = 本列表可发的（A 组）；免费抓 / 付费补 = 无联系方式（C 组）——
+        //   ⚠️ 三个数从现有 readyGroupIds 谓词取，⛔ 没新造口径（库里没有"免费抓过"这个标记，
+        //     所以免费抓 N 与付费补 N 目前是同一个 C 组计数；已如实报总工）。
+        fleet: [
+          { t:()=>`发送 ${readyGroupIds('A').length}`, cls:"pri", fn:"toolSendReadyAll()" },
+          { t:()=>`免费抓 ${readyGroupIds('C').length}`, cls:"sec", fn:"toolFindMailsReadyC(false)" },
+          { t:()=>`付费补 ${readyGroupIds('C').length}`, cls:"sec", fn:"toolFindMailsReadyC(true)" },
+        ],
+      },
+      sent: {
+        s1: { t:"跟进", cls:"pri", fn:"toolFollowupSel(null)" },
+        // 「他回了」只能单条：多选时 disabled + title 说明
+        s2: { t:"他回了", cls:"sec", only1:true, fn:"toolMarkReplied()" },
+        s5: { t:"忽略", cls:"dan", fn:"toolStatusSel('ignored','忽略')" },
+        filters: [ "due" ],   // ☐ 只看该跟进的（批⑪B 的那个复选框，只在已联系出现）
+      },
+      replied: {
+        s1: { t:"标记成交", cls:"pri", fn:"toolStatusSel('won','标记成交')" },
+        s2: { t:"起草回复", cls:"sec", fn:"toolDraftReply()" },
+        s5: { t:"忽略", cls:"dan", fn:"toolStatusSel('ignored','忽略')" },
+        s6: { t:"加黑名单", cls:"dan", fn:"toolStatusSel('blacklisted','加黑名单')" },
+        fleet: [ { t:"拉取新回复", cls:"sec", fn:"toolFetchReplies()" } ],
+      },
+      won: {
+        s1: { text:true, t:"流程终点" },   // 终点，无出口动作（成交后没下一步的业务缺口不在本单）
+      },
+      ignored: {
+        s4: { t:"恢复待审批", cls:"pri", fn:"toolStatusSel('analyzed','恢复到待审批')" },
+        s6: { t:"加黑名单", cls:"dan", fn:"toolStatusSel('blacklisted','加黑名单')" },
+      },
+      blacklisted: {
+        s4: { t:"转已忽略", cls:"sec", fn:"toolStatusSel('ignored','转已忽略')" },
+      },
     };
     // C5-3 起「全部」页有一个工具栏按钮（➕ 补货）；won 仍无出口动作
     // ⭐⭐ 批⑲ 页面一：「待分析」按**下一步动作**分两组。Joe 要每页回答两个问题：
@@ -2237,7 +2260,8 @@
     // 批㉖：行回归全站统一列结构 —— 抓取失败只留一个小红徽章（原因简码），
     //   错误全文 + 改网址 + 人工批准 + 忽略 全部收进详情（点行即达）；批量操作只在顶部批量条一处。
     function unscoredRowExtra(l){
-      if (current !== 'unscored') return "";
+      // 工具栏 v8：「官网抓不到」独立成格后，抓取失败原因徽章要在那一格里显示（谓词不变，只放开页面判断）。
+      if (current !== 'unscored' && current !== 'noscore') return "";
       if (unscoredGroupOf(l) === 'B')
         return ` <span class="fail-badge" title="${esc(l.reason||'')}\n\n点行进详情处理（改网址 / 人工批准 / 忽略）">抓取失败 · ${esc(failCode(l.reason))}</span>`;
       // 总工的加分项：让 Joe 看得见机器正在替他重试（同样收成小徽章，不再另起一行）
@@ -2331,37 +2355,18 @@
       let defs = null;
       // ⭐ C5-17（Joe 用红叉重申撤横带）：待分析页与待联系页**同一处理** ——
       //   横带撤掉、锚点没了 ⇒「跳到」改成**按组筛选**（再点一次取消）。分组谓词一个字没动。
-      if (cur === 'unscored') {
-        const cnt = g => leads.filter(l=>unscoredGroupOf(l)===g).length;
-        box.style.display = '';
-        box.innerHTML = `<span class="gj-lb">只看：</span>`
-          + `<span class="gj-help" data-help title="① 排队打分：新找到、还没轮到 AI 的线索，机器每分钟自动啃，你不用做任何事。② 官网抓不到：连续 3 次没抓到官网，机器判不了分——点行进详情改网址 / 人工批准 / 忽略。">(?)</span>`
-          + [['A','排队打分'],['B','官网抓不到']]
-              .map(([g,label])=>`<a class="gj-lnk${_readyFilter===g?' gj-on':''}" onclick="setReadyFilter('${g}')">${label}(${cnt(g)})</a>`)
-              .join('<span class="gj-sep">·</span>')
-          + (_readyFilter ? `<span class="gj-sep">·</span><a class="gj-lnk" onclick="setReadyFilter('${_readyFilter}')">显示全部</a>` : '')
-          // C5-17 增补（Joe 圈的位置）：「排队等 AI 打分 N」不做横带、也不丢信息 ——
-          //   收成工具栏行**右端**的次级小字。⚠️ 它是陈述不是动作，所以不做成可点的 chip。
-          + `<span class="gj-note">排队等 AI 打分 ${cnt('A')} · 机器自动处理</span>`;
-        return;
-      }
+      // 工具栏 v8（Joe：工具栏只保留一行、删掉分段筛选）：
+      //   · 待分析的「只看：排队打分 / 官网抓不到」chips 撤除 —— 「官网抓不到」已升成左栏独立一格，
+      //     待分析页现在只剩 status='new'（排队等 AI），没有第二个分段可切。
+      //   · 待联系的「只看：①有邮箱 ②社媒/电话 ③无联系方式」撤除 —— 这三个维度列头 ▾ 菜单
+      //     （邮箱 / 渠道）已经能筛，工具栏不再重复摆一份（铁律五）。
+      //   ⚠️ `_readyFilter` / `setReadyFilter` 保留（列表渲染与全选作用域仍读它；无 UI 时恒为 null）。
+      if (cur === 'unscored' || cur === 'ready') { box.style.display='none'; box.innerHTML=''; return; }
       // Joe 2026-08-31：待审批页的「跳到」删掉 —— 三个段头就在下面几行处，
       //   同一份分层渲染两遍（铁律五）。⚠️ 只删 review 这一档：
       //   unscored / ready 两页 Joe 没提，不顺手一起动。
       else if (cur === 'review') defs = null;
-      // C5-12：待联系页横带撤了 ⇒ 锚点没了，「跳到」改成**按组筛选**（再点一次取消）。
-      //   分组本身没消失，只是不再以横带形式躺在列表中间。
-      else if (cur === 'ready') {
-        const cnt = g => leads.filter(l=>readyGroupOf(l)===g).length;
-        box.style.display = '';
-        box.innerHTML = `<span class="gj-lb">只看：</span>`
-          + `<span class="gj-help" data-help title="① 有邮箱：机器能直接发开发信。② 只有社媒/电话：机器发不了，点右侧渠道列去聊，聊出回音点该行「💬 他回了」。③ 没有联系方式：先用「免费抓一轮」或 Hunter 补邮箱。">(?)</span>`
-          + [['A','① 有邮箱'],['B','② 社媒/电话'],['C','③ 无联系方式']]
-              .map(([g,label])=>`<a class="gj-lnk${_readyFilter===g?' gj-on':''}" onclick="setReadyFilter('${g}')">${label}(${cnt(g)})</a>`)
-              .join('<span class="gj-sep">·</span>')
-          + (_readyFilter ? `<span class="gj-sep">·</span><a class="gj-lnk" onclick="setReadyFilter('${_readyFilter}')">显示全部</a>` : '');
-        return;
-      }
+      // 工具栏 v8：ready 分支已并入上面那个早退（原来这里是「只看 ①②③」chips，删了）。
       if (!defs) { box.style.display='none'; box.innerHTML=''; return; }
       box.style.display='';
       box.innerHTML = `<span class="gj-lb">跳到：</span>`
@@ -2441,115 +2446,59 @@
       if (typeof d.enabled === "function") return d.enabled(pick);
       return { ok:true };
     }
-    // ⭐ 批⑲ 规则2（混选）：按钮文案必须说清**真正会作用几条 · 跳过几条及原因**。
-    //   延续批⑬③「只发 withEmail ids」的先例，现在扩成所有批量按钮的统一写法。
-    //   绝不许拿"选中总数"冒充"可作用数"——那正是 Joe 说的"我全选后迷茫了"。
-    //   ⚠️ n===0（还没勾选）时**不带数字**：此时"（0）"没有任何信息量，
-    //     只会和后面的「· 先勾选线索」凑成一句啰嗦话。格式与静态标题的按钮保持一致（总工要求）。
-    const mixLabel = (act, ok, skip, skipWhy, n) =>
-      n === 0 ? act
-      : skip > 0 ? `${act}（${ok} 条 · 跳过 ${skip} 条${skipWhy}）`
-      : `${act}（${ok}）`;
+    // 批⑲ 的 mixLabel（把"作用 N · 跳过 M"烤进按钮文字）已随 v8 删除：混选口径改由待审批的 s1「批准 N」+ s2 灰字「跳过 M」两个固定槽分别表达。
+    // ══⭐⭐ 工具栏 v8 渲染：每页**只有这一行**，标题 + 已选 + 5 固定槽 + 右边区 ══
+    //   结构与尺寸逐字照 mockup（.tb/.ttl/.sel/.zB/.s*/.zR/.b-*）。
+    //   🔴 槽永远渲染（空槽也占位）—— 这就是"同一动作永远同一列"的实现手段：横坐标由槽宽决定，
+    //      与本页有几个按钮、有没有勾选无关。验收量的正是这一点（20 个状态 getBoundingClientRect 同列全等）。
+    //   · 未选：左边 5 槽 .off（opacity .4）+ disabled；「已选」槽显示灰色「未选」（不是空白，否则后面移位）
+    //   · 已选：亮起；不可用的按钮灰 + title 说原因（⛔ 不再把原因烤进按钮文字，那会改按钮宽度）
+    //   · 右边：本页全量动作（fleet，不看勾选）· 筛选开关 · 重置筛选（永远最右）
+    //   · 「已选 N」+ 灰槽在**每页**都渲染 —— 旧版"没勾选就整条藏起来"那一刀已作废（Joe：只保留一行、位置固定）
     function renderGroupTools(){
-      const bar = $("#group-tools"); if(!bar) return;
-      // ⭐ 批⑪B：`dueMode` 不再清空工具栏。
-      //   那句 `(dueMode || current==='all') ? []` 是「待跟进曾是**独立视图**」的遗留 ——
-      //   独立视图跨阶段混着各种状态，给不出一套统一的动作，所以当时清空是对的。
-      //   现在它降级成**「已联系」格内的一个筛选**，格没变、动作全都仍然成立（跟进/他回了/放弃），
-      //   工具栏必须留着 —— 何况那个筛选的复选框**自己就长在工具栏上**：
-      //   不改这一行的话，Joe 一勾它，它把自己弄消失了。
-      // 🔴 C5-3：这里原来写死 `(current==='all') ? []` —— 「全部」页被**硬编码成空工具栏**，
-      //   于是我在 GROUP_TOOLS 里加的 `all: [➕ 补货]` 一个字都走不到（加了、也渲染不出来）。
-      //   真正决定"这一格有没有工具栏"的是这一行，不是那张表。
-      //   现在统一由表决定：`all` 有条目就渲染，没有就空 —— 少一处只有读代码才知道的例外。
-      const defs = GROUP_TOOLS[current] || [];
+      const bar = $("#tb"); if(!bar) return;
+      const def = GROUP_TOOLS[current] || {};
       const n = selectedIds.size;
-      // 🔴 C5-10②（回归修复，缺陷是我在 C5-4v 引进的）：
-      //   当时为了去掉常驻的"已选 0 条"噪音，加了 `n===0 就整条藏起来` ——
-      //   但工具条里有两类按钮，那一刀没分辨它们：
-      //     · 选中依赖（sel:true）：没勾选确实无从谈起
-      //     · **全量（fleet）**：跟选中集无关（「⟳ 拉取新回复」）
-      //   结果空的「已回复」页上那颗按钮**根本点不到**，而空态文案还在指着它 ——
-      //   入口指向一个看不见的东西，比没有入口更糟。
-      //   ⇒ 按**结构**修不按个案修：本组只要含 fleet 按钮，工具条就出现；
-      //     以后任何组加全量按钮都自动可达，不必再有人想起这条规则。
-      // C5-12：`hideIf` 在批⑲ 时被废止（改成"永远显示+灰+说原因"），渲染循环早已不读它。
-      //   这里**只为 fleet 类恢复**它，因为两者的情形不同：
-      //     · 批⑲ 管的是**选中依赖**按钮 —— Joe 原话「没有按钮，我不选的时候不知道能干什么」，
-      //       那是"还没选"，动作是存在的，所以要灰着告诉他存在。
-      //     · fleet 按钮的 hideIf 判的是**这一组一条线索都没有** —— 动作此刻**没有作用对象**。
-      //       摆一个「Hunter 补邮箱（0）· 本组为空」是永久噪音（C5-4v 刚清掉的那一类）。
-      //   ⚠️ 这条张力已报总调度；Joe 若要"永远显示"，把下面这行删掉即可，其余不用动。
-      const shown = defs.filter(d => !(d.fleet && typeof d.hideIf === "function" && d.hideIf()));
-      const hasFleet = shown.some(d => d.fleet);
-      if(!shown.length || (n === 0 && !hasFleet)){ bar.style.display="none"; bar.innerHTML=""; return; }
-      // fleet-only 态（没勾选、只靠全量按钮撑出来的工具条）：**不显示「已选 0 条」前缀** ——
-      //   那句在这个状态下正是当初要去掉的那种噪音。
-      // ⚠️ 但选中依赖的按钮**照常渲染成灰的 + 写明"先勾选线索"**（toolGate 已经这么做），
-      //   不隐藏 —— 那是批⑲ 里 Joe 自己定的规矩：「没有按钮，我不选的时候不知道能干什么」。
-      //   派单给了"隐藏或禁用"两个选项，这里选禁用，因为它与那条既有裁定一致。
-      const fleetOnly = (n === 0 && hasFleet);
-      // ⭐ 批⑬③：当前**选中集**的构成 —— 给动态标题 t() 和 hideIf() 用。
-      //   ⚠️ 用 _loadedLeads 而不是重新请求：它就是当前列表的那批对象，loadList 每次都刷。
+      // 当前选中集的构成 —— 给动态标题 t(p) 和 enabled(p) 用（口径与旧版一字未改）
       const _picked = _loadedLeads.filter(l => selectedIds.has(String(l.id)));
       const pick = {
         n,
         withEmail: _picked.filter(l => l.email && String(l.email).trim()).length,
         noEmail:   _picked.filter(l => !(l.email && String(l.email).trim())).length,
-        // 批⑲ 规则2：可批准子集 = **有分且 ≥APPROVE_MIN**（未打分的批不了，approveGateReason 会拦）。
-        //   跳过数一律用 `n - hi` 而不是 `lo` —— 这样"低分"和"未打分"都算进跳过，不会漏报。
+        // 可批准子集 = 有分且 ≥APPROVE_MIN（未打分批不了）；跳过数用 n - hi，低分和未打分都算进去
         hi: _picked.filter(l => l.match_score != null && Number(l.match_score) >= APPROVE_MIN).length,
       };
-      bar.style.display = "flex";
-      // ⚠️ 批⑬②：`noscore` **不在左栏**（Joe 说"不要过于臃肿"），所以 refreshNavHighlight 会把
-      //   所有格子的高亮全清掉 → **Joe 点进来会看到一个没高亮、没标题的列表，不知道自己在哪、
-      //   这 5 条是什么、为什么在这儿**。工具栏是这一格唯一能说话的地方，让它说清楚。
-      //   （这是我自己想到的 —— 一个"能进去但不知道进了哪"的页面，跟死胡同只差一步。）
-      const banner = current === 'noscore'
-        ? `<div style="width:100%;margin-bottom:6px;color:var(--amber,#8a5a00);font-weight:600">
-             ⚠️ 这些公司的官网抓不到 —— 机器判不了分，所以它们不在「待审批」里
-             <span class="hint" style="font-weight:400">（可能网址错了/换了。改对网址再分析，里面可能有真客户）</span>
-           </div>` : "";
-      bar.innerHTML = banner + (fleetOnly ? `` : `<span>已选 <b id="bulk-n">${n}</b> 条</span>`)
-        // ⭐ 批⑫：`only1` = **只在恰好选中 1 条时出现**（不是灰着 —— 总工原话：
-        //   "批量按钮摆在那儿 + 灰着，比不摆更让人困惑"）。
-        //   用在「💬 他回了」上：渠道和备注是**每条不一样的**（这家 WhatsApp、那家 LinkedIn），
-        //   "把 84 条一起标成已回复"在生意上没有任何意义 —— 那不是"暂时不能点"，是**这个动作不存在**。
-        //   `sel`（选中类）表达的是"要先勾选"，`only1` 表达的是"这事只能一条一条做"，两回事。
-        // ⭐ 批⑬③：`t` 可以是**函数**（拿选中集自己算数）、`hideIf` 可以按选中集隐藏。
-        //   为什么要动态：「📧 发邮件（22）」这个 22 必须是**当前选中里真有邮箱的条数** ——
-        //   写死就又是一个会过期的假数字，而"选了 100 条却只发得出 22 封"正是这批要修的病。
-        //   `hideIf` 承接批⑫ 那条原则：**0 条时按钮不出现，不是灰着** ——
-        //   "选中的全是没邮箱的"时摆一个「发邮件（0）」，比不摆更让人困惑。
-        // ⭐⭐ 批⑲ 规则1/3：**按钮永远显示；不可用时灰显 + 必须写明原因**。
-        //   这条**推翻**了批⑫ 的两处「不渲染」（0 条时不出现、only1 只在恰好 1 条时出现）——
-        //   Joe 原话：「没有按钮，我不选的时候不知道能干什么」。
-        //   但批⑫ 那句「光灰着比不摆更让人困惑」**也没说错** —— 两条合起来才完整：
-        //   **灰 + 说清为什么灰**。所以 `why` 是硬要求，不是提示语润色：
-        //   少了原因，这个按钮就退回成批⑫ 描述的那种"摆在那儿更困惑"。
-        + shown.map(d=>{
-                const g = toolGate(d, pick);
-                const label = typeof d.t === "function" ? d.t(pick) : esc(d.t);
-                // 函数标题自己已经把数字算进去了（混选口径），只给静态标题补「（n）」
-                const cnt = (d.sel && n && !d.only1 && typeof d.t !== "function") ? `（${n}）` : "";
-                const why = g.ok ? "" : `<span class="btn-why">· ${esc(g.why)}</span>`;
-                return `<button class="${d.cls} mini"${g.ok?"":` disabled title="${esc(g.why)}"`}${g.ok?` onclick="${d.fn}"`:""}>${label}${cnt}${why}</button>`;
-              }).join("")
-        // 批⑩C：「取消选择」已删（六个格子一起没了）—— 表头那个框本来就是全选/全不选的
-        // toggle，这个按钮纯冗余。删它的前提是表头框的状态得读得准，见 syncSelAll 的 indeterminate。
-        //
-        // ⭐⭐ 批⑪B：「🔔 只看该跟进的」—— 这是「待跟进」从左栏降级下来的**新家**。
-        //   ⚠️ **这一条必须先于删左栏那一格**，否则会静默弄丢一个能力：
-        //     左栏那格删了 + 待办那张 🔔 卡也删了（批⑪B 砍到两类）→ `openDue()` 没人调
-        //     → `due=1` 永远发不出去 → **这个筛选变成不可达的死代码，而没人会发现**。
-        //   删最后一扇门之前先开新门 —— 这是"删格子必须连根拔"的反面：
-        //   那次教训是"别只删看得见的一半"，这次是"别把能力跟着入口一起删掉"。
-        //   只在「已联系」出现：别的格子没发过信，"该不该跟进"在那儿没有意义。
-        + (current === 'sent'
-            ? `<label class="hint" style="display:flex;align-items:center;gap:4px;cursor:pointer;margin-left:6px">
-                 <input type="checkbox" ${dueMode?'checked':''} onchange="toggleDueFilter(this.checked)"> 🔔 只看该跟进的
-               </label>` : "")
-        + `<span class="hint" id="bulk-msg"></span>`;
+      // 标题 = 当前分组名 + 灰括号条数，条数与左栏同一份数据（window._groupCount，loadStats 填）
+      const label = STAGE_LABEL[current] || current;
+      const gc = window._groupCount || {};
+      const cntTxt = (typeof gc[current] === "number") ? `<span class="cnt">(${gc[current]})</span>` : "";
+      const selTxt = n > 0 ? `<span class="sel">已选 ${n}</span>` : `<span class="sel none">未选</span>`;
+      // 一个槽：空 / 说明文字 / 按钮。⚠️ 空槽也要输出 <span class="sX"></span>，宽度才会占住
+      const slot = (k) => {
+        const d = def[k];
+        if (!d) return `<span class="${k}"></span>`;
+        const t = typeof d.t === "function" ? d.t(pick) : d.t;
+        // 说明文字槽：s2 用 .skip（待审批「跳过 M」），其余用 .none-txt（已成交「流程终点」）；空串照样占位
+        if (d.text) return `<span class="${k} ${k==='s2' ? 'skip' : 'none-txt'}">${esc(t || "")}</span>`;
+        // 选中类按钮：未勾选 ⇒ 灰（整个 .zB 会 .off），仍用 toolGate 算 why 放进 title
+        const g = n === 0 ? { ok:false, why:"先勾选线索" } : toolGate({ sel:true, only1:d.only1, enabled:d.enabled }, pick);
+        return `<span class="${k}"><button class="b-${d.cls}${g.ok?'':' b-off'}"${g.ok?` onclick="${d.fn}"`:` disabled title="${esc(g.why)}"`}>${esc(t)}</button></span>`;
+      };
+      // 右边区：本页全量动作（不看勾选）· 筛选开关 · 重置筛选永远最右
+      const fleet = (def.fleet || []).map(f => {
+        const t = typeof f.t === "function" ? f.t() : f.t;
+        return `<button class="b-${f.cls}" onclick="${f.fn}">${esc(t)}</button>`;
+      }).join("");
+      const filters = (def.filters || []).map(k => k === "due"
+        ? `<label class="chk"><input type="checkbox" ${dueMode?'checked':''} onchange="toggleDueFilter(this.checked)"> 只看该跟进的</label>`
+        : "").join("");
+      // 分隔线只在"全量动作"之后出现（mockup：全部/待联系/已回复 有 fleet 才有 │；已联系的复选框与重置筛选之间没有）
+      bar.innerHTML =
+        `<span class="ttl">${esc(label)}${cntTxt}</span>${selTxt}<div class="div"></div>`
+        + `<div class="zB${n===0?' off':''}">${slot('s1')}${slot('s2')}${slot('s4')}${slot('s5')}${slot('s6')}</div>`
+        + `<span class="hint" id="bulk-msg"></span>`
+        + `<div class="zR">${fleet}${fleet ? `<div class="div"></div>` : ""}${filters}`
+        + `<button class="b-qui" onclick="resetFilters()" title="${esc(_activeFilterTxt || '清空列头里的国家/分类/邮箱/评分/阶段/渠道筛选')}">重置筛选</button></div>`;
     }
     // ⭐ 批⑪B：「待跟进」降级成「已联系」页的筛选（跟 🔥 点过链接同一层，不占左栏一格）。
     //   复用既有的 dueMode + 后端 `due=1` —— **底下一行没动**，只是换了个入口。
@@ -2585,7 +2534,7 @@
       const ids=[...selectedIds].map(Number); if(!ids.length) return;
       const N=ids.length;
       if(!(await uiConfirm({ title:`立即分析 ${N} 条`, body:`将对**选中的 ${N} 条**逐条抓官网 + AI 打分。\n约每条 10-30 秒，期间请勿关页面。`, confirmText:"开始分析" }))) return;
-      const bar=$("#group-tools"); bar.classList.add("analyzing"); bar.querySelectorAll("button").forEach(b=>b.disabled=true);
+      const bar=$("#tb"); bar.classList.add("analyzing"); bar.querySelectorAll("button").forEach(b=>b.disabled=true);   // 工具栏 v8：条容器改名 #tb
       const prog = k => `⏳ 已分析 <b>${k}</b>/${N}<span class="bulk-prog"><span class="bulk-prog-fill" style="width:${Math.round(k/N*100)}%"></span></span>`;
       toolMsg(prog(0)); let fail=0;
       for(let i=0;i<N;i++){
@@ -2594,8 +2543,9 @@
         toolMsg(prog(i+1));
       }
       bar.classList.remove("analyzing");
-      const s=$("#batch-status"); if(s) s.textContent = `✅ 分析完成 ${N} 条${fail?`（失败 ${fail}）`:""}`;
+      // 工具栏 v8：#batch-status 那个常驻位已删，完成语走 toolMsg（工具栏内的 #bulk-msg，afterMutate 重画后仍在）。
       afterMutate();
+      toolMsg(`✅ 分析完成 ${N} 条${fail?`（失败 ${fail}）`:""}`);
     };
     // 待审批：≥60有邮箱 一键全批准（复用既有端点，门槛已对齐 APPROVE_MIN_SCORE=60）。
     // 两档制下自动批准本来就会收走这批 —— 这个按钮是**自动批准关掉时**的手动入口，口径必须一致。
@@ -3030,7 +2980,9 @@
       const bits=[];
       if (hf.stage) bits.push("阶段"); if (hf.ch) bits.push("渠道");
       ["country","category","email","score"].forEach(t=>{ if ($("#"+SEL_OF[t]).value) bits.push({country:"国家",category:"分类",email:"邮箱",score:"评分"}[t]); });
-      $("#active-filters").textContent = bits.length ? ("· 已筛："+bits.join("/")) : "";
+      // 工具栏 v8：「已筛：…」不再占常驻位，收进「重置筛选」按钮的 title（信息没丢，换了住处）。
+      _activeFilterTxt = bits.length ? ("已筛："+bits.join("/")) : "";
+      renderGroupTools();
     }
     document.addEventListener("click", e => {
       const m=$("#hdrmenu");
@@ -3050,7 +3002,7 @@
         const key = COL_KEYS[i]; th.style.width = ((saved[key] || COL_DEFAULTS[key] || 90)) + "px";
       });
     }
-    window.resetColWidths = () => { try{ localStorage.removeItem("dock_colw"); }catch{} applyColWidths(); };
+    // 工具栏 v8：resetColWidths 已随「↔ 重置列宽」按钮一起删（元素 + 绑定 + 实现三处成对删；applyColWidths 保留，列宽记忆本身还在）。
     // 拖动竖线只装一次；每次 loadList 重新套用宽度（thead 静态、宽度会保留，套用幂等）
     function makeColumnsResizable() {
       const table = document.querySelector(".main table");
@@ -3085,12 +3037,15 @@
     ["f-country","f-type","f-email","f-score"].forEach(id => $("#"+id).onchange = loadList);
     // 批③C：f-due / f-engaged 的 handler 已删（它们写死 current="all" 会把用户踢回全部页）。
     // 🔔待跟进 → 左栏独立视图 openDue()；🔥最近参与 → 删除，排序在「已查看」格内部按 last_engaged_at 自动生效。
-    $("#f-reset").onclick = () => {
+    // 工具栏 v8：「重置筛选」按钮由 renderGroupTools 每次重画（永远最右），所以不能绑 onclick 到固定元素 ——
+    //   改成全局函数，按钮用 onclick="resetFilters()" 调它。行为一个字没变。
+    window.resetFilters = () => {
       ["f-country","f-type","f-email","f-score"].forEach(id => $("#"+id).value = "");
       hf.stage = ""; hf.ch = ""; sortMode = "";
       loadList();
     };
-    $("#f-resetcol").onclick = () => resetColWidths();
+    // 「↔ 重置列宽」按钮已删（Joe 定）—— 它的绑定与 resetColWidths 一并删除：只删元素留绑定，
+    //   查那个已删 id 会返回 null，随后 `.onclick=` 直接抛 TypeError，会把这一整段初始化打断。
 
     // ⭐ 两档制 · 分数颜色的**单一真源**。以前三个函数三套线（列表 70/40、详情 80/60），
     //   没有一条是真正的决策线 60 —— 那些线不对应任何后果，纯装饰。

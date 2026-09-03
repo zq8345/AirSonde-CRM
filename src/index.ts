@@ -327,7 +327,11 @@ const NO_SCORE_WHERE = "l.status IN ('analyzed','pending') AND a.match_score IS 
 // ⚠️⚠️ **这只是展示口径，不是 cron 处理口径**。cron 打分永远只捡 `status='new'`
 //   （见下面 analyze 那步的 SQL，一个字没动）—— analyzed-无分的**不会**被 cron 反复重抓，
 //   不会有 fetch_fail_count 风暴。展示口径和处理口径是两条独立的 SQL，这是 Joe 明确要的分离。
-const UNSCORED_SHOW_WHERE = "(l.status='new' OR (l.status IN ('analyzed','pending') AND a.match_score IS NULL))";
+// ⭐ 工具栏 v8（Joe 2026-09-03）：「官网抓不到」升为左栏独立一格 ⇒ 「待分析」只剩 status='new'
+//   （排队等 AI 打分、机器每分钟自动啃）。analyzed/pending-无分 那批走 NO_SCORE_WHERE（group=noscore）。
+//   ⚠️ 两条谓词**互斥且穷尽**原来的 UNSCORED_SHOW：new ∪ noscore = 旧待分析。改口径要三处一起：
+//     /api/stats 的 unscoredShow/noscoreShow · group=unscored/noscore 分支 · STAGE_SQL。
+const UNSCORED_SHOW_WHERE = "l.status='new'";
 
 
 const ALLOWED_STATUS = new Set([
@@ -465,6 +469,12 @@ app.get("/api/stats", async (c) => {
   const unscoredShow = (await c.env.DB.prepare(
     `SELECT COUNT(*) AS n FROM leads l LEFT JOIN lead_analysis a ON a.lead_id=l.id WHERE ${UNSCORED_SHOW_WHERE}`
   ).first<{ n: number }>())?.n || 0;
+  // ⭐ 工具栏 v8：左栏「官网抓不到」独立一格的真值。判据 = NO_SCORE_WHERE
+  //   （status analyzed/pending 且 match_score IS NULL —— 只有 recordFetchFailure 连续 3 次失败才会
+  //   把线索归档成这个形态；抓失败 1-2 次的仍在 status='new'，不会误算进来）。
+  const noscoreShow = (await c.env.DB.prepare(
+    `SELECT COUNT(*) AS n FROM leads l JOIN lead_analysis a ON a.lead_id=l.id WHERE ${NO_SCORE_WHERE}`
+  ).first<{ n: number }>())?.n || 0;
 
   // #39 已查看：status=sent 且有点击（与「已发送」互斥，供左栏漏斗把 sent 拆成 已发送/已查看）
   const vr = await c.env.DB.prepare(
@@ -473,7 +483,7 @@ app.get("/api/stats", async (c) => {
   // reviewScored：左栏「待审批」的真值（批⑬①）—— 前端算不出来（byStatus 只有 status 维度）
   // 批㉑：把国家名目录一起带出去 —— 前端 countryName 用它填（单源=后端 COUNTRIES），
   //   列表页在没打开「找客户」时也能把新市场（vg/pg…）显示成中文名，不是裸 gl 码。
-  return c.json({ total, byStatus, viewed: vr?.n || 0, reviewScored, unscoredShow, allCountries: COUNTRIES });
+  return c.json({ total, byStatus, viewed: vr?.n || 0, reviewScored, unscoredShow, noscoreShow, allCountries: COUNTRIES });
 });
 
 // #47 行动建议引擎（数据看板 + 今日待办共用同一份逻辑）：按规则算出当前最该做的事，按紧急度取前 4 条。
@@ -1003,7 +1013,8 @@ app.get("/api/leads", async (c) => {
     // ⭐ 待分析(new) 与 待审核(analyzed/pending) 必须分开：这是阶段列筛选下拉的数据源，
     //   以前一个 'new' 键把三个状态揉在一起 → 用户按「待审核」筛会筛出一堆还没打分的，
     //   跟前端 stageOf 的徽章对不上。key 必须与前端 STAGE_OPTS 一致。
-    unscored: UNSCORED_SHOW_WHERE,   // 批⑭②：待分析 = new + analyzed无分（展示口径，非 cron 口径）
+    unscored: UNSCORED_SHOW_WHERE,   // 工具栏 v8：待分析 = status='new'（analyzed-无分 已独立成 noscore）
+    noscore: NO_SCORE_WHERE,         // 工具栏 v8：官网抓不到（analyzed/pending 且无分）
     review: REVIEW_WHERE,          // 批⑬①：只放"AI 判完了的" —— 真口径见 REVIEW_WHERE 定义
     // ⭐ 批⑱：key 与左栏八格对齐（ready / replied / ignored / blacklisted 是这次补齐的，
     //    其中「已忽略」以前**下拉里根本筛不出来**）。approved / dead 保留为旧 URL 的兼容别名。
