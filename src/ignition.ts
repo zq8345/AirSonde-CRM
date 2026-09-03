@@ -90,26 +90,33 @@ export interface Capability {
   unlocks: string;
   /** 差它的时候，机器是不是就跑不成整条链（用来决定"零产出"算不算停摆） */
   core: boolean;
+  /** ⭐ C5-48：**接的是哪家服务**（Serper / Resend / 飞书邮箱 IMAP…）。
+   *  Joe 的原话是「已配」这两个字什么都没说 —— 他要知道的是"这一环到底接的是谁"。
+   *  ⚠️ 放在这里而不是前端：前端再写一份就是第二个真源，加能力时必漂。 */
+  service: string;
 }
 
 /** ⭐ 能力清单 = **单一真源**。加新能力只在这里加一条；
  *  ⛔ 别在别处再写一次 `if (!env.XXX_KEY)` 式的"配没配"判断 —— 那正是漂移的开始。 */
 export const CAPABILITIES: Capability[] = [
-  { id: "search", label: "自动找客户", keys: ["SEARCH_API_KEY"], core: true,
+  { id: "search", label: "自动找客户", keys: ["SEARCH_API_KEY"], core: true, service: "Serper",
     unlocks: "按关键词搜出新公司（Serper）" },
-  { id: "ai", label: "AI 打分与写信", keys: ["OPENROUTER_API_KEY"], core: true,
+  // ⚠️ AI 是**一把钥匙两件事**（打分 / 写信，两个不同的模型）。
+  //   界面上按 Joe 的要求拆成两行显示，但**能力仍然只有这一条** ——
+  //   ⛔ 别在这里拆成两个 capability：钥匙是同一把，拆了就会出现"配了一半"这种不存在的状态。
+  { id: "ai", label: "AI 打分与写信", keys: ["OPENROUTER_API_KEY"], core: true, service: "OpenRouter",
     unlocks: "给线索打分、起草开发信、AI 用量统计" },
-  { id: "send", label: "发开发信", keys: ["RESEND_API_KEY"], core: true,
+  { id: "send", label: "发开发信", keys: ["RESEND_API_KEY"], core: true, service: "Resend",
     unlocks: "真正把信发出去（Resend）" },
-  { id: "reply", label: "收客户回复", keys: ["LARK_IMAP_PASS"], core: true,
+  { id: "reply", label: "收客户回复", keys: ["LARK_IMAP_PASS"], core: true, service: "飞书邮箱 IMAP",
     unlocks: "把客户回信收进来并分类（IMAP）" },
-  { id: "notify", label: "飞书群通知", keys: ["LARK_WEBHOOK_URL"], core: false,
+  { id: "notify", label: "飞书群通知", keys: ["LARK_WEBHOOK_URL"], core: false, service: "飞书 Webhook",
     unlocks: "热回复实时推群、每 6 小时简报、故障告警" },
-  { id: "appbot", label: "飞书应用机器人", keys: ["LARK_APP_ID", "LARK_APP_SECRET"], core: false,
+  { id: "appbot", label: "飞书应用机器人", keys: ["LARK_APP_ID", "LARK_APP_SECRET"], core: false, service: "飞书开放平台",
     unlocks: "带操作按钮的卡片、多维表格镜像" },
-  { id: "inbound", label: "官网询盘接入", keys: ["INBOUND_TOKEN"], core: false,
+  { id: "inbound", label: "官网询盘接入", keys: ["INBOUND_TOKEN"], core: false, service: "官网表单",
     unlocks: "官网联系表单的询盘自动进 CRM" },
-  { id: "emailfinder", label: "自动补邮箱", keys: ["EMAIL_FINDER_API_KEY"], core: false,
+  { id: "emailfinder", label: "自动补邮箱", keys: ["EMAIL_FINDER_API_KEY"], core: false, service: "Hunter",
     unlocks: "官网找不到邮箱时用 Hunter 补" },
 ];
 
@@ -135,6 +142,8 @@ export interface CapabilityStatus {
   missing: string[];
   unlocks: string;
   core: boolean;
+  /** C5-48：接的是哪家服务（面板上取代那两个什么都没说的字「已配」）。 */
+  service: string;
 }
 
 /** 面板 / _whoami / 告警判断共用的一份状态。 */
@@ -152,7 +161,7 @@ export function ignitionReport(env: Env): {
 } {
   const capabilities = CAPABILITIES.map<CapabilityStatus>((c) => {
     const missing = missingKeys(env, c.id);
-    return { id: c.id, label: c.label, ignited: missing.length === 0, missing, unlocks: c.unlocks, core: c.core };
+    return { id: c.id, label: c.label, ignited: missing.length === 0, missing, unlocks: c.unlocks, core: c.core, service: c.service };
   });
   const missing = [...new Set(capabilities.flatMap((c) => c.missing))];
   return {

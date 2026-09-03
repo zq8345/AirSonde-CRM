@@ -6,7 +6,7 @@ import { connect } from "cloudflare:sockets";
 import { basicAuth } from "hono/basic-auth";
 import { parseCsv, mapRowToLead } from "./csv";
 import { analyzeLead, getProfile, DEFAULT_PROFILE, ensureDraft, APPROVE_MIN_SCORE_SVC } from "./service";
-import { writeReplyDraft, writeWarmFollowup, DEFAULT_SELLING_POINTS, translateToChinese, isTrustedDirectorySource, getAiUsage } from "./openrouter";
+import { writeReplyDraft, writeWarmFollowup, DEFAULT_SELLING_POINTS, translateToChinese, isTrustedDirectorySource, getAiUsage, scoreModel, emailModel } from "./openrouter";
 import { scrapeSite } from "./scrape";
 import { sendLead, sendApprovedBatch, sendFollowupBatch, sendWarmFollowupNow, unsubscribeByToken, getSetting, setSetting, addSuppressedEmail, isEmailSuppressed, autoSentToday, sentToday, sentTodayBreakdown, failedTodayBreakdown, getBreakerStatus, BREAKER_WINDOW, BREAKER_THRESHOLD, deliverEmail, brandForLead, senderSentToday, SENDER_PRIMARY, SENDER_LEGACY, DEFAULT_COMPANY_ADDRESS, autoSendEnabled, autoApproveEnabled, systemDailySendLimit, coldSentToday, SYSTEM_LIMIT_DEFAULT, RAMP_FLOOR, RAMP_FACTOR, autoSendDailyLimit , automationEnabled, autoSendBlockedReason, numSetting} from "./send";
 
@@ -1743,6 +1743,38 @@ app.get("/api/today", async (c) => {
         "SELECT COUNT(*) AS n FROM leads WHERE created_at IS NOT NULL AND date(created_at) = date('now')"
       ).first<{ n: number }>())?.n || 0,
     },
+    // ⭐⭐ C5-48 北极星：「收到回信 / 已联系」——**这台机器到底有没有用**。
+    //
+    // 🔴 口径**在这里冻结一次，别在前端再算一遍**（本仓栽过：同名不同义的数各算各的）：
+    //   · 分母 `contacted` = **曾经联系过的家数** = status 在 sent / replied / won 里的。
+    //     ⚠️ ⛔ 不能只数 `sent` —— 回了信的线索会**离开** sent 进入 replied，
+    //        只数 sent 的话分母会随着有人回信而缩小，比率虚高。今天 replied/won 都是 0，
+    //        两种算法数值相同 ⇒ **今天这个读数区分不开对错**，所以口径必须现在写死。
+    //   · 分子 `replied`  = 其中收到过回信的 = status 在 replied / won 里的。
+    //     ⚠️ won 必须算进分子：成交必然先回过信，漏掉它会让比率随成交而下降。
+    //
+    // ⚠️ 为什么用 status 而不是直接数 replies 表：**自动回执/DMARC 报告也会进 replies 表**
+    //   （生产 8 条里 5 条 DMARC、2 条自动回执）。而 status 推进那一侧早已只认真人回信
+    //   （auto-reply 不再推进 stage，见 replies.ts），所以 status 是已经去过噪的那个口径。
+    //   ⛔ 别改成 `COUNT(*) FROM replies`，那会把 DMARC 报告当成"客户回信了"。
+    replyFunnel: await (async () => {
+      const r = await db.prepare(
+        `SELECT
+           SUM(CASE WHEN status IN ('sent','replied','won') THEN 1 ELSE 0 END) AS contacted,
+           SUM(CASE WHEN status IN ('replied','won')        THEN 1 ELSE 0 END) AS replied
+         FROM leads WHERE ${NOT_TEST_SQL}`
+      ).first<{ contacted: number; replied: number }>();
+      return { contacted: r?.contacted || 0, replied: r?.replied || 0 };
+    })(),
+    // C5-48「按当前标准重刷全库」的**真实影响面**。⛔ 不许写死 ——
+    //   这个数字是 Joe 按下那个按钮之前唯一能看到的后果，写错了等于骗他点。
+    //   口径 = 会被重刷动到的那些状态（与 RESCORE_SKIP_STATUSES 互补：跳过 sent/replied/won/blacklisted）。
+    rescoreScope: (await db.prepare(
+      `SELECT COUNT(*) AS n FROM leads WHERE COALESCE(status,'new') IN ('new','analyzed','pending','approved','queued') AND ${NOT_TEST_SQL}`
+    ).first<{ n: number }>())?.n || 0,
+    // C5-48 API 配置卡要显示两个模型名。⚠️ 真读 env 覆盖后的值（scoreModel/emailModel），
+    //   ⛔ 不读 DEFAULT_* 常量 —— 那样 env 一改界面就开始说谎。
+    aiModels: { score: scoreModel(c.env), email: emailModel(c.env) },
   });
 });
 
