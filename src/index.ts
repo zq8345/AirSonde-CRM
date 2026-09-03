@@ -1454,6 +1454,15 @@ app.get("/api/activity", async (c) => {
     blockedKind: blocked ? blocked.kind : null,
     blockedGroup: blocked ? blocked.group : null,
     initiator: act ? act.by : null,
+    // ══ header-v3：面板四行「状态词 · 数字」的数字，口径全在这里，⛔ 前端不自己算 ══
+    auto,                                                              // 胶囊两句：启动中 / 暂停中
+    act: act ? { kind: act.kind, by: act.by, done: act.done ?? null, total: act.total ?? null, note: act.note || "" } : null,   // 芯片 + 在跑那一行的进度
+    serper: await (async () => { const u = await getSerperUsage(c.env); return { used: u.usedToday, budget: u.budget }; })(),   // 找客户：今日预算 已用/上限
+    unscoredQueue: (await c.env.DB.prepare(                          // AI 分析：排队 N（= 左栏待分析，同一谓词）
+      `SELECT COUNT(*) AS n FROM leads l LEFT JOIN lead_analysis a ON a.lead_id=l.id WHERE ${UNSCORED_SHOW_WHERE}`
+    ).first<{ n: number }>())?.n || 0,
+    sent: { today: sentToday, limit: effective },                     // 发信：今日 已发/上限（与 quotaNote 同源，拆成结构化）
+    replyLastPollAt: (await getSetting(c.env, "reply_last_poll_at", "")).trim() || null,   // 收信：上次成功拉取戳（IMAP 循环成功时写）
   });
 });
 
@@ -4711,6 +4720,8 @@ async function scheduled(event: ScheduledController, env: Env, ctx: ExecutionCon
       else {
         await setSetting(env, "reply_fail_streak", "0");
         await setSetting(env, "reply_timeout_streak", "0");   // 旧全局键顺手清零退役（读者已迁按账户键）
+        // header-v3：收信那一行的「上次 HH:MM」= 上次**成功**拉取的时刻（失败不写：失败的时间在 reply_fail_last 里）
+        await setSetting(env, "reply_last_poll_at", new Date().toISOString().slice(0, 19).replace("T", " "));
       }
     }
   } catch (e: any) {

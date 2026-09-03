@@ -371,29 +371,62 @@
     /* ⭐ C5-28 打磨②：轻量组合 —— **圆点 + 徽章文字 + 分隔点 + 动作小字**，
        去掉整条的粗边框与实底（原来是个带框胶囊，文字挤在一起、还整条变色）。
        层级交给**字重与颜色**：徽章 600/主色，动作小字 400/灰、降一档字号。间距走 8px 网格。 */
-    .status-bar { display:inline-flex; align-items:baseline; gap:8px; font-size:14px;
-                  padding:6px 8px; border:0; background:transparent; border-radius:8px;
-                  cursor:pointer; white-space:nowrap; max-width:420px; }
-    .status-bar:hover { background:var(--panel); }        /* 可点这件事要看得出来 */
-    .status-bar .sb-badge { font-weight:600; }
-    .status-bar .sb-sep  { color:var(--border-strong); }
-    .status-bar .sb-act  { font-size:12px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; }
-    /* ⚠️ 受阻时**只有圆点和徽章文字变 amber**，不整条变色 —— 整条变色会把顶栏染成一片，
-       而它要表达的只是"有件事需要你知道"。 */
-    .status-bar .sb-dot { width:8px; height:8px; border-radius:50%; background:currentColor;
-                          flex-shrink:0; align-self:center; }
-    .status-bar.auto-running, .status-bar.manual-busy { color:var(--blue); }
-    .status-bar.auto-blocked { color:var(--amber); }
-    .status-bar.stopped      { color:var(--muted); }
-    /* ⭐ C5-54：**有引擎停了就得看得出不对劲** —— ⛔ 只改一句小字、颜色照旧绿，
-       等于把警告藏进了一行灰字里。Joe 指认的现场正是"顶栏一个字都没说"。
-       ⚠️ 优先级高于 auto-running 的绿（写在它后面即可，同特异性后者赢）。 */
-    .status-bar.has-stopped  { color:var(--amber); }
-    /* ⚠️ 呼吸**只作用在圆点上**、且只在真的有活在跑时（.busy）——
-       idle 必须静止（一盏永远闪的灯等于没有灯），文字更不能跟着抖。 */
-    @keyframes sbPulse { 0%,100% { opacity:1 } 50% { opacity:.3 } }
-    .status-bar.busy .sb-dot { animation: sbPulse 1.6s ease-in-out infinite; }
-    @media (prefers-reduced-motion: reduce) { .status-bar.busy .sb-dot { animation:none } }
+    /* ══ header-v3（真源 header-mockup.html）：三个零件各自只有很少的态 ——
+       胶囊 2 句（.on 启动中 / .off 暂停中；.on.warn 有环节停了）· 圆点 3 色（绿/琥珀/灰，.busy 时外圈呼吸）· 芯片 有/无。
+       面板 .pop 永远四行 .row：圆点 + 名字 + 一句「状态词 · 数字」；谁在跑谁带流光进度条；受阻那行琥珀 + 服务器原话（.raw）。
+       动效全 CSS；prefers-reduced-motion 下全关。 */
+    .hdr-status { position:relative; display:flex; align-items:center; gap:10px; }
+    .find { display:inline-flex; align-items:center; gap:6px; height:32px; padding:0 14px; border-radius:16px; background:var(--brand); color:#fff;
+            font-size:13px; font-weight:600; border:0; cursor:pointer; transition:transform .15s, box-shadow .15s; white-space:nowrap; }
+    .find:hover { transform:translateY(-1px); box-shadow:0 4px 12px rgba(12,122,107,.28); border:0; }
+    .find svg { width:14px; height:14px; stroke:#fff; fill:none; stroke-width:2.4; }
+    .find.off { background:var(--panel); color:var(--hint); border:1px solid var(--border); cursor:default; }
+    .find.off:hover { transform:none; box-shadow:none; }
+    .find.off svg { stroke:var(--hint); }
+    .sb-pill { display:inline-flex; align-items:center; gap:9px; height:32px; padding:0 13px 0 11px; border-radius:16px; font-size:13px; font-weight:600;
+            cursor:pointer; border:1px solid transparent; transition:transform .15s, box-shadow .15s; white-space:nowrap; background:transparent; }
+    .sb-pill:hover { transform:translateY(-1px); box-shadow:0 4px 12px rgba(16,20,24,.08); }
+    .sb-pill .dot { position:relative; width:9px; height:9px; border-radius:50%; background:currentColor; flex-shrink:0; }
+    .sb-pill .dot:after { content:""; position:absolute; inset:-4px; border-radius:50%; border:2px solid currentColor; opacity:0; }
+    .sb-pill.busy .dot:after { animation:sbRing 1.8s ease-out infinite; }
+    @keyframes sbRing { 0% { transform:scale(.5); opacity:.6 } 100% { transform:scale(1.5); opacity:0 } }
+    .sb-pill.on { color:var(--brand-strong); background:linear-gradient(135deg,#e6f2f0,#d5eae6); }
+    .sb-pill.on.warn { color:var(--amber); background:linear-gradient(135deg,#fff4dd,#ffe9bd); }
+    .sb-pill.off { color:var(--muted); background:var(--panel); border-color:var(--border); }
+    .sb-pill.off .dot { background:var(--border-strong); }
+    .task { display:inline-flex; align-items:center; gap:8px; height:32px; padding:0 12px 0 8px; border-radius:16px; background:var(--bg);
+            border:1px solid var(--border-strong); font-size:12px; animation:sbIn .25s ease-out both; white-space:nowrap; }
+    @keyframes sbIn { from { opacity:0; transform:translateX(10px) } to { opacity:1; transform:none } }
+    .ringp { width:18px; height:18px; } .ringp circle { fill:none; stroke-width:3; } .ringp .bg { stroke:var(--border); }
+    .ringp .fg { stroke:var(--brand); stroke-linecap:round; transform:rotate(-90deg); transform-origin:50% 50%; stroke-dasharray:44; animation:sbDash 2.4s ease-in-out infinite; }
+    @keyframes sbDash { 0% { stroke-dashoffset:44 } 50% { stroke-dashoffset:12 } 100% { stroke-dashoffset:44 } }
+    .task b { color:var(--brand-strong); } .task .n { color:var(--muted); }
+    /* 面板：永远四行 */
+    .pop { position:absolute; right:0; top:44px; width:330px; background:var(--bg); border:1px solid var(--border); border-radius:12px;
+           box-shadow:0 12px 32px rgba(16,20,24,.12); padding:6px 14px 10px; z-index:60; font-size:13px; text-align:left; animation:sbPop .18s ease-out both; }
+    @keyframes sbPop { from { opacity:0; transform:translateY(-6px) } to { opacity:1; transform:none } }
+    .pop .row { display:flex; align-items:flex-start; gap:10px; padding:10px 0; border-bottom:1px solid var(--border); animation:sbIn .3s ease-out both; }
+    .pop .row:nth-child(2) { animation-delay:.04s } .pop .row:nth-child(3) { animation-delay:.08s } .pop .row:nth-child(4) { animation-delay:.12s }
+    .pop .row .d { width:8px; height:8px; border-radius:50%; flex-shrink:0; margin-top:7px; position:relative; }
+    .pop .d.ok { background:var(--brand); } .pop .d.no { background:var(--amber); } .pop .d.idle { background:var(--border-strong); }
+    .pop .d.run:after { content:""; position:absolute; inset:-3px; border-radius:50%; border:1.5px solid var(--brand); animation:sbRing 1.8s ease-out infinite; }
+    .pop .row .n { width:52px; flex-shrink:0; font-weight:600; }
+    .pop .row .b { flex:1; min-width:0; }
+    .pop .row .s { color:var(--muted); font-size:12px; }
+    .pop .row .s b { color:var(--brand-strong); }
+    .pop .row .s.warn { color:var(--amber); }
+    .pop .bar { height:4px; border-radius:2px; background:var(--border); margin-top:6px; overflow:hidden; position:relative; }
+    .pop .bar i { position:absolute; left:0; top:0; bottom:0; border-radius:2px; background:var(--brand); }
+    .pop .bar i:after { content:""; position:absolute; inset:0; background:linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent); animation:sbShine 1.4s linear infinite; }
+    @keyframes sbShine { from { transform:translateX(-100%) } to { transform:translateX(100%) } }
+    .pop .raw { margin-top:6px; padding:6px 8px; background:var(--tint-amber); border-radius:6px; font-family:ui-monospace,Consolas,monospace; font-size:12px; line-height:1.5; color:#7a5200; white-space:pre-wrap; word-break:break-all; }
+    .pop .foot { padding-top:8px; display:flex; justify-content:space-between; align-items:center; }
+    .pop .foot a { color:var(--brand-strong); font-size:12px; text-decoration:none; font-weight:600; cursor:pointer; }
+    .pop .foot .t { font-size:12px; color:var(--hint); }
+    @media (prefers-reduced-motion: reduce) {
+      .sb-pill, .find, .task, .pop, .pop .row, .sb-pill.busy .dot:after, .pop .d.run:after, .ringp .fg, .pop .bar i:after { animation:none !important; transition:none !important; }
+      .sb-pill:hover, .find:hover { transform:none; }
+    }
     .an-chip i { display:block; width:56px; height:4px; border-radius:2px; background:var(--border); overflow:hidden; }
     .an-chip i > b { display:block; height:100%; background:var(--blue); }
     .btn-quiet { background:transparent; border-color:transparent; color:var(--muted); }
@@ -905,6 +938,8 @@
     .fc-maint { border-top:1px dashed var(--border); margin-top:16px; padding-top:10px; }
     /* 批⑳ 客户画像折叠：默认收起（大 textarea 不再常驻占屏），点标题展开 */
     .fc-collapsed { display:none !important; }
+    /* header-v3 追加②：画像预览态全文可读（多行自动换行；编辑态换成 textarea，由 setSettingsMode 切） */
+    .fc-profile-full { white-space:pre-wrap; word-break:break-word; line-height:1.5; font-size:13px; color:var(--text); margin:0 0 4px; }
     /* 批④ 待办事项 = 分诊台：按紧急度排的一列，0 的不显示，每条一句人话 + 一个跳转 */
     .tri-list { display:flex; flex-direction:column; gap:10px; }
     .tri-row { display:flex; align-items:center; gap:12px; background:var(--bg); border:1px solid var(--border);
@@ -1226,11 +1261,16 @@
       <button id="btn-dashboard" style="display:none">数据看板</button>
       <!-- ⭐ C5-28 打磨①：状态栏移到顶栏**最右**（Joe 最初圈的就是右上角；第一批落在搜索框旁边不对）。
            `margin-left:auto` 把它顶到最右端 —— 全站每页同位（它住在 header 里，不随视图切换）。 -->
-      <button id="status-bar" class="status-bar" style="display:none;margin-left:auto"
-              onclick="openMachineRoom()" title="查看自动化明细">
-        <span class="sb-dot"></span><span class="sb-badge"></span>
-        <span class="sb-sep">·</span><span class="sb-act"></span>
-      </button>
+      <!-- ══ header-v3（真源 airsonde-dispatch/header-v3/header-mockup.html）：从右往左 = 模式胶囊 · 找客户 · 任务芯片 ══
+           胶囊只两句（自动模式启动中/暂停中，= automation_enabled；读不到时「状态读不到」）；圆点 绿/琥珀/灰，busy 时呼吸；
+           找客户从全部页工具栏搬到这里（每页都在，点它 = 原弹窗）；芯片只在 activity.by==='user' 时出现，做完自动收起。
+           悬停胶囊出面板（#sb-pop，永远四行）；点胶囊仍进自动化页。⛔ 常驻小字 .sb-act / 分隔点 .sb-sep / 原生 title 长文本 已删。 -->
+      <div class="hdr-status" id="hdr-status" style="margin-left:auto">
+        <span id="task-chip" class="task" hidden></span>
+        <button id="btn-find" class="find" onclick="openRestock()" title="找客户"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>找客户</button>
+        <button id="status-bar" class="sb-pill off" onclick="openMachineRoom()"><span class="dot"></span><span class="sb-badge">状态读不到</span></button>
+        <div id="sb-pop" class="pop" hidden></div>
+      </div>
     </div>
   </header>
   <div class="wrap">
@@ -1496,19 +1536,21 @@
           <div class="load-error" id="fc-loaderr" style="display:none;margin-bottom:12px"></div>
 
           <!-- ① 我是谁 · 找什么客户 -->
+          <!-- header-v3 追加（Joe 三条）：① 行右侧那颗小「编辑」删了（卡头已有整卡编辑，重复）；
+               ② 画像文字预览态**全文可读**（多行自动换行），编辑态仍是原 textarea（随整卡 编辑/取消 切换，见 setSettingsMode）；
+               ③ 「按当前标准重刷全库」搬到本行最右端（原小编辑按钮的位置），图标走 ICON 工厂（refresh-cw），⛔ 不用 emoji；
+                  它下面那句「改完上面这段之后用 · 会重置 N 条…」说明留在原位。 -->
           <div class="subhead" style="margin-top:4px"><span class="num">1</span>
             <span class="field" style="font-size:14px">我是谁 · 找什么客户</span>
             <span class="badge" id="fc-profile-badge"></span>
-            <button class="btn-secondary mini" type="button" style="margin-left:auto" onclick="toggleProfile()">编辑</button></div>
+            <button class="btn-secondary mini js-danger" id="btn-rescan" type="button" style="margin-left:auto;display:inline-flex;align-items:center;gap:5px" onclick="startRescan()">按当前标准重刷全库</button></div>
           <div class="sec-indent">
-            <div class="hint" id="fc-profile-summary" style="margin:0 0 4px;cursor:pointer" onclick="toggleProfile()">（加载中…）</div>
+            <div id="fc-profile-summary" class="fc-profile-full">（加载中…）</div>
             <textarea id="fc-profile" class="fc-collapsed" placeholder="描述你的理想客户；留空用内置默认画像"></textarea>
-            <span id="fc-profile-caret" hidden></span>
             <!-- 🔴 C5-48：改完画像之后要有地方"让它对存量生效"，否则新标准只作用于以后搜到的。
                  ⚠️ 后果那句里的条数是**后端真算**的（/api/today 的 rescoreScope），⛔ 不写死 ——
                    这是 Joe 按下去之前唯一能看到的代价，写错等于骗他点。 -->
             <div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-              <button class="btn-secondary mini js-danger" type="button" onclick="startRescan()">🔄 按当前标准重刷全库</button>
               <span class="hint" id="fc-rescan-note" style="margin:0">改完上面这段之后用 · 正在算影响面…</span>
             </div>
           </div>
@@ -2282,7 +2324,7 @@
         s5: { t:"忽略", cls:"dan", fn:"toolStatusSel('ignored','忽略')" },
         s6: { t:"加黑名单", cls:"dan", fn:"toolStatusSel('blacklisted','加黑名单')" },
         // 找客户：从 #btn-restock 搬进右边区，仍只在「全部」页出现；弹窗内容不动
-        fleet: [ { t:"找客户", cls:"pri", fn:"openRestock()" } ],
+        // header-v3：「找客户」从这里搬进顶栏（每页都在，#btn-find → openRestock），全部页工具栏不再有它
       },
       unscored: {
         s1: { t:"分析", cls:"pri", fn:"toolAnalyzeSel()" },
@@ -3055,6 +3097,8 @@
     const ico = (d, size = 18) =>
       `<svg class="nav-ico" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
     const ICON = {
+      // header-v3 追加③：重刷全库（refresh-cw），与左栏同一套单色线条图标，⛔ 不用 emoji 🔄
+      refresh: ico(`<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>`, 14),
       // 待办事项：清单 + 勾（check-square 变体）
       todo:    ico(`<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>`),
       // 数据看板：柱状图（bar-chart）
@@ -3979,60 +4023,93 @@
     //   就是把刚收编掉的双真源换个地方重造。
     // ⚠️ 读不到就**说读不到**（铁律三），不显示一个看起来正常的默认值 ——
     //   这一格恰恰最不能猜：它的全部意义就是让机器状态可见。
-    let _sbTimer = null;
+    // ══⭐⭐ header-v3（Joe：状态栏文字精简到两句 + 悬停出详情 + 找客户搬上来 + 有点动效）══
+    //   三个零件：胶囊（2 句 + 读不到）· 圆点（3 色，busy 呼吸）· 任务芯片（只在 activity.by==='user' 时）。
+    //   面板永远四行：找客户 · AI 分析 · 发信 · 收信，每行「状态词 · 数字」；状态词只有 5 个。
+    //   ⚠️ 判定与数字**全部来自 /api/activity**（auto / act / engines / stoppedCount / serper / unscoredQueue / sent / replyLastPollAt），
+    //     前端只挑字：⛔ 不判"预算满没满"、⛔ 不算任何数（C5-54 那条规矩不变）。
+    //   ⚠️ 读不到就说读不到（铁律三）：胶囊「状态读不到」+ 空心点，面板四行全「待命 · —」。
+    let _sbTimer = null, _sbLast = null, _sbAt = null, _popShowT = null, _popHideT = null;
+    const SB_WORD = { idle:'待命', run:'在跑', user:'你交办的在跑', blocked:'受阻', paused:'已暂停' };
+    const SB_ACT_LABEL = { search:'找客户', analyze:'AI 分析', findmail:'补邮箱', send:'发信', reply:'收信' };
+    const SB_ROW_KIND = { discover:'search', analyze:'analyze', send:'send', reply:'reply' };   // 引擎 id → activity.kind
+    const sbHHMM = (s) => { if (!s) return ''; const d = new Date(String(s).replace(' ', 'T') + (/[Zz]|[+-]\d\d:?\d\d$/.test(String(s)) ? '' : 'Z'));
+      return isNaN(d) ? String(s).slice(11, 16) : `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; };
+    const sbProg = (a) => a && a.total ? `${a.done ?? 0}/${a.total}` : (a && a.done != null ? String(a.done) : '');
+    // 四行的内容：只挑字、不判定
+    function sbRows(d){
+      const eng = (id) => (Array.isArray(d.engines) ? d.engines : []).find(e => e.id === id) || null;
+      const act = d.act || null;
+      const running = (kind) => act && act.kind === kind;
+      const row = (id, name, numIdle, numPaused) => {
+        const e = eng(id), kind = SB_ROW_KIND[id];
+        const paused = !d.auto && id !== 'reply';           // 收信不随总开关
+        const r = { name, cls:'idle', word:SB_WORD.idle, num:numIdle, bar:null, raw:'' };
+        if (paused) { r.cls = 'idle'; r.word = SB_WORD.paused; r.num = numPaused; return r; }
+        if (e && e.stopped) { r.cls = 'no'; r.word = SB_WORD.blocked; r.num = `${e.reason || '原因读不到'}${numIdle ? ' · ' + numIdle : ''}`; r.raw = (id === 'send' && d.detail) ? d.detail : ''; return r; }
+        if (running(kind)) { r.cls = 'ok run'; r.word = act.by === 'user' ? SB_WORD.user : SB_WORD.run; r.num = [sbProg(act), act.note].filter(Boolean).join(' · ') || numIdle;
+          r.bar = act.total ? Math.max(2, Math.min(100, Math.round(100 * (act.done || 0) / act.total))) : null; return r; }
+        r.cls = 'ok'; return r;
+      };
+      const sp = d.serper || {}, st = d.sent || {};
+      return [
+        row('discover', '找客户', (sp.budget != null) ? `今日预算 ${sp.used ?? 0}/${sp.budget}` : '', '手动点仍可用'),
+        row('analyze',  'AI 分析', `排队 ${Number(d.unscoredQueue) || 0}`, `排队 ${Number(d.unscoredQueue) || 0}`),
+        row('send',     '发信',    (st.limit != null) ? `今日 ${st.today ?? 0}/${st.limit}` : '', (st.limit != null) ? `今日 ${st.today ?? 0}/${st.limit}` : ''),
+        (() => { const r = row('reply', '收信', d.replyLastPollAt ? `上次 ${sbHHMM(d.replyLastPollAt)}` : '未拉取过', ''); if (!d.auto && r.cls === 'ok') r.num = '不随总开关'; return r; })(),
+      ];
+    }
+    function sbRenderPop(){
+      const pop = document.getElementById('sb-pop'); if (!pop) return;
+      const d = _sbLast;
+      const rows = d ? sbRows(d) : ['找客户','AI 分析','发信','收信'].map(n => ({ name:n, cls:'idle', word:SB_WORD.idle, num:'—', bar:null, raw:'' }));
+      const stopped = d ? ((Number(d.stoppedCount) || 0) > 0 || !!d.detail) : false;
+      const footR = !d ? '状态读不到' : !d.auto ? '开关在自动化页' : stopped ? '恢复后自动变绿' : `${sbHHMM(_sbAt)} 更新`;
+      pop.innerHTML = rows.map(r => `<div class="row"><span class="d ${r.cls}"></span><span class="n">${esc(r.name)}</span><div class="b">`
+          + `<div class="s${r.cls.startsWith('no') ? ' warn' : ''}">${r.word === SB_WORD.user ? `<b>${r.word}</b>` : esc(r.word)}${r.num ? ' · ' + esc(r.num) : ''}</div>`
+          + (r.bar != null ? `<div class="bar"><i style="width:${r.bar}%"></i></div>` : '')
+          + (r.raw ? `<div class="raw">${esc(r.raw)}</div>` : '') + `</div></div>`).join('')
+        + `<div class="foot"><a onclick="openMachineRoom()">查看自动化 →</a><span class="t">${esc(footR)}</span></div>`;
+    }
+    // 悬停：停胶囊 150ms 弹出，移到面板上不消失，离开 200ms 收起；点胶囊仍进自动化页
+    function sbPopShow(){ clearTimeout(_popHideT); clearTimeout(_popShowT); _popShowT = setTimeout(() => { sbRenderPop(); const p = document.getElementById('sb-pop'); if (p) p.hidden = false; }, 150); }
+    function sbPopHide(){ clearTimeout(_popShowT); clearTimeout(_popHideT); _popHideT = setTimeout(() => { const p = document.getElementById('sb-pop'); if (p) p.hidden = true; }, 200); }
+    function sbBindHover(){
+      const pill = document.getElementById('status-bar'), pop = document.getElementById('sb-pop');
+      if (!pill || !pop || pill.dataset.hover) return; pill.dataset.hover = '1';
+      pill.addEventListener('mouseenter', sbPopShow); pill.addEventListener('mouseleave', sbPopHide);
+      pop.addEventListener('mouseenter', () => clearTimeout(_popHideT)); pop.addEventListener('mouseleave', sbPopHide);
+    }
     async function paintStatusBar(){
       const el = document.getElementById('status-bar'); if (!el) return;
+      sbBindHover();
       let d = null;
       try { d = await fetch('/api/activity').then(r => r.json()); } catch {}
-      el.style.display = '';
+      const badge = el.querySelector('.sb-badge'), chip = document.getElementById('task-chip'), find = document.getElementById('btn-find');
       if (!d || !d.badge) {
-        el.className = 'status-bar stopped';
-        el.querySelector('.sb-badge').textContent = '状态读不到';
-        el.querySelector('.sb-act').textContent = '';
-        el.title = '后台没返回状态 —— 这是"不知道"，不是"停了"';
+        _sbLast = null; _sbAt = null;
+        el.className = 'sb-pill off'; badge.textContent = '状态读不到';
+        if (chip) chip.hidden = true;
+        if (find) { find.classList.remove('off'); find.disabled = false; find.title = '找客户'; }
+        if (!document.getElementById('sb-pop').hidden) sbRenderPop();
         return;
       }
-      const LABEL = { 'auto-running':'自动·运行中', 'auto-blocked':'自动·发信受阻',
-                      'manual-busy':'手动·工作中', 'stopped':'已停·只收耳朵' };
-      el.className = 'status-bar ' + d.badge + (d.busy ? ' busy' : '');
-      el.querySelector('.sb-badge').textContent = LABEL[d.badge] || d.badge;
-      // ⭐⭐ C5-54：顶栏要说的是**四个引擎的真实状态**，不只是总开关的状态。
-      //   Joe 指认的现场：今日搜索预算 2500/2500 已用满、**找客户彻底停了**，
-      //   而这里还在显示「自动·运行中」—— 它说了**一半真话**。
-      //
-      // ⚠️ 口径**全部来自后端** `d.engines`（src/engines.ts），⛔ 前端不自己判断任何一条 ——
-      //   "预算用满了没""国家选了没"在前端再算一遍就是第二个真源（今天三次事故全是这个形状）。
-      //
-      // ⚠️ **正常时必须一个字都不多说**：`stoppedCount===0` 走原来的分支，不加任何警告。
-      //   今天刚栽过 `crossed_50_at`（正常运行必定报警）—— 那种告警等于没有告警，而且更坏。
-      //
-      // 📌 多个引擎同时停的显示形状 = **最该先处理的那一条 + 还有几个**（后端已排好序：
-      //   能让他立刻动手的排前面）。⚠️ 这个形状**待总调度确认**，改起来只动这一段。
-      const stoppedN = Number(d.stoppedCount) || 0;
-      const top = d.topStopped;
-      let warnTxt = '';
-      if (stoppedN > 0 && top) {
-        warnTxt = `⚠️ ${top.label}已停（${top.reason || '原因读不到'}）`
-                + (stoppedN > 1 ? ` · 另有 ${stoppedN - 1} 个环节也停了` : '');
+      _sbLast = d; _sbAt = new Date().toISOString();
+      const warn = (Number(d.stoppedCount) || 0) > 0 || !!d.detail;
+      el.className = 'sb-pill ' + (d.auto ? 'on' + (warn ? ' warn' : '') : 'off') + (d.busy ? ' busy' : '');
+      badge.textContent = d.auto ? '自动模式启动中' : '自动模式暂停中';
+      // 任务芯片：只有你交办的活（activity.by==='user'）才出现；机器自己跑的不出芯片（面板那一行会带进度条）
+      const mine = d.act && d.act.by === 'user';
+      if (chip) {
+        if (mine) {
+          const label = SB_ACT_LABEL[d.act.kind] || d.act.kind;
+          const num = [sbProg(d.act), d.act.note].filter(Boolean).join(' · ');
+          chip.innerHTML = `<svg class="ringp" viewBox="0 0 18 18"><circle class="bg" cx="9" cy="9" r="7"/><circle class="fg" cx="9" cy="9" r="7"/></svg><b>${esc(label)}</b>${num ? `<span class="n">${esc(num)}</span>` : ''}`;
+          chip.hidden = false;
+        } else chip.hidden = true;
       }
-      // 分隔点由 CSS 结构承担，所以小字里不再自己带 ' · '；没有小字时把分隔点一起藏掉
-      const actTxt = [d.action || '', warnTxt].filter(Boolean).join(' · ');
-      el.querySelector('.sb-act').textContent = actTxt;
-      { const sep = el.querySelector('.sb-sep'); if (sep) sep.style.display = actTxt ? '' : 'none'; }
-      // 停了的时候整条状态栏也要**看得出不对劲**（⛔ 别只改一句小字，颜色不变等于没说）
-      if (stoppedN > 0) el.classList.add('has-stopped');
-      // C5-28 打磨③：悬浮提示统一成「查看自动化明细」——"可点"这件事要说得出来点了会去哪。
-      // 受阻时把**服务器原话**顶在最前面（排查要的是它，不是那句人话）。
-      // C5-29：额度类静态信息（今日已发 / 发满 / 明天上限）**只进悬浮**，不占常驻小字 ——
-      //   常驻小字只说"正在干什么"。信息没丢，只是换了住处（悬浮 + 机器房）。
-      // C5-54：悬浮里给**四个引擎的全貌** —— 顶栏只说最该先处理的那一条，细节要有地方看得到。
-      //   ⚠️ 在跑的也列出来：只列停了的，会让人以为"没列出来的可能也停了只是没显示"。
-      const engLines = Array.isArray(d.engines) && d.engines.length
-        ? d.engines.map(e => `${e.stopped ? '○' : '●'} ${e.label}：${e.stopped ? (e.reason || '原因读不到') : '在跑'}`).join("\n") + "\n\n"
-        : "";
-      el.title = (d.detail ? d.detail + "\n\n" : "")
-        + engLines
-        + (d.quotaNote ? d.quotaNote + "\n" : "") + "查看自动化明细";
+      if (find) { find.classList.toggle('off', !!mine); find.disabled = !!mine; find.title = mine ? '正在跑' : '找客户'; }
+      if (!document.getElementById('sb-pop').hidden) sbRenderPop();   // 面板开着时跟着刷新
     }
     window.paintStatusBar = paintStatusBar;
     /** 常驻轮询。⚠️ 有活在跑时快一点、闲着时慢下来 —— 闲着还每 3 秒打一次是白烧额度。 */
@@ -4290,13 +4367,13 @@
     window.fcKwAll = (on) => { if (inPreview('[data-cfg-group="search"]')) return;   // C5-49 第三层
       if(on) _fcKwRows.forEach(k=>_fcKwChecked.add(k.keyword)); else _fcKwChecked.clear(); renderKwInline(); };
     // 批A#3 客户画像展开/收起（批⑳ 改：点标题切 caret + 收起时显摘要行，不再依赖 #fc-profile-toggle 按钮）
-    window.toggleProfile = () => {
-      const t=$("#fc-profile"); if(!t) return;
-      const collapsed=t.classList.toggle('fc-collapsed');
-      const c=$("#fc-profile-caret"); if(c) c.textContent = collapsed?'▸':'▾';
-      const sm=$("#fc-profile-summary"); if(sm) sm.style.display = collapsed?'':'none';
-      if(!collapsed) t.focus();
-    };
+    // header-v3 追加①②：画像不再有自己的小「编辑」/折叠开关（toggleProfile 及 caret 一并删）——
+    //   预览态 = 全文 div，编辑态 = 原 textarea，跟整卡 编辑/取消/保存 同一开关（setSettingsMode 调这里）。
+    function setProfileEditMode(edit){
+      const t=$("#fc-profile"), sm=$("#fc-profile-summary"); if(!t || !sm) return;
+      t.classList.toggle('fc-collapsed', !edit);
+      sm.style.display = edit ? 'none' : '';
+    }
     // 批⑳ 层3 末 · 维护折叠（全量重扫降位）
     // ⚠️ 维护区已改成原生 <details>（板块三），不再需要 JS 切换。
     //   这个函数的两个元素都不存在了 ⇒ **恒 return**。⛔ 不删：window.toggleMaint 可能仍被 onclick 引用，
@@ -4465,7 +4542,8 @@
       fetch("/api/settings/profile").then(r=>r.json()).then(p=>{
         const el=$("#fc-profile"); if(el) el.value = p.profile||"";
         const txt=(p.profile||"").trim();
-        const sm=$("#fc-profile-summary"); if(sm) sm.textContent = txt ? (txt.slice(0,40)+(txt.length>40?'…':'')) : '（未设置，用内置默认画像）';
+        // header-v3 追加②（Joe）：预览态**全文**可读，不再 40 字截断（CSS .fc-profile-full 负责换行）
+        const sm=$("#fc-profile-summary"); if(sm) sm.textContent = txt ? txt : '（未设置，用内置默认画像）';
         const bd=$("#fc-profile-badge"); if(bd) bd.textContent = p.isDefault ? '· 默认画像' : '· 已自定义';
         renderWheelSummary(cfg, !p.isDefault);   // C5-3：方向盘折叠行摘要（真值派生）
       }).catch(()=>{ renderWheelSummary(cfg, null); });   // 画像读不到就说读不到，别当成"默认"
@@ -4943,6 +5021,8 @@
       if (!forms.length) return;
       const edit = mode === "edit";
       for (const sp of forms) setOneFormMode(sp, edit);
+      // header-v3 追加②：画像文本框跟着整卡两态走（预览 = 全文 div，编辑 = textarea）
+      if (forms.some(f => f.querySelector && f.querySelector('#fc-profile'))) setProfileEditMode(edit);
       // ⚠️ C5-42b：现在有**两套**控制按钮（设置页一套、机器房一套）。
       //   `$()` 只取第一个 ⇒ 只写 '#cfg-edit' 会让机器房那颗永远不切换、点了没反应，**且不报错**。
       const show = (sel, on) => document.querySelectorAll(sel)
@@ -5094,6 +5174,7 @@
       // C5-4v C.6：左栏「设置」也是导航项 → 单色线条图标。用 sliders 而非齿轮，
       //   免得跟机器房那颗齿轮撞脸：两个"齿轮感"图标并排，扫视时分不出哪个是哪个。
       if(gb) gb.innerHTML = `<span class="ico">${ICON.gear}</span>设置`; }   // nav-table-v2：图标占 25px 位，文字与其它条目同一 x
+    { const rb=$("#btn-rescan"); if(rb) rb.innerHTML = `${ICON.refresh}<span>按当前标准重刷全库</span>`; }   // header-v3 追加③：图标走 ICON 工厂
     $("#btn-settings").onclick = () => openSettings();
     document.addEventListener("input", (e) => { if (e.target && e.target.id === "cfg-auto-limit") renderCapacity(); });
     // ⭐ P0-1 的灵魂：**宁可告诉他做不到，也不能悄悄砍成 N 还让他以为发了 500。**
