@@ -21,7 +21,7 @@ import { REAL_REPLY_SQL, realReplySql, NOT_TEST_SQL, notTestSql, LEADS_IS_TEST_D
 import { installFetchMeter, meteredDB, mark as subMark, reset as subReset, summary as subSummary } from "./subreq";
 import { engineStatuses, pipelineTools } from "./engines";
 import { normalizeCustomerType, customerTypeLabel, categoryValuesFor, classifyKillReason, KILL_REASONS } from "./taxonomy";
-import { normalizePhone, formatPhoneDisplay } from "./scrape";   // C5-31：号码清洗与展示切分，单源
+import { normalizePhone, formatPhoneDisplay, decodeEntities } from "./scrape";   // C5-31：号码清洗与展示切分，单源；v8 补丁⑨：实体解码同源
 import { errHuman } from "./errhuman";   // C5-24 第 5 条：机器错误串 → 人话（服务端唯一一份）
 import { currentActivity, setActivity, clearActivity } from "./activity";   // C5-28：机器活动真源
 
@@ -114,10 +114,20 @@ function withPhoneDisplay<T extends { channels?: string | null }>(r: T): T & {
 } {
   let ch: any = {};
   try { ch = r.channels ? JSON.parse(r.channels) : {}; } catch { /* 脏 JSON 不该拖垮整行 */ }
+  // v8 补丁⑨ 读路径兜底：存量里 `&#x28;800&#x29;…` 这类没解码的实体，出接口前统一解一次（列表与详情都经这里），
+  //   前端 chanCell/tel:/wa.me 拿到的就是干净值；写路径根治见 scrape.ts extractChannels，回填见 /api/admin/decode-channels。
+  let changed = false;
+  for (const k of Object.keys(ch)) {
+    if (typeof ch[k] !== "string") continue;
+    const d = decodeEntities(ch[k]);
+    if (d !== ch[k]) { ch[k] = d; changed = true; }
+  }
+  const channelsOut = changed ? JSON.stringify(ch) : r.channels;
   const phoneRaw = normalizePhone(String(ch.phone || ""));
   const wa = waDigits(ch.whatsapp || ch.phone || "");
   return {
     ...r,
+    channels: channelsOut,
     phone_display: formatPhoneDisplay(phoneRaw),
     wa_display: wa ? formatPhoneDisplay("+" + wa) : "",
     phone_wa_same: !!wa && !!phoneRaw && phoneRaw.replace(/\D/g, "") === wa,
@@ -3563,15 +3573,28 @@ app.post("/api/replies/:id/handled", async (c) => {
 app.get("/api/replies/orphans", async (c) => {
   // v8 补丁③：孤儿也要过回复箱**同一套**噪音判定（isNoiseReply，⛔ 不写第二套）——
   //   生产实测 7 封 DMARC 自动报告被当"真人给你回的信"喊了一整条橙带。raw_headers 只用于判定，不出接口。
+  await ensureReplyColumns(c.env);
   const rows = await c.env.DB.prepare(
-    `SELECT id, from_email, subject, summary, category, content, received_at, raw_headers
+    `SELECT id, from_email, subject, summary, category, content, received_at, raw_headers, is_auto
        FROM replies WHERE lead_id IS NULL ORDER BY id DESC LIMIT 50`
   ).all<any>();
+  // v8 补丁⑩：人工「标为噪音」写的是现有的 is_auto 列（噪音缓存列，⛔ 不新造字段）⇒ 这里 is_auto=1 也算噪音
   const orphans = (rows.results || []).map((r: any) => {
     const { raw_headers, ...rest } = r;
-    return { ...rest, is_noise: isNoiseReply({ raw_headers, content: r.content, from_email: r.from_email, subject: r.subject }) };
+    return { ...rest, is_noise: Number(r.is_auto) === 1 || isNoiseReply({ raw_headers, content: r.content, from_email: r.from_email, subject: r.subject }) };
   });
   return c.json({ orphans });
+});
+
+// v8 补丁⑩：孤儿面板的「标为噪音」—— 写 replies.is_auto（回复箱/计数早就按这一列排除机器信），可 undo。
+app.post("/api/replies/:id/noise", async (c) => {
+  await ensureReplyColumns(c.env);
+  const id = Number(c.req.param("id"));
+  const b = await jsonBody<{ undo?: boolean }>(c);
+  if (!Number.isFinite(id)) return c.json({ error: "invalid id" }, 400);
+  const res = await c.env.DB.prepare("UPDATE replies SET is_auto=? WHERE id=?").bind(b.undo ? 0 : 1, id).run();
+  if (!Number(res.meta?.changes || 0)) return c.json({ error: "回复不存在" }, 404);
+  return c.json({ ok: true, is_auto: !b.undo });
 });
 
 // 人工把一条孤儿回复挂到某条线索上 —— 三层匹配也有兜不住的时候（换域名回、私人邮箱回），
@@ -4012,6 +4035,36 @@ app.post("/api/rescore-low/batch", async (c) => {
  *   **一个戳的全部价值就是回答"我看到的是哪一版"；给一个误导性的答案，比不给更坏。**
  * ⚠️ git sha 仍然返回，但降级为 `buildSha`（相关性参考），⛔ 不是"生产跑哪版"的依据。
  */
+// ══ v8 补丁⑨ 存量回填：channels 里没解码的 HTML 实体。用的就是 scrape.ts 的 decodeEntities（与写路径同一函数）。
+//   默认只读：报行数 + 样本；`?confirm=write` 才 UPDATE，且**只改真的会变的行**，改前原值随响应返回（调用方存档进 docs/audit）。
+//   ⚠️ 这是抓取数据不是 Joe 的内容资产（总工裁定可改，先报数再动）。Access 之后才到得了这里。
+app.get("/api/admin/decode-channels", async (c) => {
+  const rows = await c.env.DB.prepare(
+    `SELECT id, channels FROM leads WHERE channels IS NOT NULL AND (channels LIKE '%&#%' OR channels LIKE '%&amp;%' OR channels LIKE '%&nbsp;%' OR channels LIKE '%&quot;%' OR channels LIKE '%&apos;%' OR channels LIKE '%&lt;%' OR channels LIKE '%&gt;%')`
+  ).all<{ id: number; channels: string }>();
+  const changes: { id: number; before: string; after: string }[] = [];
+  for (const r of rows.results || []) {
+    let ch: any; try { ch = JSON.parse(r.channels); } catch { continue; }
+    if (!ch || typeof ch !== "object") continue;
+    let changed = false;
+    for (const k of Object.keys(ch)) {
+      if (typeof ch[k] !== "string") continue;
+      const d = decodeEntities(ch[k]);
+      if (d !== ch[k]) { ch[k] = d; changed = true; }
+    }
+    if (changed) changes.push({ id: r.id, before: r.channels, after: JSON.stringify(ch) });
+  }
+  const write = c.req.query("confirm") === "write";
+  let updated = 0;
+  if (write) {
+    for (const ch of changes) {
+      const res = await c.env.DB.prepare("UPDATE leads SET channels=? WHERE id=? AND channels=?").bind(ch.after, ch.id, ch.before).run();
+      updated += Number(res.meta?.changes || 0);
+    }
+  }
+  return c.json({ matchedRows: (rows.results || []).length, wouldChange: changes.length, write, updated, changes });
+});
+
 app.get("/api/version", async (c) => {
   const v = c.env.CF_VERSION;
   let build: any = null;

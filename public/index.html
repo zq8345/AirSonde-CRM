@@ -635,29 +635,23 @@
     .bulk-bar { background:var(--panel); border:1px solid var(--blue); border-radius:8px; padding:8px 12px;
                 margin-bottom:10px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
     .bulk-bar b { color:var(--blue); }
-    /* ⭐ 工具栏 v8 补丁①（Joe：「几次都没点上，然后进了信息详情页」）：行复选框加大成正方形，
-       高 = 公司名行顶 → 域名行底。⛔ 不写死像素：公司格是 flex，勾选热区 align-self:stretch，
-       方框 aspect-ratio:1 跟着两行文字块的高度走；两行块高变了它自动跟。
-       热区 = 方框 + 四周 4px padding（label 整体），整个热区 stopPropagation，不进详情。 */
-    .co-cell { display:flex; align-items:stretch; gap:6px; min-width:0; }
+    /* ⭐ 工具栏 v8 补丁①（Joe：「几次都没点上，然后进了信息详情页」）→ 回调（Joe：「又太大了」）：
+       可见方框 20×20，垂直居中于公司名+域名两行块；**热区不缩**：label 靠 flex stretch 撑满两行块整高，
+       宽 = 20 + 左右各 6px（≈32×40），热区内任意点只切换勾选、stopPropagation 不进详情。
+       方框定宽后不再需要逐行量高的 JS（--chk / syncChkBoxes 已删）。公司名 left = 方框 right + 8px（.co-cell gap）。 */
+    .co-cell { display:flex; align-items:stretch; gap:8px; min-width:0; }
     .co-lines { flex:1; min-width:0; }
-    /* ⚠️ 宽度为什么走 --chk 变量而不是 aspect-ratio：实测两版都不行 ——
-         ① 只给方框 aspect-ratio:1：flex 父按 padding 给 label 算宽（10px），39px 的方框溢出压在公司名上，
-           四角点击三角落在文字上 → 进详情；
-         ② 给 label 也加 aspect-ratio:1：Chrome 不把 stretch 得到的高度回传给 aspect-ratio 算主轴宽，label 仍 10px。
-       ⇒ 高度照旧由 stretch 跟着文字块走；宽度 = 渲染后实测该行 .co-lines 的高（syncChkBoxes 写进 --chk），
-         仍然不是常量：两行块高变了、已回复页多一行，它都自动跟。 */
-    .chk-hit { display:flex; align-items:stretch; align-self:stretch; flex-shrink:0; width:var(--chk,16px); box-sizing:content-box;
-               padding:0 4px; margin:0 -4px; cursor:pointer; }
+    .chk-hit { display:flex; align-items:center; align-self:stretch; flex-shrink:0; width:20px; box-sizing:content-box;
+               padding:0 6px; margin:0 -6px; cursor:pointer; }
     .chk-hit .rowchk { position:absolute; opacity:0; width:0; height:0; margin:0; pointer-events:none; }
-    .chk-box { display:block; flex:1; box-sizing:border-box; position:relative; border-radius:5px;
+    .chk-box { display:block; flex:none; width:20px; height:20px; box-sizing:border-box; position:relative; border-radius:4px;
                border:1.5px solid var(--border-strong); background:var(--bg); }
     .chk-hit:hover .chk-box { border-color:var(--brand); }
     .chk-hit .rowchk:checked + .chk-box { background:var(--brand); border-color:var(--brand); }
     .chk-hit .rowchk:checked + .chk-box::after { content:""; position:absolute; left:50%; top:46%; width:26%; height:50%;
-               border:solid #fff; border-width:0 2.5px 2.5px 0; transform:translate(-50%,-50%) rotate(45deg); }
-    /* 表头全选框：自己画、与行框同宽（宽度由 syncSelAllWidth 从第一行实测同步，左边缘对齐一列）、高度保持小 */
-    #sel-all { appearance:none; -webkit-appearance:none; width:16px; height:16px; margin:0 6px 0 0; vertical-align:middle; cursor:pointer;
+               border:solid #fff; border-width:0 2px 2px 0; transform:translate(-50%,-50%) rotate(45deg); }
+    /* 表头全选框：同款 20×20，与行框同一列左对齐（th/td 同 padding，行框 label 的 -6px margin 被 6px padding 抵消） */
+    #sel-all { appearance:none; -webkit-appearance:none; width:20px; height:20px; margin:0 8px 0 0; vertical-align:middle; cursor:pointer;
                box-sizing:border-box; border:1.5px solid var(--border-strong); border-radius:4px; background:var(--bg); position:relative; }
     #sel-all:checked { background:var(--brand); border-color:var(--brand); }
     #sel-all:checked::after { content:""; position:absolute; left:50%; top:44%; width:26%; height:52%; border:solid #fff; border-width:0 2px 2px 0; transform:translate(-50%,-50%) rotate(45deg); }
@@ -832,6 +826,16 @@
     .fc-backlog b { color:var(--amber); }
     .bk-lnk { color:var(--blue); cursor:pointer; text-decoration:none; }
     .bk-lnk:hover { text-decoration:underline; }
+    /* v8 补丁⑩：孤儿回复「关联到线索」行内面板（替代原生 prompt） */
+    .orphan-panel { margin:4px 0 6px 28px; padding:8px 10px; border:1px solid var(--border); border-radius:8px; background:var(--bg); }
+    .orphan-panel .op-row { display:flex; align-items:center; gap:6px; }
+    .orphan-panel .op-q { flex:1; min-width:200px; }
+    .orphan-panel .op-list { margin-top:6px; }
+    .orphan-panel .op-item { display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:6px; cursor:pointer; font-size:13px; }
+    .orphan-panel .op-item:hover { background:var(--panel); }
+    .orphan-panel .op-host { font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .orphan-panel .op-stg { margin-left:auto; flex-shrink:0; background:var(--brand-tint); color:var(--brand-strong); }
+    .orphan-panel .op-msg { margin-top:4px; font-size:12px; min-height:14px; }
     .fc-backlog .fc-warn { margin-left:8px; }
     /* 批⑳ 层1 · 进货机器状态卡（只读）：4 行紧凑，回答"机器现在在替你干什么、干到哪了" */
     .fc-machine { border-left:3px solid var(--blue); }
@@ -2183,20 +2187,7 @@
     // 批⑩C：删了「取消选择」之后，表头这个框就是**唯一**的清空入口 → 它的状态必须读得准。
     // 半选态用 indeterminate 表达（选了一部分 ≠ 一条没选）。原生 checkbox 的行为正好是我们要的：
     // 半选/未选时点一下 → checked=true → 全选；全选时点一下 → checked=false → 全不选。
-    // v8 补丁①：表头全选框宽度跟第一行方框走（行方框由两行文字块高度决定，不是常量 ⇒ 实测而不是写死）。
-    //   没有行（空列表）时保持 CSS 默认 16px；高度不动（总工：表头可保持小）。
-    // v8 补丁①：每行方框的宽 = 该行文字块（.co-lines）实测高 —— 写进该行的 --chk，CSS 用它定 label 宽；
-    //   高由 flex stretch 自然跟着块走，于是 宽==高（正方形）而且不是常量。见 .chk-hit 的注释（为什么不是 aspect-ratio）。
-    function syncChkBoxes(){
-      document.querySelectorAll("#rows .co-cell").forEach(c => {
-        const lines = c.querySelector(".co-lines"); if (!lines) return;
-        const h = lines.getBoundingClientRect().height; if (h > 0) c.style.setProperty("--chk", h + "px");
-      });
-    }
-    function syncSelAllWidth(){
-      const sa=$("#sel-all"), box=document.querySelector("#rows .chk-box"); if(!sa || !box) return;
-      const w = box.getBoundingClientRect().width; if (w > 0) sa.style.width = w + "px";
-    }
+    // （v8 补丁①回调：方框定宽 20×20 后，原逐行量高写 --chk 的 syncChkBoxes 与同步表头宽的 syncSelAllWidth 已删，不留死代码）
     function syncSelAll(){
       const sa=$("#sel-all"); if(!sa) return;
       const picked = _loadedIds.filter(id=>selectedIds.has(id)).length;
@@ -2924,8 +2915,6 @@
       //   与待联系页（C5-12）同一处理。分组没消失：它变成了工具栏上的筛选 chips。
       //   ⚠️ renderUnscoredGroups 一并删除（撤了横带它就没有调用点了，留着是死代码）。
       $("#rows").innerHTML = rowsData.map(rowHtml).join("");
-      syncChkBoxes();      // v8 补丁①：每行方框宽 = 该行文字块实测高（正方形、跟块高走）
-      syncSelAllWidth();   // v8 补丁①：表头全选框宽度 = 第一行方框实测宽度（左边缘对齐一列，不写死像素）
       renderGroupJump(current, leads);   // 计数用**未筛的** leads（见上）
       document.querySelectorAll("tr.row").forEach(tr =>
         tr.onclick = () => openDetail(tr.dataset.id));
@@ -4609,7 +4598,7 @@
       //   橙色告警条只在 ≥1 封**非噪音**孤儿时出现、才写"真人给你回的信"；
       //   噪音（DMARC/退信回执）收成一行灰字，点「查看」才展开 —— 生产那 7 封 DMARC 曾被当真人回信喊了一整条橙带。
       const real = orphans.filter(o => !o.is_noise), noise = orphans.filter(o => o.is_noise);
-      const row = (o) => `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid var(--border)">
+      const row = (o) => `<div data-orphan-row="${o.id}" style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid var(--border)">
             <span class="pill" style="background:${catColor[o.category]||'#6b7480'};color:var(--bg);flex-shrink:0">${esc(catLabel[o.category]||o.category||'未分类')}</span>
             <b style="flex-shrink:0">${esc(o.from_email)}</b>
             <span class="muted" style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(o.content||'')}">${esc(o.summary||o.subject||'')}</span>
@@ -4626,16 +4615,62 @@
           : "");
     }
     // 人工关联：三层匹配也有兜不住的时候（换域名回、私人邮箱回）—— 那时得有人能一键接上
-    window.linkOrphan = async (replyId, from) => {
-      const v = prompt(`把 ${from} 的这封回复挂到哪条线索？\n\n填线索 ID（在列表里点开那家公司，地址栏/详情里能看到）：`);
-      const leadId = Number((v||"").trim().replace(/^#/,''));
-      if (!leadId) return;
-      const res = await fetch(`/api/replies/${replyId}/link`, {
-        method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify({ lead_id: leadId })
-      }).then(r=>r.json()).catch(e=>({error:String(e)}));
-      if (res.error){ toolMsg("关联失败: "+esc(res.error)); return; }
-      toolMsg(`✅ 已挂到 <b>${esc(res.company_name)}</b>（#${res.lead_id}），状态 → ${esc(res.status)}`);
-      loadStats(); loadList(); loadFacets();
+    // v8 补丁⑩（Joe：「这个弹窗让人有点懵」）：⛔ 不再 prompt 要线索 ID —— ID 是机器的事。
+    //   点「关联到线索…」→ 该行下方展开行内面板：搜索框（公司名/域名/邮箱，防抖 250ms，走现有 /api/leads?q=）
+    //   + 最多 8 条结果（公司名 · 域名 · 阶段 pill）+「标为噪音」「取消」。面板打开先按发件人域名预搜。
+    //   结果/按钮全部 addEventListener 绑定，用户数据不进代码上下文（M11 同一条规则）。
+    window.linkOrphan = (replyId, from) => {
+      const strip = $("#orphan-strip"); if (!strip) return;
+      strip.querySelectorAll(".orphan-panel").forEach(p => p.remove());   // 同时只开一个
+      const anchor = strip.querySelector(`[data-orphan-row="${replyId}"]`) || strip;
+      const panel = document.createElement("div"); panel.className = "orphan-panel";
+      panel.innerHTML = `<div class="op-row"><input class="op-q inlinput" placeholder="公司名 / 域名 / 邮箱"><button class="btn-ghost mini op-noise">标为噪音</button><button class="btn-ghost mini op-cancel">取消</button></div>
+        <div class="op-list"></div><div class="op-msg hint"></div>`;
+      anchor.insertAdjacentElement("afterend", panel);
+      const q = panel.querySelector(".op-q"), list = panel.querySelector(".op-list"), msg = panel.querySelector(".op-msg");
+      let timer = null, seq = 0;
+      const search = async () => {
+        const term = q.value.trim(); const my = ++seq;
+        if (!term) { list.innerHTML = ""; msg.textContent = "输入公司名、域名或邮箱"; return; }
+        msg.textContent = "搜索中…";
+        const r = await fetch(`/api/leads?group=all&q=${encodeURIComponent(term)}`).then(r => r.json()).catch(() => ({ leads: [] }));
+        if (my !== seq) return;   // 过期结果不渲染
+        const leads = (r.leads || []).slice(0, 8);
+        list.innerHTML = "";
+        if (!leads.length) { msg.textContent = "没找到，换个词"; return; }
+        msg.textContent = "";
+        for (const l of leads) {
+          const item = document.createElement("div"); item.className = "op-item";
+          const stg = STAGE_LABEL[gridKeyOf(l)] || "";
+          item.innerHTML = `<b></b><span class="muted op-host"></span><span class="pill op-stg"></span>`;
+          item.querySelector("b").textContent = l.company_name || `#${l.id}`;
+          item.querySelector(".op-host").textContent = hostOf(l.website || "") || (l.email || "");
+          item.querySelector(".op-stg").textContent = stg;
+          item.addEventListener("click", async () => {
+            msg.textContent = "关联中…";
+            const res = await fetch(`/api/replies/${replyId}/link`, {
+              method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify({ lead_id: l.id })
+            }).then(r=>r.json()).catch(e=>({error:String(e)}));
+            if (res.error){ msg.textContent = "关联失败：" + res.error; return; }
+            toolMsg(`✅ 已挂到 <b>${esc(res.company_name)}</b>（#${res.lead_id}），状态 → ${esc(res.status)}`);
+            renderOrphans(); loadStats(); loadList(); loadFacets();
+          });
+          list.appendChild(item);
+        }
+      };
+      q.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(search, 250); });
+      panel.querySelector(".op-cancel").addEventListener("click", () => panel.remove());
+      panel.querySelector(".op-noise").addEventListener("click", async () => {
+        msg.textContent = "标记中…";
+        const res = await fetch(`/api/replies/${replyId}/noise`, { method:"POST", headers:{"content-type":"application/json"}, body:"{}" })
+          .then(r=>r.json()).catch(e=>({error:String(e)}));
+        if (res.error){ msg.textContent = "标记失败：" + res.error; return; }
+        renderOrphans();
+      });
+      // 预搜：发件人域名（多数真实回信一搜就中，一步点选）
+      const dom = String(from || "").split("@")[1] || "";
+      q.value = dom.replace(/^(mail|smtp|email)\./, "");
+      q.focus(); search();
     };
     // ══ 事件委托：把"用户数据"从代码上下文里赶出去 ══
     //

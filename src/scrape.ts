@@ -132,6 +132,20 @@ export function normalizePhone(raw: string): string {
   return plus ? "+" + digits : v.replace(/[^\d+\-\s().]/g, "").trim();
 }
 
+/** HTML 实体解码：十进制 &#NN; / 十六进制 &#xNN; / 常见命名实体。
+ *  v8 补丁⑨（Joe 指认 Bakerdist 的电话 `&#x28;800&#x29;&#x20;217-4698`）：属性值里的实体没解码就入库，
+ *  列表标 ⚠️、tel: 拨不通。这是**唯一**的渠道值入口（extractChannels → mergeChannels → service.ts 一处 UPDATE），
+ *  在这里解一次，⛔ 各渠道不各写一份。回填存量与前端兜底用的是同一套规则（前端 decodeEntitiesJs 逐字对应）。 */
+export function decodeEntities(s: string): string {
+  const NAMED: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
+  return String(s || "")
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => { const n = parseInt(h, 16); return n > 0 && n < 0x110000 ? String.fromCodePoint(n) : ""; })
+    .replace(/&#(\d+);/g, (_, d) => { const n = Number(d); return n > 0 && n < 0x110000 ? String.fromCodePoint(n) : ""; })
+    .replace(/&(amp|lt|gt|quot|apos|nbsp);/gi, (_, k) => NAMED[k.toLowerCase()])
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export function extractChannels(html: string): Channels {
   const ch: Channels = {};
   const set = (k: keyof Channels, v: string) => { if (!ch[k] && v) ch[k] = v; };
@@ -143,7 +157,7 @@ export function extractChannels(html: string): Channels {
   const re = /(?:href|content)\s*=\s*["']([^"']+)["']/gi;
   let m: RegExpExecArray | null;
   while ((m = re.exec(html))) {
-    const href = m[1].trim();
+    const href = decodeEntities(m[1]);   // v8 补丁⑨：先解实体，再过下面所有判定（normalizePhone / 平台正则 / abs）
     const low = href.toLowerCase();
     if (/^(mailto:|javascript:|#|data:)/.test(low)) continue;
     // 🔴 C5-24：原来是 `href.slice(4)` —— 对 `tel:+123` 没问题，但野外常见 **`tel://+123`**
