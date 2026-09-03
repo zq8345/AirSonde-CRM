@@ -4831,17 +4831,28 @@ async function scheduled(event: ScheduledController, env: Env, ctx: ExecutionCon
   //   ⚠️ 本轮**只出数字，不据此做任何限流** —— 构成表出来之前不动逻辑。
   try {
     const s = subSummary();
-    console.log(`subreq: ext=${s.ext} d1=${s.d1} sock=${s.sock} 越线于=${s.crossedAt || "(未越线)"} | `
-      + s.marks.map((m) => `${m.step}:+${m.ext}`).join(" "));
+    // ⭐ C5-51：日志第一眼要能看出**有没有真的失败**。⛔ 别再把"累计>50"当成越线播报 ——
+    //   那句话在付费档上恒为噪音（补邮箱正常满批就是 160），我们为它查过一整轮不存在的故障。
+    console.log(`subreq: ext=${s.ext} extFail=${s.extFail}${s.extFail > 0 ? " 🔴有请求没发出去" : ""} `
+      + `d1=${s.d1} sock=${s.sock} ext>50于=${s.extGt50At || "(未超50)"} | `
+      + s.marks.map((m) => `${m.step}:+${m.ext}${m.extFail ? `/失败${m.extFail}` : ""}`).join(" "));
     await setSetting(env, "cron_subreq_last", JSON.stringify({
       at: new Date().toISOString().slice(0, 16).replace("T", " "),
-      ext_total: s.ext, d1_total: s.d1, sock_total: s.sock, crossed_50_at: s.crossedAt,
+      ext_total: s.ext,
+      // ⭐ 真告警就这一个：>0 = 真的有请求没发出去。⛔ 阈值那个不是告警。
+      ext_fail_total: s.extFail,
+      d1_total: s.d1, sock_total: s.sock,
+      // ⚠️ 改名（原 crossed_50_at）：它只表示"累计超过 50"，**不表示越线**。
+      //   50 是免费档的数，本账号付费档实测 ≥200。真越线看 ext_fail_total。
+      ext_gt_50_at: s.extGt50At,
       // ⚠️ 读这张表前先看这一行：**哪些 0 是"没发生"，哪些 0 是"仪器看不见"**。
       //    ext/d1 是包出口数的（可信）；sock 是在 connect() 调用点数的（不是包出口）；
       //    绕开这三者的出站一律显示为 0 —— 那种 0 是"看不见"。
       meter: s.meterCoverage,
-      steps: s.marks.map((m) => ({ s: m.step, ext: m.ext, d1: m.d1, sock: m.sock, cum: m.extCum })),
-    }).slice(0, 2400));
+      // ⚠️ ext 与 extFail **成对给到每一步**：总计里的 extFail>0 只说明"这轮有失败"，
+      //   说不出**从哪一步开始垮**，而那正是分辨"某步没活干"与"从这里起全被饿死"的唯一线索。
+      steps: s.marks.map((m) => ({ s: m.step, ext: m.ext, fail: m.extFail, d1: m.d1, sock: m.sock, cum: m.extCum })),
+    }).slice(0, 2600));
   } catch (e) { console.error("subreq summary:", e); }
 }
 
