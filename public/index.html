@@ -247,8 +247,8 @@
                    opacity:.35; pointer-events:none; user-select:text; z-index:1; letter-spacing:.02em; }
     #build-stamp:hover { opacity:.8; }
     .wrap { display:flex; gap:12px; padding:12px; height:calc(100vh - 64px); box-sizing:border-box; }
-    .side { width:178px; background:var(--surface-2); border:.5px solid var(--border); border-radius:12px; padding:12px; flex-shrink:0; overflow:auto;
-            display:flex; flex-direction:column; }   /* 批③：flex 把底部⚙设置顶到底 */
+    .side { width:168px; background:var(--surface-2); border:.5px solid var(--border); border-radius:12px; padding:12px 8px; flex-shrink:0; overflow:auto;
+            display:flex; flex-direction:column; }   /* 批③：flex 把底部⚙设置顶到底；nav-table-v2：栏宽 168、内 padding 12/8 */
     .side-settings { margin-top:10px; padding-top:10px; border-top:1px solid var(--border); flex-shrink:0; display:block; }
     .side-settings .gear-btn { width:100%; text-align:left; display:flex; align-items:center; gap:9px; }
     /* 账号菜单：原生 <details>，展开收起零 JS。收起态仍显示当前登录人（"我以谁的身份在操作"不能藏）。 */
@@ -261,16 +261,22 @@
        只有真渲染才抓得到（查"元素存不存在"会以为没问题）。 */
       border:1px solid var(--border); border-radius:8px; padding:6px; box-shadow:0 8px 24px rgba(0,0,0,.45); z-index:40; }
     .dd-menu.dd-up { top:auto; bottom:calc(100% + 4px); left:0; right:auto; }   /* 左栏底部→菜单向上弹 */
-    .tab { padding:7px 10px; border-radius:6px; cursor:pointer; display:flex; align-items:center; gap:5px; color:var(--muted); }
+    /* nav-table-v2：左栏条目统一结构 [图标位 25px][名字][灰 (N)]，行高 36，所有文字同一个 x（真源 nav-table-mockup.html .it） */
+    .tab { height:36px; padding:0 10px; margin:2px 0; border-radius:7px; cursor:pointer; display:flex; align-items:center; gap:0; color:var(--muted); font-size:13px; white-space:nowrap; }
     .tab:hover { background:var(--panel); }
+    .tab .ico, .side-nav .ico { width:25px; flex-shrink:0; display:inline-flex; align-items:center; color:var(--hint); font-size:12px; }
+    .tab .ico { padding-left:9px; }   /* 「↳」占无官网的图标位，比 SVG 图标略靠右（mockup .it.sub .ico） */
+    .side-nav .ico { padding-left:0; }
+    .side-nav .ico .nav-ico { width:16px; height:16px; }
+    .side-cap { font-size:12px; color:var(--hint); padding:0 10px 4px 35px; line-height:1.2; }   /* mockup 写 11px，宪法字号闭集最小 12 ⇒ 取 12（已报总工） */
     /* C5-10③（Joe：不要左边那种括号形）：去掉 `box-shadow:inset 3px 0 0` 那道竖条，
        选中态只保留 tint 底色 + 文字变色。
        ⚠️ **两处一起改**：派单以为只有阶段列表有竖条，实测 `.side-nav.active` 一模一样也有
           —— 只改一处会把现在一致的两者改成不一致。 */
     .tab.active { background:var(--tint-blue); color:var(--blue); font-weight:600; }
     .tab.active:hover { background:var(--tint-blue); }
-    .tab .cnt { color:var(--muted); font-size:12px; }
-    .tab.active .cnt { color:var(--blue); }
+    .tab .cnt, .side-nav .cnt { color:var(--hint); font-size:12px; margin-left:5px; }
+    .tab.active .cnt, .side-nav.active .cnt { color:var(--blue); }
     /* 工具栏 v8：scrollbar-gutter:stable —— 竖滚动条的 16px 永远预留。否则行多的页（全部 1407 行）滚动条吃掉宽度，
        靠右对齐的「重置筛选」比行少的页左移 16px（实测 1293 vs 1309），违反"横坐标 10 页不许变"。 */
     .main { flex:1; overflow:auto; scrollbar-gutter:stable; padding:16px 20px; background:var(--panel); border-radius:12px; }
@@ -449,8 +455,6 @@
     table { width:100%; border-collapse:collapse; }
     th,td { text-align:left; padding:9px 10px; border-bottom:1px solid var(--border); vertical-align:top; word-break:break-word; }
     th { color:var(--muted); font-weight:600; font-size:12px; position:relative; }
-    .col-resizer { position:absolute; top:0; right:-3px; width:7px; height:100%; cursor:col-resize; user-select:none; z-index:2; }
-    .col-resizer:hover, .col-resizer.drag { background:var(--blue); opacity:.5; width:3px; right:-1px; }
     tr.row:hover { background:var(--panel); cursor:pointer; }
     .pill { padding:2px 8px; border-radius:10px; font-size:12px; white-space:nowrap; }
     .s-new,.s-analyzed,.s-pending { background:var(--panel); color:var(--muted); }
@@ -499,8 +503,6 @@
     .grp-n { display:inline-block; margin:0 9px; padding:1px 8px; border-radius:9px; background:var(--panel); font-size:12px; }
     .grp-empty { color:var(--muted); font-size:12px; padding:11px; font-style:italic; }
     /* 批㉖：抓取失败=一个小徽章（全文挂 title、点行进详情处理）。铁律：行内元素不随数据量膨胀。 */
-    .fail-badge { display:inline-block; padding:1px 7px; border-radius:8px; background:var(--tint-red); color:var(--red); font-size:12px; white-space:nowrap; vertical-align:1px; }
-    .fail-badge.fail-retry { background:var(--panel); color:var(--muted); }
     /* 批⑲b：阶段列里的紧凑「他回了」——同一行、不占新行、不增加行高 */
     .stgcol { white-space:nowrap; }   /* 徽章 + 他回了 同一行不换行（否则 ②组行会高一截）*/
     /* 批⑲b：脏渠道值（拼不出合法链接）显示原文但不可点，灰 + ⚠️ 一眼可辨 */
@@ -609,15 +611,55 @@
     .auto-row { display:flex; align-items:center; gap:8px; padding:4px 0; font-size:13px; cursor:pointer; }
     .auto-row input[type=checkbox] { margin:0; flex-shrink:0; }
     /* 渠道独立列：窄、居中；表加 min-width 让 12 列超宽时走横向滚动而非压扁 */
-    .chcol { width:120px; }
-    th.chcol { text-align:left; overflow:hidden; text-overflow:ellipsis; }
-    .chacct { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-decoration:none; font-size:13px; }
     /* 🔴 C5-9①：这条原来是 `.main table` —— 它是给**客户列表**那张宽表设的，
        却命中了 `.main` 里的每一张 <table>，包括机器房的点火表 ⇒ 那张表被强行撑到
        1620px，溢出白卡右侧 487px（Joe 截图指认的就是这个）。
        我先加了 `table-layout:fixed` 想约束它 —— 没用，因为**输的不是布局算法，是 min-width**。
        ⇒ 把作用域收回到它真正要管的那张表。 */
-    #v-list table { min-width:1620px; }
+    /* ══ nav-table-v2（真源 airsonde-dispatch/nav-table-v2/nav-table-mockup.html）══
+       全页同一套 9 列同序同宽：公司 230 · 阶段 96 · 评分 64 · 分类 100 · 国家 80 · 邮箱 190 · 联系方式 158 · 本页专属(吸余宽) · 时间 96。
+       表头 12px --muted 500 高 38 底 #fafbfc；正文 13 行高 48；th 与 td 同一对齐（公司/邮箱/分类左，其余居中）。
+       ⚠️ 全部作用域限定在 #v-list table：全局 th,td 规则还服务机器房等别的表。列宽拖动/记忆整套已删（SPEC §4）。 */
+    #v-list table { table-layout:fixed; width:100%; }
+    #v-list th { font-size:12px; font-weight:500; color:var(--muted); text-align:left; height:38px; padding:0 10px; border-bottom:1px solid var(--border);
+                 white-space:nowrap; background:#fafbfc; vertical-align:middle; word-break:normal; }
+    #v-list td { height:48px; padding:0 10px; border-bottom:1px solid var(--border); font-size:13px; vertical-align:middle;
+                 overflow:hidden; text-overflow:ellipsis; white-space:nowrap; word-break:normal; }
+    #v-list tr:last-child td { border-bottom:0; }
+    #v-list .ac, #v-list th.ac { text-align:center; }
+    #v-list .chc { overflow:visible; text-overflow:clip; }
+    #v-list th .fcaret { display:inline-block; margin-left:5px; color:var(--hint); vertical-align:-1px; }
+    #v-list th .fcaret svg { width:11px; height:11px; display:block; }
+    #v-list th.on, #v-list th.on .fcaret { color:var(--brand-strong); }
+    #v-list th .sortarrow { color:var(--brand-strong); margin-left:3px; font-size:12px; }   /* mockup 11px → 宪法闭集最小 12 */
+    #v-list th.filt { cursor:pointer; }
+    #v-list .pill { display:inline-block; padding:1px 8px; border-radius:10px; font-size:12px; white-space:nowrap; line-height:18px; }
+    #v-list .pill.sc { color:#fff; min-width:32px; text-align:center; }
+    #v-list .pill.sc.g { background:var(--brand); } #v-list .pill.sc.r { background:var(--red); }
+    #v-list .pill.cat { background:var(--brand-tint); color:var(--brand-strong); }
+    #v-list .pill.cat.x { background:var(--panel); color:var(--muted); }
+    #v-list .pill.stg { background:var(--panel); color:var(--muted); }
+    #v-list .pill.fail { background:var(--tint-red); color:var(--red); }
+    #v-list .pill.retry { background:var(--panel); color:var(--muted); }
+    #v-list .mu { color:var(--hint); }
+    #v-list .t { font-size:12px; color:var(--muted); }
+    #v-list .t.due { color:var(--red); }
+    /* 联系方式：5 个固定小格 in · WA · f · IG · ☎（24×20）——同一渠道永远同一格，无=空格占位 */
+    #v-list .ch { display:inline-flex; gap:3px; vertical-align:middle; }
+    #v-list .ch a, #v-list .ch i { display:inline-block; width:24px; height:20px; border-radius:5px; font-size:12px; font-weight:600; line-height:20px; font-style:normal;   /* mockup 10px → 宪法闭集最小 12 */
+                                   text-align:center; color:var(--brand-strong); background:var(--brand-tint); text-decoration:none; }
+    #v-list .ch i.e { background:transparent; }
+    #v-list .ch a.bad { background:var(--tint-red); color:var(--red); cursor:default; }
+    #v-list .rp { display:flex; align-items:center; justify-content:center; gap:6px; min-width:0; }
+    #v-list .rp .pill { flex-shrink:0; }
+    #v-list .rp span:last-child { overflow:hidden; text-overflow:ellipsis; color:var(--muted); font-size:12px; }
+    /* 公司格：名字 13 + 域名 12 --brand，两行块；复选框 20×20 居中、热区 32 宽撑满（v8 补丁① 已上线） */
+    #v-list .co-lines { line-height:1.3; }
+    #v-list .dom { display:block; font-size:12px; color:var(--brand); line-height:1.3; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-decoration:none; }
+    #v-list .dom.bad { color:var(--muted); }
+    /* 工具栏筛选 chip：放「重置筛选」左边，点 × 单个去掉 */
+    .tb .chip { display:inline-flex; align-items:center; gap:5px; font-size:12px; color:var(--brand-strong); background:var(--brand-tint); border-radius:7px; padding:5px 8px; white-space:nowrap; }
+    .tb .chip b { font-weight:400; opacity:.7; cursor:pointer; }
     .main th { white-space:nowrap; }
     .co-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     /* 表头内置筛选 */
@@ -1107,7 +1149,6 @@
     .dd-static { padding:7px 10px; font-size:12px; color:var(--muted); }
     .dd-static a { color:var(--blue); }
     .side-div { height:1px; background:var(--border); margin:8px 6px; }
-    .side-arrow { text-align:left; padding-left:12px; color:var(--muted); font-size:12px; line-height:1; margin:2px 0; opacity:.55; }
     /* 状态统一重构：顶栏合并成一行（brand · 主动作+更多▾ · 搜索+⚙设置▾），漏斗已移除 */
     header { flex-wrap:nowrap; gap:12px; background:var(--surface-2); }
     header h1 { white-space:nowrap; }
@@ -1128,7 +1169,7 @@
     .hdr-right .gear-btn { padding:6px 10px; }
     .hdr-left { width:178px; flex-shrink:0; display:flex; align-items:center; justify-content:center; }  /* 正对左侧栏(178px)：logo 上下+左右居中 */
     .hdr-right-zone { flex:1; min-width:0; display:flex; align-items:center; gap:12px; }  /* 正对主列表：按钮+搜索+设置 */
-    .side-nav { padding:8px 10px; border-radius:8px; cursor:pointer; color:var(--text); font-size:13px; display:flex; align-items:center; gap:9px; }
+    .side-nav { height:36px; padding:0 10px; margin:2px 0; border-radius:7px; cursor:pointer; color:var(--text); font-size:13px; display:flex; align-items:center; gap:0; white-space:nowrap; }   /* nav-table-v2：与 .tab 同一行高与图标列 */
     /* v8 补丁⑥：「设置」是 <button>，把原生按钮外观归零后与其它 side-nav 同一套；
        ⚠️ 特异性 (0,1,1) 低于 .side-nav.active (0,2,0)，选中态的底色/字重照常生效（第一版写成内联 style 把它们压掉了） */
     button.side-nav { width:100%; border:0; background:none; font:inherit; font-size:13px; text-align:left; }
@@ -1221,7 +1262,7 @@
         <!-- 工具栏 v8（Joe 2026-09-03，真源 = airsonde-dispatch/toolbar-v8/toolbar-mockup.html）：
              原来这一行的「重置筛选」「↔ 重置列宽」「已筛：…」「批量状态」「➕ 找客户」全部撤出 ——
              · 重置筛选 → 搬进下面那一行的最右（永远最右，10 页横坐标相同）
-             · 重置列宽 → 删（Joe 定；连同 resetColWidths 绑定一起删，别只删元素留绑定）
+             · 重置列宽 → 删（Joe 定；连同它的绑定一起删，别只删元素留绑定）
              · 找客户   → 搬进下面那一行的右边区，仍只在「全部」页出现
              · 已筛：… → 收进「重置筛选」按钮的 title
              这个 .filters 容器只剩隐藏 select（它们是列头 ▾ 菜单的状态容器，保留）。 -->
@@ -1241,7 +1282,18 @@
       <!-- C5-4v A：表格整体装进白卡（页底灰、卡内表格）——Joe 点名"别的页没有卡片层次" -->
       <div class="page-card table-card">
       <table>
-        <thead><tr><th><input type="checkbox" id="sel-all" title="全选当前筛选" onclick="event.stopPropagation();toggleSelAll(this.checked)"> 公司</th><th>评分</th><th>阶段</th><th>邮箱</th><th>分类</th><th>国家</th><th class="chcol">LinkedIn</th><th class="chcol">WhatsApp</th><th class="chcol">Facebook</th><th class="chcol">Instagram</th><th class="chcol">电话</th><th>录入时间</th></tr></thead>
+        <!-- nav-table-v2：9 列同序同宽（宽度写死在这里 = 真源 COLS；第 8 列不给宽、吸余量，列名由 loadList 按页填进 #th-own）-->
+        <thead><tr>
+          <th style="width:230px"><input type="checkbox" id="sel-all" title="全选当前筛选" onclick="event.stopPropagation();toggleSelAll(this.checked)">公司</th>
+          <th style="width:96px" class="ac">阶段</th>
+          <th style="width:64px" class="ac">评分</th>
+          <th style="width:100px">分类</th>
+          <th style="width:80px" class="ac">国家</th>
+          <th style="width:190px">邮箱</th>
+          <th style="width:158px" class="ac chc">联系方式</th>
+          <th class="ac" id="th-own">本页</th>
+          <th style="width:96px" class="ac">时间</th>
+        </tr></thead>
         <tbody id="rows"></tbody>
       </table>
       <!-- v8 补丁④：空态文案按格，单一真源 EMPTY_TEXT（loadList 按 current 填），这里不再写死一句全站通用的 -->
@@ -2022,20 +2074,8 @@
       return { clickable:false, label:channelAccount(key, v) };
     }
     // 单个渠道独立列单元格：可点→深链，脏值→原文不可点（批⑲b 守卫），不存在→空白
-    function chanCell(channelsJson, key, company){
-      let ch={}; try { ch = channelsJson ? JSON.parse(channelsJson) : {}; } catch {}
-      if (!ch[key]) return `<td class="chcol"></td>`;
-      const meta = CHANNEL_META[key];
-      const link = channelLink(key, ch[key], company);
-      if (!link.clickable) {
-        // 脏值：显示原文（截断+全文挂 title），灰、不可点，加个 ⚠️ 让人一眼看出是坏数据
-        return `<td class="chcol"><span class="chacct chbad" title="${esc(meta.label)}：${esc(link.label)}（数据不规范，无法直接点开）">⚠️ ${esc(link.label)}</span></td>`;
-      }
-      const safe = safeHref(link.href);
-      // scheme 不合法 → 走上面那条"脏值"的同一条展示路（⚠️ 灰、不可点），不另起一套样式
-      if (!safe) return `<td class="chcol"><span class="chacct chbad" title="${esc(meta.label)}：${esc(link.label)}（链接协议不合法，无法点开）">⚠️ ${esc(link.label)}</span></td>`;
-      return `<td class="chcol"><a class="chacct" href="${esc(safe)}" target="_blank" rel="noopener" title="${esc(meta.label)}：${esc(link.label)}${link.note||""}" onclick="event.stopPropagation()">${esc(link.label)}</a></td>`;
-    }
+    // nav-table-v2：chanCell（5 列社媒各一格）已删 —— 列表改用 loadList 里的 chSlots（5 固定小格，同一渠道永远同一格），
+    //   脏值/协议判定仍走 channelLink + safeHref 这两处（M11 同一条规则）。
     // 该跟进：next_action_date 已到/过期
     function isDue(l){ return !!(l.next_action_date && l.next_action_date <= new Date().toISOString().slice(0,10)); }
     function flag(cc){ cc=(cc||"").toUpperCase(); if(!/^[A-Z]{2}$/.test(cc)) return "🏳️";
@@ -2094,7 +2134,8 @@
       _viewedCount = s.viewed || 0;   // 仍要它：格内置顶排序 + 待办卡
       // 批③：顶栏群发按钮已删，这里不再需要给它挂待发送计数（计数已在左栏「待发送」格上）
       // 侧栏顶部：📋今日待办 + 🎯找客户（导航项，点击复用现有隐藏按钮 handler）；下方=竖向漏斗
-      const tabHtml = t => `<div class="tab ${t.key===current?"active":""}" data-k="${t.key}">${t.label} <span class="cnt">(${groupCount[t.key]??0})</span></div>`;
+      // nav-table-v2：每个条目 = [图标位 25px 固定][名字][灰 (N)]，所有文字同一个 x；无官网用「↳」占图标位
+      const tabHtml = t => `<div class="tab ${t.key===current?"active":""}" data-k="${t.key}"><span class="ico">${t.key==='noscore'?'↳':''}</span>${t.label}<span class="cnt">(${groupCount[t.key]??0})</span></div>`;
       const chain = TABS.slice(1);
       // ⭐ 批⑪B：「🔔 待跟进」从左栏删掉。
       //   总工的判断：八格已经是**唯一的状态真源**，而「待跟进」是**跨阶段的一个筛选条件**
@@ -2108,18 +2149,22 @@
       //   降级成「已联系」页的筛选/排序（跟 🔥 点过链接同一层），不占左栏一格。
       // C5-4v：导航与页名统一叫「待办事项」（Joe 定），emoji 退场换单色线条图标。
       //   ⚠️ 只改 label 与图标：`data-nav="today"` / `btn-today` / activeView 的 'today' 是契约，一字不动。
-      const navTop = `<div class="side-nav" data-nav="today" onclick="document.getElementById('btn-today').click()">${ICON.todo}<span>待办事项${_todoCount ? ` (${_todoCount})` : ''}</span></div>`
-          + `<div class="side-nav" data-nav="dashboard" onclick="document.getElementById('btn-dashboard').click()">${ICON.dash}<span>数据看板</span></div>`
+      const navTop = `<div class="side-nav" data-nav="today" onclick="document.getElementById('btn-today').click()"><span class="ico">${ICON.todo}</span>待办事项${_todoCount ? `<span class="cnt">(${_todoCount})</span>` : ''}</div>`
+          + `<div class="side-nav" data-nav="dashboard" onclick="document.getElementById('btn-dashboard').click()"><span class="ico">${ICON.dash}</span>数据看板</div>`
       // C5-1：「📬 回复箱」导航项**撤除** —— 回信列表已内嵌进「今天」页（客户回你了 = 今天最该看的事，
       //   它不该是一个要你自己想起来去点的第二个入口）。
       //   ⚠️ `openReplyInbox` / `openReplyDetail` 两个函数**保留**：详情视图仍由内嵌列表调用。
       // C2-D：机器房排在最后 —— 它是"需要时才进去"的页，不是每天要看的
-      + `<div class="side-nav" data-nav="machine" onclick="openMachineRoom()">${ICON.machine}<span>自动化</span></div>`
+      + `<div class="side-nav" data-nav="machine" onclick="openMachineRoom()"><span class="ico">${ICON.machine}</span>自动化</div>`
         + `<div class="side-div"></div>`;
       // 工具栏 v8：「找客户」页面级按钮已从 #btn-restock 搬进工具栏右边区（renderGroupTools 按 current==='all' 渲染），
       //   这里那段 innerHTML/display 控制随元素一起删（别只删元素留绑定）。
-      $("#side").innerHTML = navTop + tabHtml(TABS[0]) + `<div class="side-div"></div>` +
-        chain.map((t,i) => tabHtml(t) + (i < chain.length - 1 ? `<div class="side-arrow">↓</div>` : "")).join("");
+      // nav-table-v2：↓ 与竖线全部去掉；三组 = 全部 ｜ 流程（待分析…已成交）｜ 出口（已忽略 · 黑名单/退订），分隔线 + 11px 小标题
+      const EXIT_KEYS = new Set(["ignored", "blacklisted"]);
+      const flow = chain.filter(t => !EXIT_KEYS.has(t.key)), exits = chain.filter(t => EXIT_KEYS.has(t.key));
+      $("#side").innerHTML = navTop + tabHtml(TABS[0]) + `<div class="side-div"></div>`
+        + `<div class="side-cap">流程</div>` + flow.map(tabHtml).join("")
+        + `<div class="side-div"></div><div class="side-cap">出口</div>` + exits.map(tabHtml).join("");
       // 点漏斗格 = 退出待跟进视图 + 清掉待联系页的分组筛选，然后走 gotoGroup 这个唯一切页入口（它负责 clearSel）
       document.querySelectorAll(".tab").forEach(el =>
         el.onclick = () => { dueMode = false; clearReadyFilter(); gotoGroup(el.dataset.k); });
@@ -2174,8 +2219,7 @@
     const hf = { stage:"", ch:"" };
     // A1 排序模式：'' 默认按价值(评分降序) / 'score_asc' 评分升序 / 'engaged' 最近参与（互斥）
     let sortMode = "";
-    // 工具栏 v8：「已筛：…」摘要（原 #active-filters 常驻文字）—— 现在只作「重置筛选」按钮的 title
-    let _activeFilterTxt = "";
+    // 工具栏 v8：「已筛：…」摘要（原左上角常驻小字）—— nav-table-v2 起改成工具栏里的筛选 chip（见 activeFilterChips）
     // B1 多选状态（存字符串 id）；_loadedIds = 当前已加载行 id，用于"全选当前"
     const selectedIds = new Set(); let _loadedIds = [];
     let _viewedCount = 0;    // 批⑨③：点过链接的家数（「已查看」删格后仍要它：待办卡用）
@@ -2314,15 +2358,8 @@
     }
     // 批㉖：行回归全站统一列结构 —— 抓取失败只留一个小红徽章（原因简码），
     //   错误全文 + 改网址 + 人工批准 + 忽略 全部收进详情（点行即达）；批量操作只在顶部批量条一处。
-    function unscoredRowExtra(l){
-      // 工具栏 v8：「无官网」独立成格后，抓取失败原因徽章要在那一格里显示（谓词不变，只放开页面判断）。
-      if (current !== 'unscored' && current !== 'noscore') return "";
-      if (unscoredGroupOf(l) === 'B')
-        return ` <span class="fail-badge" title="${esc(l.reason||'')}\n\n点行进详情处理（改网址 / 人工批准 / 忽略）">抓取失败 · ${esc(failCode(l.reason))}</span>`;
-      // 总工的加分项：让 Joe 看得见机器正在替他重试（同样收成小徽章，不再另起一行）
-      return (Number(l.fetch_fail_count)||0) > 0
-        ? ` <span class="fail-badge fail-retry" title="机器自动重试中，无需操作">⏳ 重试 ${Number(l.fetch_fail_count)}/3</span>` : "";
-    }
+    // nav-table-v2：原行内红标函数（公司名下的「抓取失败·xx」红标 / 「⏳ 重试 n/3」）已删 ——
+    //   两者搬进第 8 列：无官网页「失败原因」= failCode 红 pill + failShort 灰字；待分析页「命中关键词」后追加 retry pill（见 loadList 的 ownCell）。
     // C5-17：renderUnscoredGroups 已删 —— 待分析页横带撤掉后它没有调用点了（死代码不留）。
     //   分组谓词 `unscoredGroupOf` **保留**：工具栏的筛选 chips 与计数都靠它。
     // ⭐⭐ 批⑲ 页面二：「待审批」按分数分三段，每段一个明确的下一步。
@@ -2346,7 +2383,7 @@
     //     · 读完整理由 → 详情页（列表那行本来也只铺 70 字截断，看不全）
     //     · 批准/忽略  → 勾选 + 批量条（同一条 toolStatusSel 路径，服务端闸一行未动）
     //   同时删掉的死件：reasonShort()、rowApprove/rowIgnore（撤除后再无调用点）、.row-sub/.reason-sm 两条 CSS。
-    //   ⚠️ **只撤这一套**：已回复页的「最新回信摘要」子行、待分析页的 unscoredRowExtra（抓取失败原因）
+    //   ⚠️ **只撤这一套**：已回复页的「最新回信摘要」子行、待分析页的行内抓取失败红标
     //     长得像但不是同一件事，按最小范围原样保留。
     // ══ C5-6（Joe 指令）：待审批的**三段分层撤出列表**，回到平铺表格（默认按评分降序，高分自然在顶）══
     //   能力核算 —— 这不是删能力：
@@ -2550,7 +2587,9 @@
         + `<div class="zB${n===0?' off':''}">${slot('s1')}${slot('s2')}${slot('s4')}${slot('s5')}${slot('s6')}</div>`
         + `<span class="hint" id="bulk-msg"></span>`
         + `<div class="zR">${fleet}${fleet ? `<div class="div"></div>` : ""}${filters}`
-        + `<button class="b-qui" onclick="resetFilters()" title="${esc(_activeFilterTxt || '清空列头里的国家/分类/邮箱/评分/阶段/渠道筛选')}">重置筛选</button></div>`;
+        // nav-table-v2：生效的筛选做成 chip 放「重置筛选」左边，点 × 单个去掉（type 是内部枚举，不是用户数据）
+        + (_filterChips || []).map(c => `<span class="chip">${esc(c.label)}<b onclick="clearHdrFilter('${c.type}')" title="去掉这个筛选">×</b></span>`).join("")
+        + `<button class="b-qui" onclick="resetFilters()" title="清空列头里的国家/分类/邮箱/评分/阶段/渠道筛选">重置筛选</button></div>`;
     }
     // ⭐ 批⑪B：「待跟进」降级成「已联系」页的筛选（跟 🔥 点过链接同一层，不占左栏一格）。
     //   复用既有的 dueMode + 后端 `due=1` —— **底下一行没动**，只是换了个入口。
@@ -2883,23 +2922,73 @@
       // 小修：列表每次 reload 后把已选与当前结果集求交集——去掉不在当前筛选/分组可见集里的 id，
       // 让"已选N条"与批量操作永远=当前可见的选中项（无分页，全量加载，交集剪枝安全）。
       { const visible = new Set(_loadedIds); for (const id of [...selectedIds]) if (!visible.has(id)) selectedIds.delete(id); }
-      // 阶段列取代原公司名旁的状态徽章（更信息量：漏斗阶段+下一步）；保留 🔔待跟进 + 🔥/👀参与标记
-      const rowHtml = (l) => { const stg = stageOf(l); return `
+      // ══ nav-table-v2：全页同一套 9 列（真源 nav-table-mockup.html / gen-nav-table.mjs COLS）══
+      //   公司 · 阶段 · 评分 · 分类 · 国家 · 邮箱 · 联系方式(5 固定小格) · 本页专属 · 时间(进入本格)。
+      //   这一页没内容的格子留 —（与工具栏空槽同一原则），⛔ 不折叠列、不改顺序。
+      //   原公司名旁的 🔔/🔥/👀、公司名下的抓取失败红标、已回复第三行摘要，全部搬进第 8 列（原位置删）。
+      const mu = `<span class="mu">—</span>`;
+      const scPill = (s) => s == null ? mu : `<span class="pill sc ${Number(s) >= SCORE_LINE ? 'g' : 'r'}">${Number(s)}</span>`;
+      const GREY_CATS = new Set(["unclear", "other", "nontarget", "non_target"]);
+      const catPill = (l) => l.customer_category
+        ? `<span class="pill cat${GREY_CATS.has(String(l.customer_category)) || /^(非目标|资料不足|其他)$/.test(String(l.customer_category_label||'')) ? ' x' : ''}" title="${esc(l.customer_type)||''}">${esc(l.customer_category_label||l.customer_category)}</span>` : mu;
+      // 联系方式：in · WA · f · IG · ☎ 同一渠道永远同一格；有 = tint 小格可点开原链接（脏值红格不可点，全文挂 title）；无 = 空格占位
+      const CH_SLOTS = [["linkedin","in"],["whatsapp","WA"],["facebook","f"],["instagram","IG"],["phone","☎"]];
+      const chSlots = (l) => { const ch = chanOf(l); return `<span class="ch">` + CH_SLOTS.map(([k, t]) => {
+        if (!ch[k]) return `<i class="e"></i>`;
+        const link = channelLink(k, ch[k], l.company_name), safe = link.clickable ? safeHref(link.href) : "";
+        const meta = CHANNEL_META[k];
+        return safe ? `<a href="${esc(safe)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="${esc(meta.label)}：${esc(link.label)}${link.note||''}">${t}</a>`
+                    : `<a class="bad" onclick="event.stopPropagation();return false" title="${esc(meta.label)}：${esc(link.label)}（数据不规范，无法直接点开）">${t}</a>`;
+      }).join("") + `</span>`; };
+      // 时间列 = stage_at（后端按 status 取的"进入本格时间"），格式 2026-9-3：年-月-日不补零、不带时分
+      const fmtDay = (s) => { if (!s) return "—"; const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/); if (!m) return "—";
+        const d = new Date(String(s).replace(" ", "T") + (/[Zz]|[+-]\d\d:?\d\d$/.test(String(s)) ? "" : "Z"));
+        return isNaN(d) ? `${Number(m[1])}-${Number(m[2])}-${Number(m[3])}` : `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`; };
+      const fmtMD = (s) => { const m = String(s||"").match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${Number(m[2])}-${Number(m[3])}` : ""; };
+      // 第 8 列「本页专属」：列名与内容按页（SPEC §2 表）
+      const OWN_HEAD = { all:"命中关键词", unscored:"命中关键词", ignored:"命中关键词", noscore:"失败原因", review:"触达方式", ready:"触达方式", sent:"邮件 · 跟进", won:"邮件 · 跟进", replied:"回复", blacklisted:"原因" };
+      const ownCell = (l) => {
+        switch (current) {
+          case "all": case "unscored": case "ignored": {
+            const kw = l.keyword ? `<span class="t" title="${esc(l.keyword)}">${esc(l.keyword)}</span>` : "";
+            const retry = (current === "unscored" && (Number(l.fetch_fail_count)||0) > 0) ? ` <span class="pill retry" title="机器自动重试中，无需操作">⏳ 重试 ${Number(l.fetch_fail_count)}/3</span>` : "";
+            return (kw || retry) ? kw + retry : mu; }
+          case "noscore":
+            return `<span class="pill fail" title="${esc(l.reason||'')}">${esc(failCode(l.reason))}</span> <span class="t" title="${esc(l.reason||'')}">${esc(failShort(l.reason))}</span>`;
+          case "review": case "ready": {
+            const g = readyGroupOf(l);   // 现成谓词：A 有邮箱 / B 只有社媒 / C 都没有
+            return g === "A" ? `<span class="t">机器发信</span>` : g === "B" ? `<span class="t">手动 · 社媒</span>` : `<span class="pill fail">缺邮箱</span>`; }
+          case "sent": case "won": {
+            const n = Number(l.email_count) || 0, bits = [];
+            if (n > 0) bits.push(`${n} 封`); else if (l.bench_channel) { const m = BENCH_CHANNEL_OPTS.find(([k]) => k === l.bench_channel); bits.push(`手动 · ${esc(m ? m[1] : l.bench_channel)}`); }
+            if (l.has_open) bits.push("👀"); if (l.has_click) bits.push("🔥");
+            let due = "";
+            if (l.next_action_date) due = isDue(l) ? ` <span class="t due" title="${esc(l.next_action)||''}">· 🔔 今天跟进</span>` : ` <span class="t" title="${esc(l.next_action)||''}">· ${fmtMD(l.next_action_date)} 跟进</span>`;
+            return (bits.length || due) ? `<span class="t">${bits.join(" · ")}</span>${due}` : mu; }
+          case "replied": {
+            if (!l.latest_reply_cat && !l.latest_reply_summary) return mu;
+            const c = l.latest_reply_cat || "other";
+            return `<div class="rp">${l.latest_reply_cat ? `<span class="pill cat${c==='not_interested'||c==='other' ? ' x' : ''}">${esc(catLabel[c]||c)}</span>` : ""}${l.latest_reply_summary ? `<span title="${esc(l.latest_reply_summary)}">🤖 ${esc(l.latest_reply_summary)}</span>` : ""}</div>`; }
+          case "blacklisted": {
+            const why = l.status === "unsubscribed" ? "退订" : l.status === "bounced" ? "退信" : "黑名单";
+            return `<span class="pill fail">${why}</span>`; }
+          default: return mu;
+        }
+      };
+      { const th = $("#th-own"); if (th) th.textContent = OWN_HEAD[current] || "本页"; }
+      const rowHtml = (l) => { return `
         <tr class="row" data-id="${l.id}">
-          ${/* v8 补丁①：公司格 = [勾选热区(整高正方框)][文字块：公司名 / 域名 / (已回复页)回信摘要]。
-                 热区是 <label>：点框、点 4px 外沿都只切换勾选，stopPropagation 挡住整行进详情。 */''}
-          <td><div class="co-cell"><label class="chk-hit" onclick="event.stopPropagation()"><input type="checkbox" class="rowchk" ${selectedIds.has(String(l.id))?'checked':''} onchange="toggleSel(${l.id},this.checked)"><span class="chk-box"></span></label><div class="co-lines"><div class="co-name" title="${esc(l.company_name)||''}">${isDue(l)?`<span class="due-flag" title="该跟进了：${esc(l.next_action)||''} (${esc(l.next_action_date)})">🔔 </span>`:""}${esc(l.company_name)||"<span class='muted'>—</span>"}${l.has_click?`<span title="点击过开发信（强意向）" style="margin-left:4px">🔥</span>`:(l.has_open?`<span title="打开过开发信" style="margin-left:4px">👀</span>`:"")}</div>${(()=>{const fb=unscoredRowExtra(l);if(l.website){const w=safeHref(l.website);const inner=w?`<a class="wsite" href="${esc(w)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="margin:0;display:inline-block;max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(hostOf(l.website))}</a>`:`<span class="wsite" title="链接协议不合法，已按纯文本显示" style="margin:0;display:inline-block;max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(hostOf(l.website))}</span>`;return `<span class="co-site" style="display:flex;align-items:center;gap:6px;min-width:0">${inner}${fb}</span>`;}return fb?`<span class="co-site" style="display:flex">${fb}</span>`:"";})()}${(current==='replied'&&(l.latest_reply_cat||l.latest_reply_summary))?`<div style="margin-top:3px;display:flex;align-items:center;gap:6px;min-width:0">${l.latest_reply_cat?`<span class="pill" style="background:${catColor[l.latest_reply_cat]||'#6b7480'};color:var(--bg);flex-shrink:0">${esc(catLabel[l.latest_reply_cat]||l.latest_reply_cat)}</span>`:''}${l.latest_reply_summary?`<span class="co-name muted" style="font-size:12px" title="${esc(l.latest_reply_summary)}">🤖 ${esc(l.latest_reply_summary)}</span>`:''}</div>`:''}</div></div></td>
-          <td>${scoreBadge(l.match_score)}</td>
-          <td class="stgcol"><span class="stg ${stg.cls}">${stg.badge}</span>${stg.sub?`<span class="stg-sub">${stg.sub}</span>`:""}</td>
-          ${/* ⭐ C5-17：「缺邮箱」红标撤掉，改居中长横线。
-                 理由（Joe 指认）：缺邮箱是**信息不全，不是故障**——全库 92 条都顶着红字，
-                 红色就此贬值，真正该报警的「抓取失败·403」反而淹在里面。
-                 ⚠️ **只撤这一个**：抓取失败/403 那个红标保留（那才是"机器卡住了、要人管"）。 */''}
-          <td style="text-align:center">${l.email?`<span style="text-align:left;display:block">${esc(l.email)}</span>`:'<span class="muted">—</span>'}</td>
-          <td>${l.customer_category?`<span class="pill ptype" title="${esc(l.customer_type)||''}">${esc(l.customer_category_label||l.customer_category)}</span>`:"<span class='muted'>—</span>"}</td>
-          <td>${l.country?esc(countryName(l.country)):"<span class='muted'>—</span>"}</td>
-          ${chanCell(l.channels,'linkedin',l.company_name)}${chanCell(l.channels,'whatsapp',l.company_name)}${chanCell(l.channels,'facebook',l.company_name)}${chanCell(l.channels,'instagram',l.company_name)}${chanCell(l.channels,'phone',l.company_name)}
-          <td class="muted" style="white-space:nowrap;font-size:12px">${fmtDate(l.created_at)}</td>
+          ${/* ① 公司：复选框（v8 补丁① 的 20×20 方框 + 撑满两行块的热区）+ 公司名 13 + 域名 12 --brand */''}
+          <td><div class="co-cell"><label class="chk-hit" onclick="event.stopPropagation()"><input type="checkbox" class="rowchk" ${selectedIds.has(String(l.id))?'checked':''} onchange="toggleSel(${l.id},this.checked)"><span class="chk-box"></span></label><div class="co-lines"><div class="co-name" title="${esc(l.company_name)||''}">${esc(l.company_name)||mu}</div>${(()=>{ if(!l.website) return ""; const w=safeHref(l.website); return w ? `<a class="dom" href="${esc(w)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(hostOf(l.website))}</a>` : `<span class="dom bad" title="链接协议不合法，已按纯文本显示">${esc(hostOf(l.website))}</span>`; })()}</div></div></td>
+          ${/* ② 阶段：灰 pill，文字 = 左栏格名逐字（无 emoji） */''}
+          <td class="ac"><span class="pill stg">${esc(STAGE_LABEL[gridKeyOf(l)] || l.status)}</span></td>
+          <td class="ac">${scPill(l.match_score)}</td>
+          <td>${catPill(l)}</td>
+          <td class="ac">${l.country ? esc(countryName(l.country)) : mu}</td>
+          <td title="${esc(l.email)||''}">${l.email ? esc(l.email) : mu}</td>
+          <td class="ac chc">${chSlots(l)}</td>
+          <td class="ac">${ownCell(l)}</td>
+          <td class="ac"><span class="t" title="${esc(l.stage_at)||''}">${fmtDay(l.stage_at)}</span></td>
         </tr>`; };
       // ⭐ 批⑲ 页面一：「待分析」换成**按下一步动作分组**的视图；其余格保持原来的平铺表格，一个字不动。
       // C5-12：分组筛选**只过滤渲染，不过滤计数** —— 页顶那几个数必须始终是全量分组数
@@ -2914,8 +3003,7 @@
       renderGroupJump(current, leads);   // 计数用**未筛的** leads（见上）
       document.querySelectorAll("tr.row").forEach(tr =>
         tr.onclick = () => openDetail(tr.dataset.id));
-      makeColumnsResizable();
-      buildHeaderFilters();
+      buildHeaderFilters();   // nav-table-v2：列宽拖动/记忆整套已删（table-layout:fixed + thead 写死宽度）
       refreshHeaderActive();
       refreshBulkBar(); syncSelAll();
     }
@@ -2933,7 +3021,7 @@
     //   数字来自 facets.stages（全库数 = 左栏数：选阶段会跳到「全部」再筛，拿到的正是那批）。
     //   旧子项 engaged/talking/declined 的后端谓词保留（兼容旧链接），菜单不再列。
     const stageOpts = () => [["", "全部"], ...TABS.slice(1).map(t => [t.key, `${t.label} (${Number(_facets?.stages?.[t.key]) || 0})`])];
-    const CH_COLS = { ch_linkedin:["linkedin","LinkedIn"], ch_whatsapp:["whatsapp","WhatsApp"], ch_facebook:["facebook","Facebook"], ch_instagram:["instagram","Instagram"], ch_phone:["phone","电话"] };
+    // nav-table-v2：5 列社媒（各自的映射表、列头索引 6-10、列样式）已删，合并成「联系方式」一列 + 一个菜单（CH_MENU）
     // 统一「漏斗=筛选」图标（Feather filter，与排序三角 ▲/▼ 明显不同形）
     const FUNNEL_SVG = `<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="21 4 3 4 10 12.5 10 19 14 21 14 12.5"/></svg>`;
 
@@ -2955,18 +3043,20 @@
       // 补货：加号圆（plus-circle）
       plus:    ico(`<circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>`, 16),
     };
-    const FILT_COL = { 1:"score", 2:"stage", 3:"email", 4:"category", 5:"country", 6:"ch_linkedin", 7:"ch_whatsapp", 8:"ch_facebook", 9:"ch_instagram", 10:"ch_phone" };  // 阶段列筛选恢复：与左栏漏斗互补——漏斗快切状态、阶段列多维交叉精筛，可叠加 国家/分类/邮箱/评分(AND)
+    // nav-table-v2：9 列的列头筛选映射（索引 = thead 顺序：0 公司 · 1 阶段 · 2 评分 · 3 分类 · 4 国家 · 5 邮箱 · 6 联系方式 · 7 本页专属 · 8 时间）。
+    //   漏斗只做筛选；排序只在评分列点文字（▼/▲）。联系方式一个菜单（全部 / 有 LinkedIn (N) / 有 WhatsApp (N) …）替代原 5 列各一个。
+    const FILT_COL = { 1:"stage", 2:"score", 3:"category", 4:"country", 5:"email", 6:"ch" };
     const SEL_OF = { country:"f-country", category:"f-type", email:"f-email", score:"f-score" };
+    const CH_MENU = [["linkedin","LinkedIn"],["whatsapp","WhatsApp"],["facebook","Facebook"],["instagram","Instagram"],["phone","电话"]];
     function buildHeaderFilters(){
       const table = document.querySelector(".main table"); if (!table || table.dataset.hfbuilt) return;
       table.dataset.hfbuilt = "1";
       [...table.querySelectorAll("thead th")].forEach((th,i) => {
         const type = FILT_COL[i]; if (!type) return;
         th.classList.add("filt");
-        if (type === "score") { const sa=document.createElement("span"); sa.className="sortarrow"; th.appendChild(sa); } // A1 排序指示（▲/▼ 贴文字后）
-        const car = document.createElement("span"); car.className = "fcaret" + (type==="score" ? " fcaret-score" : ""); car.innerHTML = FUNNEL_SVG; car.title = "筛选"; th.appendChild(car);
+        if (type === "score") { const sa=document.createElement("span"); sa.className="sortarrow"; th.appendChild(sa); } // 排序指示（▲/▼ 贴文字后）
+        const car = document.createElement("span"); car.className = "fcaret"; car.innerHTML = FUNNEL_SVG; car.title = "筛选"; th.appendChild(car);
         th.addEventListener("click", e => {
-          if (e.target.classList && e.target.classList.contains("col-resizer")) return;
           const onCaret = e.target.closest && e.target.closest(".fcaret");   // 点漏斗(含内部 svg)=筛选
           e.stopPropagation();
           if (type === "score" && !onCaret) { toggleScoreSort(); return; } // 评分列：点文字/▲▼=排序，漏斗=分桶筛选
@@ -2976,15 +3066,26 @@
     }
     function hdrGet(type){
       if (type==="stage") return hf.stage;
-      if (type in CH_COLS) return hf.ch===CH_COLS[type][0] ? CH_COLS[type][0] : "";
+      if (type==="ch") return hf.ch || "";
       return $("#"+SEL_OF[type]).value;
     }
     function hdrOpts(type){
       if (type==="stage") return stageOpts();
       // 渠道：「全部」+「有 X (N)」，N = 本格里该渠道非空的行数（facets.channels）
-      if (type in CH_COLS){ const [k,name]=CH_COLS[type]; return [["","全部"],[k,`有 ${name} (${Number(_facets?.channels?.[k]) || 0})`]]; }
+      if (type==="ch") return [["","全部"], ...CH_MENU.map(([k,name]) => [k, `有 ${name} (${Number(_facets?.channels?.[k]) || 0})`])];
       return [...$("#"+SEL_OF[type]).options].map(o=>[o.value, o.text]);
     }
+    // 筛选 chip（工具栏「重置筛选」左边）：每个生效的筛选一颗「维度 值 ×」，点 × 单个去掉
+    let _filterChips = [];
+    function activeFilterChips(){
+      const chips = [];
+      const selTxt = (t) => { const s=$("#"+SEL_OF[t]); const o=s.options[s.selectedIndex]; return o ? o.text.replace(/\s*\(\d+\)\s*$/,'') : ""; };
+      if (hf.stage) chips.push({ type:"stage", label:`阶段 ${STAGE_LABEL[hf.stage] || hf.stage}` });
+      if (hf.ch) { const m = CH_MENU.find(([k]) => k === hf.ch); chips.push({ type:"ch", label:`渠道 有 ${m ? m[1] : hf.ch}` }); }
+      for (const [t, name] of [["country","国家"],["category","分类"],["email","邮箱"],["score","评分"]]) if ($("#"+SEL_OF[t]).value) chips.push({ type:t, label:`${name} ${selTxt(t)}` });
+      return chips;
+    }
+    window.clearHdrFilter = (type) => applyHdrFilter(type, "");
     let _menuTh = null;
     function openHdrMenu(th, type){
       const menu = $("#hdrmenu");
@@ -3005,7 +3106,7 @@
         // 阶段是按 status 派生，与侧栏 status 分组会冲突 → 选阶段时切到「全部」跨状态
         if (v && current !== "all") { current = "all"; loadStats(); }
       }
-      else if (type in CH_COLS) hf.ch = v;   // v = 渠道 key 或 ""
+      else if (type==="ch") hf.ch = v;       // v = 渠道 key 或 ""
       else $("#"+SEL_OF[type]).value = v;
       loadList();                            // loadList 内会 refreshHeaderActive
     }
@@ -3015,14 +3116,11 @@
         const type = FILT_COL[i]; if (!type) return;
         th.classList.toggle("on", !!hdrGet(type));
       });
-      // A1 评分排序指示（▲ 升 / ▼ 默认降；engaged 时不显）
+      // 评分排序指示（▲ 升 / ▼ 默认降；engaged 时不显）
       const sa = document.querySelector(".main thead .sortarrow");
       if (sa) sa.textContent = sortMode==="score_asc" ? " ▲" : (sortMode==="engaged" ? "" : " ▼");
-      const bits=[];
-      if (hf.stage) bits.push("阶段"); if (hf.ch) bits.push("渠道");
-      ["country","category","email","score"].forEach(t=>{ if ($("#"+SEL_OF[t]).value) bits.push({country:"国家",category:"分类",email:"邮箱",score:"评分"}[t]); });
-      // 工具栏 v8：「已筛：…」不再占常驻位，收进「重置筛选」按钮的 title（信息没丢，换了住处）。
-      _activeFilterTxt = bits.length ? ("已筛："+bits.join("/")) : "";
+      // nav-table-v2：生效的筛选做成 chip 放工具栏「重置筛选」左边（左上角「已筛：xx」小字已删）
+      _filterChips = activeFilterChips();
       renderGroupTools();
     }
     document.addEventListener("click", e => {
@@ -3030,49 +3128,8 @@
       if (m.classList.contains("show") && !m.contains(e.target) && !(e.target.closest && e.target.closest("th.filt"))) closeHdrMenu();
     });
 
-    // 列宽：一套均衡默认宽 + 拖动持久化到 localStorage（按列 key）+ 重置入口
-    const COL_KEYS = ["company","score","stage","email","category","country","ch_linkedin","ch_whatsapp","ch_facebook","ch_instagram","ch_phone","created"];
-    const COL_DEFAULTS = { company:280, score:72, stage:120, email:200, category:88, country:68, ch_linkedin:120, ch_whatsapp:120, ch_facebook:120, ch_instagram:120, ch_phone:120, created:110 };
-    function loadColWidths(){ try { return JSON.parse(localStorage.getItem("dock_colw")||"{}"); } catch { return {}; } }
-    function saveColWidth(key,w){ const m=loadColWidths(); m[key]=w; try{ localStorage.setItem("dock_colw", JSON.stringify(m)); }catch{} }
-    function applyColWidths(){
-      const table = document.querySelector(".main table"); if (!table) return;
-      table.style.tableLayout = "fixed";
-      const saved = loadColWidths();
-      [...table.querySelectorAll("thead th")].forEach((th,i) => {
-        const key = COL_KEYS[i]; th.style.width = ((saved[key] || COL_DEFAULTS[key] || 90)) + "px";
-      });
-    }
-    // 工具栏 v8：resetColWidths 已随「↔ 重置列宽」按钮一起删（元素 + 绑定 + 实现三处成对删；applyColWidths 保留，列宽记忆本身还在）。
-    // 拖动竖线只装一次；每次 loadList 重新套用宽度（thead 静态、宽度会保留，套用幂等）
-    function makeColumnsResizable() {
-      const table = document.querySelector(".main table");
-      if (!table) return;
-      applyColWidths();
-      if (table.dataset.resizable) return;
-      table.dataset.resizable = "1";
-      const ths = [...table.querySelectorAll("thead th")];
-      ths.forEach((th,i) => {
-        if (i === ths.length - 1) return;                // 最后一列不加
-        const r = document.createElement("div");
-        r.className = "col-resizer";
-        th.appendChild(r);
-        r.addEventListener("mousedown", e => {
-          e.preventDefault(); e.stopPropagation();
-          const startX = e.pageX, startW = th.offsetWidth;
-          r.classList.add("drag");
-          const move = ev => { th.style.width = Math.max(40, startW + ev.pageX - startX) + "px"; };
-          const up = () => {
-            document.removeEventListener("mousemove", move); document.removeEventListener("mouseup", up);
-            r.classList.remove("drag"); document.body.style.userSelect="";
-            saveColWidth(COL_KEYS[i], th.offsetWidth);     // 持久化
-          };
-          document.addEventListener("mousemove", move);
-          document.addEventListener("mouseup", up);
-          document.body.style.userSelect = "none";
-        });
-      });
-    }
+    // nav-table-v2：列宽拖动 + localStorage 记忆（列键表、默认宽表、读/写记忆、套用、装拖动柄 六个常量与函数）整套已删 ——
+    //   列宽写死在 thead（= 真源 COLS），table-layout:fixed。旧的 localStorage 键 dock_colw 不再读，留着无害。
 
     // 筛选控件联动
     ["f-country","f-type","f-email","f-score"].forEach(id => $("#"+id).onchange = loadList);
@@ -3085,7 +3142,7 @@
       hf.stage = ""; hf.ch = ""; sortMode = "";
       loadList();
     };
-    // 「↔ 重置列宽」按钮已删（Joe 定）—— 它的绑定与 resetColWidths 一并删除：只删元素留绑定，
+    // 「↔ 重置列宽」按钮已删（Joe 定）—— 它的绑定与实现一并删除：只删元素留绑定，
     //   查那个已删 id 会返回 null，随后 `.onclick=` 直接抛 TypeError，会把这一整段初始化打断。
 
     // ⭐ 两档制 · 分数颜色的**单一真源**。以前三个函数三套线（列表 70/40、详情 80/60），
@@ -4945,7 +5002,7 @@
     { const gb=$("#btn-settings");
       // C5-4v C.6：左栏「设置」也是导航项 → 单色线条图标。用 sliders 而非齿轮，
       //   免得跟机器房那颗齿轮撞脸：两个"齿轮感"图标并排，扫视时分不出哪个是哪个。
-      if(gb) gb.innerHTML = `${ICON.gear}<span>设置</span>`; }
+      if(gb) gb.innerHTML = `<span class="ico">${ICON.gear}</span>设置`; }   // nav-table-v2：图标占 25px 位，文字与其它条目同一 x
     $("#btn-settings").onclick = () => openSettings();
     document.addEventListener("input", (e) => { if (e.target && e.target.id === "cfg-auto-limit") renderCapacity(); });
     // ⭐ P0-1 的灵魂：**宁可告诉他做不到，也不能悄悄砍成 N 还让他以为发了 500。**

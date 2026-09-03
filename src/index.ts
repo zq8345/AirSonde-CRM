@@ -45,7 +45,7 @@ import { currentActivity, setActivity, clearActivity } from "./activity";   // C
  */
 const LEAD_ROW_COLS =
   "l.id, l.company_name, l.website, l.email, l.country, l.source, l.keyword, l.status, l.created_at, l.channels, " +
-  "l.next_action, l.next_action_date, l.last_engaged_at, " +
+  "l.next_action, l.next_action_date, l.last_engaged_at, l.bench_channel, " +   // nav-table-v2：已联系页「邮件·跟进」列，没邮件时显示「手动 · 渠道」
   // 批⑲：这两列**只读**，给「待分析」分组页用 —— 组B 要显示无官网的**具体原因**
   // （批⑰ 已把超时/403/TLS/DNS 分开落库），组A 要显示「重试中 n/3」让 Joe 知道机器在干活。
   // ⚠️ 只加列，**不动任何 WHERE**（口径一个字没变）。
@@ -60,7 +60,23 @@ const LEAD_ROW_COLS =
   "(SELECT r.category FROM replies r WHERE r.lead_id = l.id ORDER BY r.id DESC LIMIT 1) AS latest_reply_cat, " +
   // 批③追加2：回复箱并入「已回复」页——每行一个线索 + 最新回复摘要/id（页面数据源仍是 /api/leads，不用 /api/replies）
   "(SELECT r.summary FROM replies r WHERE r.lead_id = l.id ORDER BY r.id DESC LIMIT 1) AS latest_reply_summary, " +
-  "(SELECT r.id FROM replies r WHERE r.lead_id = l.id ORDER BY r.id DESC LIMIT 1) AS latest_reply_id";
+  "(SELECT r.id FROM replies r WHERE r.lead_id = l.id ORDER BY r.id DESC LIMIT 1) AS latest_reply_id, " +
+  // nav-table-v2：列表「时间」列 = **进入这一格的时间**（不是录入时间）。每个 status 用哪个字段写死在这里：
+  //   new → created_at（录入即进待分析）· analyzed/pending → lead_analysis.analyzed_at（打分/归档那一刻进待审批或无官网）
+  //   approved/queued → updated_at（批准那一刻）· sent → emails 最早 sent_at（第一封发出；社媒手动触达没有邮件时退到 bench_contacted_at）
+  //   replied → replies 最新 received_at · won/ignored/blacklisted/unsubscribed/bounced → updated_at（改状态那一刻）
+  //   ⚠️ 没有更准的来源时才用 updated_at；⛔ 不许一把梭。取不到就 NULL，前端显 —。
+  "CASE l.status " +
+  "  WHEN 'new' THEN l.created_at " +
+  "  WHEN 'analyzed' THEN COALESCE(a.analyzed_at, l.updated_at) " +
+  "  WHEN 'pending' THEN COALESCE(a.analyzed_at, l.updated_at) " +
+  "  WHEN 'approved' THEN l.updated_at " +
+  "  WHEN 'queued' THEN l.updated_at " +
+  "  WHEN 'sent' THEN COALESCE((SELECT MIN(e.sent_at) FROM emails e WHERE e.lead_id = l.id AND e.status='sent'), l.bench_contacted_at, l.updated_at) " +
+  "  WHEN 'replied' THEN COALESCE((SELECT MAX(r.received_at) FROM replies r WHERE r.lead_id = l.id), l.updated_at) " +
+  "  ELSE l.updated_at END AS stage_at, " +
+  // nav-table-v2：已联系/已成交页「邮件 · 跟进」列的 N 封 = 该线索已发出的邮件数（status='sent'，含跟进）
+  "(SELECT COUNT(*) FROM emails e WHERE e.lead_id = l.id AND e.status='sent') AS email_count";
 
 /**
  * C5-13：给一行分析数据补上分类的中文标签，**不改机器值**。
