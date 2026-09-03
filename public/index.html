@@ -835,17 +835,21 @@
     /* 批⑩A 设置整页：原来这些内容长在 .modal 里，靠它给宽度/内边距/滚动。弹层删了之后
        得有人接住这份排版职责，否则表单会摊平到整个主区宽度（输入框拉成一米长，更难用）。
        宽度比 .modal 的 680 宽一档 —— 整页的意义就是给它更多呼吸空间，但不能宽到没边。 */
-    .set-page { max-width:820px; }
+    /* nav-table-v2 追加②（Joe：设置页容器与其它三页不一致）：四个导航页**同一个内容最大宽 = 820px**（自动化页那套：
+       它的状态卡/参数卡本来就是 820 上限）。设置卡原是 760 上限、待办/看板原是不设上限 ⇒ 全部统一到 --pg-max，
+       只改这一个变量就能一起变。 */
+    :root { --pg-max:820px; }
+    .set-page { max-width:var(--pg-max); }
+    #v-page .pg-head, #v-page .page-card, #v-page .td-report, #v-settings .pg-head, #v-machine .pg-head { max-width:var(--pg-max); }
     .set-page h2 { margin:0 0 6px; font-size:17px; }
     .pg-head { display:flex; align-items:center; gap:12px; margin-bottom:14px; }
     .pg-titlewrap { display:flex; flex-direction:column; line-height:1.25; }
     .pg-title { font-size:17px; font-weight:700; }
     .pg-sub { font-size:12px; color:var(--muted); }
-    /* C5-4v①：设置页页头吸顶。⚠️ 吸的是 `.main` 这个**滚动容器**内的 top，不是视口 ——
-       页面滚动发生在 .main 里，贴视口会完全不动。 */
-    #v-settings .pg-head { position:sticky; top:-16px; z-index:5; background:var(--bg);
-      margin:-16px -20px 16px; padding:16px 20px; border-bottom:1px solid var(--border);
-      box-shadow:0 6px 14px -12px rgba(16,20,24,.5); display:flex; align-items:center; gap:12px; }
+    /* nav-table-v2 追加②（Joe）：设置页原来的页头是一条独立吸顶白带（负 margin 顶满 .main 两侧 + 白底阴影），
+       与 待办/看板/自动化 三页"标题与卡同一容器"不一致 ⇒ 撤掉，四页同一个 pageHeader 结构、同一个宽度、同一个卡间距。
+       编辑/保存/取消 三颗按钮照旧住在 .pg-head 右侧（margin-left:auto）。 */
+    #v-settings .pg-head { display:flex; align-items:center; gap:12px; }
     /* 今日待办 2×2 卡 */
     .td-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
     .td-card { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:12px 14px; }
@@ -1040,7 +1044,7 @@
           max-width 保留（那是控行长，与对齐无关，见附录 C 的全站容器规则）。 */
     #v-settings .set-page { padding:0; }
     .set-card { background:var(--bg); border:1px solid var(--border); border-radius:12px;
-                padding:24px; margin:0 0 16px; max-width:760px; }
+                padding:24px; margin:0 0 16px; max-width:var(--pg-max); }   /* nav-table-v2 追加②：原 760px 让设置卡比自动化卡（820）窄；四页同一内容宽 --pg-max */
     .set-card:last-of-type { margin-bottom:0; }
     .set-card > .sec-title { font-size:15px; font-weight:600; color:var(--text); margin:0; }
     .set-card > .sec-sub { font-size:12px; color:var(--muted); margin:2px 0 18px; line-height:1.5; }
@@ -1550,8 +1554,8 @@
     <div id="mr-rare"></div>
   </div>
   <div id="v-settings" style="display:none">
+    <!-- nav-table-v2 追加①（Joe）：四个导航页（待办/看板/自动化/设置）是左栏一级页，不是从列表点进来的详情 ⇒ 「← 返回列表」删；只有线索详情页保留返回 -->
     <div class="pg-head">
-      <button class="btn-ghost" onclick="showMainView('list')">← 返回列表</button>
       <div class="pg-titlewrap"><span class="pg-title">设置</span></div>
       <!-- C5-4v①：保存移进吸顶页头右侧 —— "存不存得下"是全页共同的状态，理应跟着页头走。
            ⚠️ _cfgLoaded 闸照旧管住它（openSettings 里 disabled + title），这里只换位置。 -->
@@ -5385,9 +5389,10 @@
         setTimeout(()=>{ const f=ov.querySelector('.cd-pick'); if(f) f.focus(); }, 30);
       });
     }
-    // 4 个整页共用的顶部返回栏：← 返回列表 + 页名 + 副标题
+    // 整页共用的页头：页名 + 副标题。nav-table-v2 追加①（Joe）：「← 返回列表」删 —— 待办/看板/自动化/设置是左栏一级页，
+    //   不是从列表点进来的；只有线索详情页保留返回（那个在 openDetail 里自己写）。⛔ 别把返回按钮再加回参数里。
     function pageHeader(title, sub){
-      return `<div class="pg-head"><button class="btn-ghost" onclick="showMainView('list')">← 返回列表</button><div class="pg-titlewrap"><span class="pg-title">${title}</span>${sub?`<span class="pg-sub">${sub}</span>`:''}</div></div>`;
+      return `<div class="pg-head"><div class="pg-titlewrap"><span class="pg-title">${title}</span>${sub?`<span class="pg-sub">${sub}</span>`:''}</div></div>`;
     }
     // ⭐ 发信健康度（只读）。这些数以前只活在分析报告里，Joe 在后台一个都看不到 ——
     //   2026-07-28 就是这么栽的：出信量被砍到 10 封/天，连续三天没人发现。
