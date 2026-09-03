@@ -100,6 +100,12 @@ export function isNoiseReply(r: { raw_headers?: string | null; content?: string 
   //   「Report Domain: <d> Submitter: <s> Report-ID: <id>」（SES 变体 "Dmarc Aggregate Report Domain: {…} Submitter: {…}" 同样命中），
   //   一条规则、一个规范出处，⛔ 不按发件人域名枚举（那是"认得几种错法"）。subject 是新加的可选字段，老调用方不传照旧。
   if (/\breport\s+domain:\s*\S+[\s\S]*?\bsubmitter:/i.test(String(r.subject || ""))) return true;
+  // 🔴 2026-09-03（AOM 那封实证，总工批准）：主题里明写自动回复的，比正文措辞**更硬**。
+  //   实例：`Re: Private-label IAQ monitors for AOM's air quality solutions [ Auto Reply ]`
+  //   —— 它此刻是靠下面那条**英文正文措辞**兜住的（"we acknowledge receipt … will get back"），
+  //   换个模板就漏。⇒ 主题这条是独立判据，一条规则覆盖三种规范写法，⛔ 不按发件人域名枚举。
+  //   ⚠️ 只认**方括号里或独立出现**的这三种写法，⛔ 不匹配正常商务信里出现的 "automatic" 一词。
+  if (/\[\s*auto[\s-]?reply\s*\]|\bauto(?:matic)?[\s-]?reply\b|\bout of (?:the )?office\b|\bautoreply\b/i.test(String(r.subject || ""))) return true;
   // RFC 3834 / 群发头：自动回执、假期自动回复、邮件列表
   // ⚠️ 原写法 `/^Auto-Submitted:\s*(?!no\b)/im` 是错的：`\s*` 会**回溯到零宽**，
   //   于是否定前瞻在冒号正后方那个空格上求值（空格不是 "no"）⇒ 前瞻恒成立，

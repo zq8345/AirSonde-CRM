@@ -126,7 +126,9 @@ export async function engineStatuses(env: Env): Promise<EngineStatus[]> {
     if (u.usedToday >= u.budget) {
       // ⚠️ 与 discover.ts:573 `if (usedToday >= budget) { budgetStopped = true; break; }` **同一个判据**。
       //   ⛔ 别在这里另写一个阈值——那就是第二个真源。
-      discover = { stopped: true, reason: `今日搜索预算用满（${u.usedToday}/${u.budget}），明天恢复` };
+      // 🔴 文案（总工裁定 2026-09-03）：原来是「用满（5000/2500）」—— 预算被调小到 2500 而今日已用 5000 时，
+      //   括号里那对数字读起来像笔误。判定不动（已用 ≥ 预算才算满），只把两个数**分开说**。
+      discover = { stopped: true, reason: `今日已用 ${u.usedToday} · 预算 ${u.budget}，明天恢复` };
     } else {
       const ccRow = await env.DB.prepare("SELECT value FROM settings WHERE key='search_countries'").first<{ value: string }>();
       // ⚠️ 三态：行不存在 = 未设 = 全量；有值 = 按值；空串 = **真的一个都不选**。

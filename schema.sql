@@ -90,7 +90,12 @@ CREATE TABLE IF NOT EXISTS emails (
   click_count       INTEGER NOT NULL DEFAULT 0,
   auto_sent         INTEGER NOT NULL DEFAULT 0,    -- 是否自动发（autosend，熔断器窗口用）
   message_id        TEXT,                          -- 我们发出那封的 Message-ID（replymatch，精确认领回复）
-  sender_email      TEXT                           -- 实际发件人（sender，发件域切换地基）
+  sender_email      TEXT,                          -- 实际发件人（sender，发件域切换地基）
+  -- 🔴 2026-09-03 补：发送失败的**服务器原话**。生产一直有这一列（`send.ts` 失败时写、时间线与
+  --   `/api/leads/:id/comm` 读它），但本文件从来没声明过 ⇒ **新库一起就少这一列**，
+  --   一调详情页的 comm 接口直接 500（审计窗今天被它拦过一次）。
+  --   ⚠️ 这类漂移的判据是「生产有没有」，不是「我记不记得加过」—— 用 pragma_table_info 对账出来的。
+  error             TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_emails_lead        ON emails(lead_id);
 CREATE INDEX IF NOT EXISTS idx_emails_status      ON emails(status);
@@ -112,10 +117,14 @@ CREATE TABLE IF NOT EXISTS replies (
   raw_headers  TEXT,               -- 原始头，供日后判自动回复（replyheaders，只观察不判断）
   -- #37 回复箱：handled_at=人已处理（消灭"去邮箱里发完再回来补打卡"）；draft=人工编辑过的回信草稿。
   -- 旧库由 reply-inbox.ts:ensureReplyColumns 运行时幂等补列；这里是新库的真源。
-  -- ⚠️ 没有 is_noise 列是**故意的**：噪音判定读取时计算（见 reply-inbox.ts），
-  --    存下来等于把今天只有 15 封样本的判断烤死，且会让人误以为它是事实。
+  -- ⚠️ 没有 is_noise 列是**故意的**：噪音判定读取时计算（见 reply-inbox.ts）。
   handled_at   TEXT,
-  draft        TEXT
+  draft        TEXT,
+  -- 🔴 2026-09-03 补：`is_auto` = 自动回执标记。上面那条"读取时算、不落库"的纪律在**只用于分组显示**时
+  --   成立；而这个判断现在要参与 **SQL 聚合**（关键词战绩 / 看板北极星 / 周报 / 待办），SQL 调不了 JS
+  --   ⇒ 2026-09-02 起它**已经落库**（SELF_HEAL_COLUMNS 里有它，生产实测存在）。
+  --   本文件却仍停在旧结论上 ⇒ 新库缺列。**真源判定仍是 reply-inbox.ts 的 isNoiseReply，这列是它的缓存。**
+  is_auto      INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_replies_lead         ON replies(lead_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_replies_msgid ON replies(message_id);

@@ -899,7 +899,11 @@
     .cd-ok { background:var(--blue); border:none; color:var(--bg); }
     .cd-ok:hover { filter:brightness(1.12); }
     .cd-ok.cd-danger { background:var(--red); }
-    @media(max-width:820px){ .dv-body { grid-template-columns:1fr; } }
+    /* 🔴 Joe 的常态是**分屏**（Claude 桌面端占左半、Chrome 占右半）⇒ CRM 视口 ≈990，不是偶尔没最大化。
+       990 下两栏实测：侧栏固定 340 ⇒ **主栏只剩 362px** —— 开发信正文/回信原文/已发出的信全挤在那 362 里。
+       ⇒ 断点从 820 抬到 **1100**：不够宽就侧栏下移、单列铺满（总工裁定：别硬撑两栏）。
+       ⚠️ 判据是**量出来的主栏宽**，不是"看起来还行"：1278 下主栏 650 够用，990 下 362 不够。 */
+    @media(max-width:1100px){ .dv-body { grid-template-columns:1fr; } }
     /* 整页视图共用头 */
     /* 批⑩A 设置整页：原来这些内容长在 .modal 里，靠它给宽度/内边距/滚动。弹层删了之后
        得有人接住这份排版职责，否则表单会摊平到整个主区宽度（输入框拉成一米长，更难用）。
@@ -3368,12 +3372,14 @@
     function dvReasonText(reason){ return cleanReason(reason).replace(/^【[^】]*】\s*/, "").trim(); }
     function dvReasonCard(a, opts){
       opts = opts || {};
-      const sc = Number(a.match_score);
-      const label = a.customer_category_label || a.customer_category || "";
-      const verdict = [label, `${sc} 分`, sc < SCORE_LINE ? (sc <= REVIEW_LO_MAX ? "建议忽略" : `低于 ${SCORE_LINE} 线`) : ""].filter(Boolean).join(" · ");
+      // 🔴 Joe（09-03 返修①）：「经销/批发 · 90 分」那行**删掉** —— 侧栏基本信息已经有 评分 pill + 分类 pill，
+      //   同一个事实两处 = 铁律五。理由卡从**正文**直接开始（正文 + 产品 tag + 右上「重新分析」）。
+      //   ⚠️ 这个函数是**所有状态**共用的（待审批/待联系/已联系/已回复/已成交/已忽略/黑名单），
+      //     删在这里 = 七个态一起干净，⛔ 不是只改他截图那个态。
+      // 🔴 返修②：「重新分析」从小字链接（.lnk）改成**描边次级按钮**（.mini，与卡头按钮同皮），
+      //   出现范围不变（只在 opts.re 为真时给 = 待审批/待联系，SPEC 定的范围）。
       const tags = String(a.needed_products || "").split(/[、,，;；]/).map(p => p.trim()).filter(Boolean);
-      return `<div class="card"><div class="ct"><b>判断理由</b>${opts.re ? `<span class="r"><button class="lnk" onclick="analyzeOne(${opts.id})">重新分析</button></span>` : ""}</div>
-        <div class="verdict">${esc(verdict)}</div>
+      return `<div class="card"><div class="ct"><b>判断理由</b>${opts.re ? `<span class="r"><button class="mini" onclick="analyzeOne(${opts.id}, this)">重新分析</button></span>` : ""}</div>
         <div class="txt">${esc(dvReasonText(a.reason)) || '<span class="mu">（没有理由正文）</span>'}</div>
         ${tags.length ? `<div class="tags">${tags.map(t => `<span class="tag">${esc(t)}</span>`).join("")}</div>` : ""}
       </div>`;
@@ -3909,8 +3915,13 @@
     };
 
     // 单条 AI 分析
-    window.analyzeOne = async (id) => {
-      const btn = $("#d-analyze"), t0 = btn ? btn.textContent : "";
+    // ⚠️ 反馈不能只靠 `#d-analyze`：那个 id 只挂在**动作条**那颗（分析/重新分析）上，而
+    //   判断理由卡右上那颗「重新分析」没有 id ⇒ 在待审批/待联系两态点它时 `$("#d-analyze")` 是 null，
+    //   `if (btn)` 把"什么都没发生"吞掉，人看到的是**点了 10-30 秒零反馈**（总工队列里那条）。
+    //   ⇒ 调用方把自己传进来（`analyzeOne(id, this)`），没传再回落找那个 id；两处都拿不到时
+    //     仍有页头 #dv-msg 那句话兜底 —— **任何一条路径都必须有可见反馈**。
+    window.analyzeOne = async (id, el) => {
+      const btn = el || $("#d-analyze"), t0 = btn ? btn.textContent : "";
       if (btn) { btn.disabled = true; btn.textContent = "分析中…"; }
       dvMsg("抓官网 + 打分中，约 10-30 秒", false);
       const res = await fetch(`/api/leads/${id}/analyze`, { method:"POST" }).then(r=>r.json()).catch(e=>({error:String(e)}));

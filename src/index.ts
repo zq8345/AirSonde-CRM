@@ -2715,7 +2715,8 @@ app.post("/api/discover", async (c) => {
     {
       const u = await getSerperUsage(c.env);
       if (u.usedToday >= u.budget) {
-        return c.json({ blocked: true, reason: `今日搜索预算用满（${u.usedToday}/${u.budget}），明天恢复` });
+        // 文案与 engines.ts 那处保持逐字一致（同一件事两个面，⛔ 别一处改一处不改）
+        return c.json({ blocked: true, reason: `今日已用 ${u.usedToday} · 预算 ${u.budget}，明天恢复` });
       }
     }
     // C5-11 B4：给这一轮打个标记，供 /api/discover/round-complete 判重与统计。
