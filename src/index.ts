@@ -2720,18 +2720,31 @@ app.get("/u/:token", async (c) => {
   );
 });
 
+/**
+ * 「现在能不能开一轮找客户」+ **那句话**。
+ *
+ * ⚠️ 判定与文案**只有这一处**：`POST /api/discover`（拦截）与 `GET /api/discover/blocked`（弹窗开着时先问一声）
+ *   都调它 ⇒ 弹窗上显示的那句，与真按下去时拦你的那句，**逐字是同一句**。
+ *   ⛔ 前端不许自己判"预算用满了没"、也不许自己拼数字（那就是第二个真源）。
+ * ⚠️ 判据与 discover.ts / engines.ts 同一条：`usedToday >= budget`。
+ */
+async function discoverBlocked(env: Env): Promise<{ blocked: boolean; reason?: string }> {
+  const u = await getSerperUsage(env);
+  if (u.usedToday >= u.budget) return { blocked: true, reason: `今日已用 ${u.usedToday} · 预算 ${u.budget}，明天恢复` };
+  return { blocked: false };
+}
+// 找客户弹窗打开时先问一声（只读，零副作用）——⛔ 不写 activity、不建 round
+app.get("/api/discover/blocked", async (c) => c.json(await discoverBlocked(c.env)));
+
 // ---- P5 自动找客户：搜索发现 ----
 app.post("/api/discover", async (c) => {
   const body = await jsonBody<{ keywords?: string[]; perKeyword?: number; countries?: string[] }>(c);
   try {
     // 预算锁死修法（Joe 批）：预算用满 ⇒ **不建任务**——不写 round、不写 activity，直接把原因还给弹窗。
-    //   ⛔ 口径只在服务端（getSerperUsage / runDiscovery 头部同一判据），前端只显示这句话。
+    //   ⛔ 口径只在服务端（discoverBlocked 一处判、一处出话），前端只显示这句话。
     {
-      const u = await getSerperUsage(c.env);
-      if (u.usedToday >= u.budget) {
-        // 文案与 engines.ts 那处保持逐字一致（同一件事两个面，⛔ 别一处改一处不改）
-        return c.json({ blocked: true, reason: `今日已用 ${u.usedToday} · 预算 ${u.budget}，明天恢复` });
-      }
+      const b = await discoverBlocked(c.env);
+      if (b.blocked) return c.json(b);
     }
     // C5-11 B4：给这一轮打个标记，供 /api/discover/round-complete 判重与统计。
     //   ⚠️ **在 runDiscovery 之前写**：搜索途中若被预算闸提前停止，那些已入库的线索也算这一轮。

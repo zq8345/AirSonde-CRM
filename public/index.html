@@ -297,17 +297,45 @@
     .table-card { padding:0; overflow:hidden; }   /* 总工裁定：不出横滚——9 列已收窄到 Joe 视口放得下（≤1030），卡不再是滚动容器 */
     .table-card table { margin:0; }
     /* C5-4v A：次级小按钮 —— 「重置筛选/重置列宽」不该与主动作平级 */
-    /* ══ C5-4v B：补货弹窗 —— 两张选择卡 ══ */
-    .rs-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-    @media (max-width:640px){ .rs-grid { grid-template-columns:1fr; } }
-    .rs-card { background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:16px; }
-    .rs-card-t { font-size:15px; font-weight:600; margin-bottom:12px; }
-    .rs-est { font-size:12px; color:var(--muted); line-height:1.55; }
-    /* 运行中：两张卡收起，弹窗只回答"跑到哪了"。
-       ⚠️ 状态由 runPipeline 的 pipelineRunning 真值驱动，**不新增状态变量**——
-          多一个变量就多一处会跟真实状态漂开的地方。 */
-    #restock-overlay.rs-running .rs-grid { display:none; }
-    #restock-overlay.rs-running #fc-backlog { display:none !important; }
+    /* ══ 找客户弹窗 v2.1（两张选择卡 .rs-grid/.rs-card 已删，改成一列四行 + 选择层）══
+       ⚠️ 进行中态由 `rsShowRunning()` 显隐三个块，**不再靠 .rs-running 这个类**（状态只有一个来源 pipelineRunning）。 */
+    .rs2 { position:relative; }
+    .rs-seg { display:inline-flex; background:var(--panel); border-radius:8px; padding:2px; margin:0 0 14px; }
+    .rs-seg button { font-size:13px; padding:6px 14px; border:0; background:none; color:var(--muted); border-radius:6px; cursor:pointer; }
+    .rs-seg button.on { background:var(--bg); color:var(--text); font-weight:600; box-shadow:0 1px 2px rgba(16,20,24,.06); }
+    .rs-row { display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid var(--border); font-size:13px; }
+    .rs-k { width:76px; flex-shrink:0; color:var(--muted); }
+    .rs-v { flex:1; min-width:0; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .rs-pick { font-size:13px; padding:5px 10px; border:1px solid var(--border-strong); border-radius:7px;
+               background:var(--bg); color:var(--text); cursor:pointer; }
+    .rs-pick:hover { border-color:var(--brand); color:var(--brand-strong); }
+    .rs-step { display:inline-flex; align-items:center; gap:0; border:1px solid var(--border-strong); border-radius:7px; overflow:hidden; }
+    .rs-step button { width:28px; height:28px; border:0; background:var(--bg); color:var(--text); font-size:14px; cursor:pointer; }
+    .rs-step button:hover:not(:disabled) { background:var(--panel); }
+    .rs-step button:disabled { color:var(--hint); cursor:not-allowed; }   /* 边界自己变灰，⛔ 不弹提示 */
+    .rs-step b { min-width:26px; text-align:center; font-size:13px; border-left:1px solid var(--border); border-right:1px solid var(--border); line-height:28px; }
+    .rs-act { display:flex; align-items:center; gap:10px; margin-top:14px; flex-wrap:wrap; }
+    .rs-blocked { margin-top:10px; font-size:13px; color:var(--red); }
+    .rs-blocked a { color:var(--brand); cursor:pointer; }
+    .rs-csv { width:100%; box-sizing:border-box; min-height:120px; border:1px solid var(--border-strong); border-radius:8px;
+              padding:10px 12px; font:13px/1.6 inherit; background:var(--bg); color:var(--text); resize:vertical; }
+    .rs-prog-t { font-size:13px; font-weight:600; margin-bottom:8px; }
+    .rs-prog-p { font-size:12px; margin-top:8px; }
+    /* 选择层：挂在弹窗内（⛔ 不是第二个 overlay —— 两层遮罩会让 ✕ 关掉哪一层变得说不清） */
+    .rs-pick-layer { position:absolute; inset:52px 16px 16px; background:var(--bg); border:1px solid var(--border);
+                     border-radius:10px; box-shadow:0 12px 32px rgba(16,20,24,.14); display:flex; flex-direction:column; z-index:5; }
+    .rs-pick-head { display:flex; align-items:center; gap:10px; padding:12px 14px; border-bottom:1px solid var(--border); }
+    .rs-pick-head .set-in { flex:1; min-width:0; }
+    .rs-pick-links { display:flex; gap:10px; font-size:12px; white-space:nowrap; }
+    .rs-pick-links a { color:var(--brand); cursor:pointer; }
+    .rs-pick-body { flex:1; overflow:auto; padding:10px 14px; }
+    .rs-grp { font-size:12px; color:var(--hint); margin:8px 0 6px; }
+    .rs-grp:first-child { margin-top:0; }
+    .rs-chips { display:flex; flex-wrap:wrap; gap:6px; }
+    .rs-chip { font-size:12px; padding:4px 10px; border-radius:14px; border:1px solid var(--border);
+               background:var(--bg); color:var(--muted); cursor:pointer; }
+    .rs-chip.on { background:var(--brand-tint); border-color:var(--brand); color:var(--brand-strong); font-weight:600; }
+    .rs-pick-foot { display:flex; align-items:center; gap:10px; padding:10px 14px; border-top:1px solid var(--border); }
     /* ══ C5-8 待办事项：优先级清单 ══ 字号/字重/颜色全取自附录 C 闭集 */
     .td-layer { margin-bottom:16px; }
     .td-t { font-size:15px; font-weight:600; margin:0 0 12px; }
@@ -1694,99 +1722,93 @@
   <div class="overlay" id="dashboard-overlay">
     <div class="modal" id="dashboard" style="width:min(940px,96vw)"></div>
   </div>
-
-  <!-- ══ C5-3「➕ 补货」弹窗 ══
-       找客户整页解散后，「再抓一批」这个**动作**落在这里。
-       ⚠️ 里面的控件**一个没新建**：`fc-backlog` / `dp-transparency` / `fc-one-country` /
-          `dp-perkw` / `btn-import` / `dp-run` / `dp-progress` 全是从 #v-found 原样搬来的 id，
-          onclick 绑定、runPipeline、进度条一行没改 —— 只换了住处。
-       ⚠️「只搜某国」「本次条数」是**单次参数**，从此只活在这个弹窗里（总工 C5-3 ①）。 -->
+  <!-- ══ 找客户弹窗 v2.1（真源 airsonde-dispatch/restock-v2/restock-mockup.html，Joe「安排」）══
+       Joe 定的三条：① 每词每国 = 「− 5 +」步进器（默认 5，1–10，上限说明进 (?)）
+       ② 国家/关键词两行都能点开勾选，默认 = 自动化里勾着的，**只影响本轮、⛔ 不写回设置**
+       ③ **✕ = 收起不停止**；停止只有「取消本轮」一处（顶栏芯片 ✕ 复用同一个 cancel 端点）。
+       ⛔ 删：标题 ➕ · 卡头 🔍📄 · 黄字算式整段 · 「Serper 单页封顶约 10 条」「跑起来后可以关掉这个窗口…」两句 · 滑杆。 -->
   <div class="overlay" id="restock-overlay">
-    <div class="modal" style="width:min(680px,96vw)">
-      <!-- ⭐ C5-28（Joe 原话"记得加个最小化的按钮"）：他不敢点 ×，因为 **× 在弹窗上默认读作"取消"**。
-           这是真实的 affordance 盲点 —— 行为对不对不重要，**他不敢点就等于这个能力不存在**。
-           ⇒ 加一个显式「—」，与 × 同义；× 的悬浮提示也改成"收起"，让"收起 ≠ 取消"长在按钮上。 -->
-      <!-- 🔴 Joe 实时指认：两颗挨太近会误点。⚠️ 误点代价**不对称** —— 点错「✕」他会以为搜索被取消了
-           （其实后台照跑），而这个弹窗正是他唯一看得见进度的地方。所以宁可占位置也要分得开。
-           ⇒ 用 flex 容器 + gap 把间距做成**结构性**的，不再靠 float 上的偏移补丁。 -->
+    <div class="modal rs2" style="width:min(560px,96vw)">
+      <!-- 两颗控制键分得开：误点代价不对称——点错会让他以为搜索被取消了（其实后台照跑） -->
       <div class="modal-ctl">
         <button class="modal-x modal-min" type="button" onclick="closeRestock()" title="收起（后台继续跑）" aria-label="收起">—</button>
-        <button class="modal-x modal-close" type="button" onclick="closeRestock()" title="关闭（后台继续跑，随时可以再打开看进度）" aria-label="关闭">✕</button>
+        <button class="modal-x modal-close" type="button" onclick="closeRestock()" title="收起（后台继续跑，随时点顶栏芯片回来）" aria-label="收起">✕</button>
       </div>
-      <h2>➕ 找客户</h2>
-      <!-- 积压刹车条：它的全部意义就是**拦在"再进货"这个决定前面**（总工裁定 A）。
-           ⚠️ 条里三个「去处理」链接点下去要先关弹窗再跳，否则弹窗会盖在跳转后的列表上。 -->
-      <div id="fc-backlog" class="fc-backlog" style="display:none;margin-bottom:12px"></div>
+      <h2>找客户</h2>
 
-      <!-- C5-4v B：两张选择卡（窄屏上下叠）。⚠️ 纯排版层：id / 绑定 / 管线一个没动。 -->
-      <div class="rs-grid">
-        <div class="rs-card">
-          <div class="rs-card-t">🔍 自动搜一轮</div>
-          <div class="set-numrow" style="margin-bottom:10px">
-            <span style="font-size:13px">只搜某国</span>
-            <select id="fc-one-country" class="fc-add-sel"><option value="">全部市场（默认）</option></select>
-          </div>
-          <div class="set-numrow" style="margin-bottom:12px">
-            <span style="font-size:13px">本次条数</span>
-            <!-- 🔴 C5-53：上限由 100 改成 **10**（2026-09-03 生产实测）。
-                 实测：同一个词 `num=100` 与 `num=10` 返回**完全相同的 7 条**（三个不同查询一致）
-                       —— 那不是"结果不够多"，是 **num 超过约 10 就不起作用**。
-                 ⇒ 原来 1–100 的滑块里，**90% 的行程是无效的**，而它看起来完全可用。
-                 ⚠️ 为什么选"改上限"而不是"保留 100 但把 >10 标灰"：
-                    range 控件**没有"这一段无效"的视觉语言** —— 标灰也还是能拖过去、
-                    拖过去数字照样变大，人只会更困惑。**一个拖不到的位置，比一个拖得到但没用的位置诚实。**
-                 ⚠️ 10 是**观测值不是文档常数**：若哪天 Serper 改了，用
-                    `/api/diag/serper-num-probe?confirm=spend-credits&num=100&q=<冷门无关词>` 重测再调。 -->
-            <input id="dp-perkw" type="range" min="1" max="10" step="1" value="10" style="width:150px;max-width:100%">
-            <span style="font-size:13px"><b id="fc-perkw-val">10</b> 条/词/国</span>
-            <span class="hint" style="margin:0">· Serper 单页封顶约 10 条，再调高也不会更多</span>
-          </div>
-          <!-- 存量值 > 10 时的诚实出口：⛔ 不能让滑块把它静默钳到 10 —— 那会变成
-               "界面显示 10、机器仍按存量跑"，又一次界面说谎。这里如实说出来。 -->
-          <div class="hint" id="fc-perkw-note" style="margin:0 0 8px;display:none"></div>
-          <!-- 估算行：从蓝底横幅降成卡内一行安静文字；只有批量大时才由 .fc-warn 变警示色 -->
-          <div id="dp-transparency" class="rs-est"></div>
-          <button id="dp-run" class="primary" style="margin-top:12px">▶ 开始搜索</button>
-          <div class="hint" id="dp-msg" style="margin-top:6px"></div>
-          <!-- C5-11 B3：这句是**能力说明不是装饰** —— 不写的话，Joe 不知道关掉页面会怎样，
-               只能干等着（"别让用户干等黑盒"）。cron 兜底本来就有，这里只是把它说出来。 -->
-          <div class="hint" style="margin-top:8px">跑起来后可以关掉这个窗口，分析会继续；顶栏有进度。整页关掉也不要紧，后台每小时会接着做完。</div>
-        </div>
-
-        <div class="rs-card">
-          <div class="rs-card-t">📄 导入 CSV</div>
-          <div class="hint" style="margin:0 0 12px">自有名单，零搜索成本。</div>
-          <button id="btn-import" class="btn-secondary">选择 / 粘贴 CSV</button>
-          <div class="hint" id="fc-free-msg" style="margin-top:6px"></div>
-        </div>
+      <!-- 两段切换 -->
+      <div class="rs-seg" id="rs-seg">
+        <button class="on" type="button" data-seg="search" onclick="rsSeg('search')">搜一轮</button>
+        <button type="button" data-seg="csv" onclick="rsSeg('csv')">导入 CSV</button>
       </div>
 
-      <div class="prog-log" id="fc-free-log" style="margin-top:8px;display:none"></div>
-      <div id="fc-free-result" style="margin-top:8px"></div>
-      <div id="dp-progress" style="display:none;margin-top:12px">
+      <!-- ── 段一：搜一轮（默认）── -->
+      <div id="rs-search">
+        <div class="rs-row"><span class="rs-k">国家</span>
+          <span class="rs-v"><button class="rs-pick" type="button" id="rs-cc-btn" onclick="rsOpenPick('cc')">全部 51 国 ▾</button></span></div>
+        <div class="rs-row"><span class="rs-k">关键词</span>
+          <span class="rs-v"><button class="rs-pick" type="button" id="rs-kw-btn" onclick="rsOpenPick('kw')">— ▾</button></span></div>
+        <div class="rs-row"><span class="rs-k">每词每国</span>
+          <span class="rs-v"><span class="rs-step">
+              <button type="button" onclick="rsPer(-1)" aria-label="减少">−</button>
+              <b id="rs-per">5</b>
+              <button type="button" onclick="rsPer(1)" aria-label="增加">+</button>
+            </span><span class="u">条</span>
+            <span class="gj-help" data-help title="Serper 单页封顶约 10 条，再调高也不会更多（2026-09-03 实测：num=100 与 num=10 返回完全相同的结果）。">(?)</span></span></div>
+        <div class="rs-row"><span class="rs-k">预计</span>
+          <span class="rs-v"><span id="rs-est" class="u">—</span></span></div>
+
+        <div class="rs-act">
+          <button id="dp-run" class="primary">开始搜索</button>
+          <span class="u">入库后机器自动分析、批准、发信</span>
+        </div>
+        <!-- 预算用满态：这句**来自 /api/discover 的 blocked.reason**，⛔ 前端不拼预算数字 -->
+        <div class="rs-blocked" id="rs-blocked" hidden></div>
+        <div class="hint" id="dp-msg" style="margin-top:6px"></div>
+      </div>
+
+      <!-- ── 段二：导入 CSV ── -->
+      <div id="rs-csv" hidden>
+        <textarea id="csv-input" class="rs-csv" placeholder="公司, 官网, 邮箱（可空）, 国家（可空）
+Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
+        <div class="rs-act">
+          <button class="primary" id="do-import">导入</button>
+          <span class="u">重复域名自动跳过 · 导入后机器照常分析</span>
+        </div>
+        <div class="hint" id="import-result" style="margin-top:6px"></div>
+      </div>
+
+      <!-- ── 进行中态：原地切换（⛔ 不另开一个弹窗）── -->
+      <div id="rs-running" hidden>
+        <div class="rs-prog-t" id="rs-prog-t">正在开始…</div>
         <div class="prog-track"><div class="prog-bar" id="dp-bar"></div></div>
-        <div class="prog-log" id="dp-log"></div>
-        <!-- C5-28：说清"收起不等于取消"。⚠️ 计入字数预算，所以只写一句、不解释机制。 -->
-        <div class="hint" style="margin-top:6px">收起后继续后台运行，进度在右上角。</div>
+        <div class="rs-prog-p u" id="rs-prog-p"></div>
+        <div class="rs-act">
+          <button class="btn-secondary" type="button" onclick="rsCancelRound()">取消本轮</button>
+          <span class="u">关掉窗口不会停 · 停用「取消本轮」· 顶栏芯片点开回到这里</span>
+        </div>
         <div id="dp-result" style="margin-top:10px"></div>
       </div>
-    </div>
-  </div>
 
-  <!-- 导入弹层 -->
-  <div class="overlay" id="import-overlay">
-    <div class="modal">
-      <button class="modal-x" type="button" onclick="this.closest('.overlay').classList.remove('show')" title="关闭">×</button>
-      <h2>导入 CSV 线索</h2>
-      <p class="hint">支持表头（中英文皆可）：company/公司名、website/网站、email/邮箱、country/国家、keyword/关键词。按邮箱或网站自动去重。</p>
-      <textarea id="csv-input" placeholder="company,website,email,country,keyword&#10;Acme Air Quality,acme-iaq.com,sales@acme-iaq.com,US,HVAC controls integrator"></textarea>
-      <div class="actions">
-        <button class="primary" id="do-import">导入</button>
-        <button id="cancel-import">取消</button>
-        <span class="hint" id="import-result"></span>
+      <!-- 积压条：一行。它的意义就是**拦在"再进货"这个决定前面**（总工裁定 A） -->
+      <div id="fc-backlog" class="fc-backlog" style="display:none"></div>
+
+      <!-- ── 选择层（国家/关键词共用一个组件，挂在弹窗内、⛔ 不是第二个 overlay）── -->
+      <div class="rs-pick-layer" id="rs-pick" hidden>
+        <div class="rs-pick-head">
+          <input class="set-in" id="rs-pick-q" placeholder="搜一下…" oninput="rsPickRender()">
+          <span class="rs-pick-links" id="rs-pick-links"></span>
+        </div>
+        <div class="rs-pick-body" id="rs-pick-body"></div>
+        <div class="rs-pick-foot">
+          <span class="u" id="rs-pick-sum"></span>
+          <button class="primary mini" type="button" onclick="rsClosePick()" style="margin-left:auto">确定</button>
+        </div>
       </div>
     </div>
   </div>
+  <!-- v2.1：独立的「导入弹层」已删 —— CSV 导入现在是找客户弹窗里的第二段（同一个 #csv-input / #do-import / #import-result，
+       ⛔ 两处同 id 会让 $() 只拿到第一个，那正是"元素还在、绑定指向另一个"的坑）。#cancel-import 随之删（段切换即取消）。 -->
 
   <script>
     // 左栏=竖向漏斗：全部(置顶·默认)→分隔线→ 待分析→待审批→待发送→已发送→已查看→已回复→已成交→已忽略→黑名单/退订。
@@ -4350,33 +4372,14 @@
 
     // ⭐⭐ 批㉑：手动跑一次的国家集 = **单国定向选了就只它一国，否则全部市场**。
     //   （后台自动轮换永远全量，不看这里 —— 它只影响手动这一跑，且不写配置。）
-    function getSelectedCountries(){
-      const one = $("#fc-one-country") && $("#fc-one-country").value;
-      return one ? [one] : Object.keys(_fcAllCountries);
-    }
+    // v2.1：本轮国家范围的真源是弹窗选择层 `RS.cc`；这个函数只当 RS 还没初始化时的兜底（= 全部市场）。
+    function getSelectedCountries(){ return Object.keys(_fcAllCountries); }
     function getSelectedKeywords(){ return _fcKwRows.map(k=>k.keyword).filter(kw=>_fcKwChecked.has(kw)); }
-    function updateTransparency(){
-      const nc = getSelectedCountries().length;
-      const nk = _fcKwRows.length ? getSelectedKeywords().length : _fcKwEffCount;  // 无自定义清单时用生效默认数
-      // 🔴 C5-53：`per` 现在**封顶 10**（滑块 max 已降）。原来滑到 100 时这一行会算出
-      //   nk×nc×100 —— Joe 拉到 100 时它说「预计最多新增 168,300 家」，
-      //   **而实测每次只给约 10 条** ⇒ 那句话骗人，且骗的方向正是让他以为能捞到 20 倍。
-      //   ⇒ 这里再夹一次（⛔ 不只靠滑块的 max：滑块可能被存量/脚本绕过，闸不能只有一层）。
-      const per = Math.min(10, Number($("#dp-perkw").value) || 1);
-      const est = nk*nc*per;
-      const big = est > 500;   // 大批量醒目提醒，防误跑烧钱
-      const one = $("#fc-one-country") && $("#fc-one-country").value;
-      const scope = one ? `<b>1</b> 个国家（${esc(_fcAllCountries[one]||one)}）` : `<b>${nc}</b> 个国家（全部市场）`;
-      // C5-3：估算行并进补货弹窗，末尾补一句「今日还剩 X 次」——**决策时点**最该知道的那个数。
-      //   读的是 openRestock 存下的同一份 cfg.serper（与机器房同源），不另开端点、不自己算。
-      const _tp = $("#dp-transparency");
-      const _left = (_tp && _tp.dataset) ? _tp.dataset.left : undefined;
-      // ⚠️ 读不到就不显示 —— 绝不写 0 冒充"还剩零次"（"不知道"不许伪装成一个数）
-      const leftTxt = (_left !== undefined && _left !== "") ? ` · 今日还剩 <b>${esc(_left)}</b> 次` : ``;
-      _tp.innerHTML = (nc && nk)
-        ? `<span class="${big?'fc-warn':''}">本轮将执行：<b>${nk}</b> 个关键词 × ${scope} = <b>${nk*nc}</b> 次搜索，每次取 <b>${per}</b> 条 → 预计最多新增 <b>${est}</b> 家（去重后通常少很多）${leftTxt}。${big?' ⚠️ 批量较大，注意搜索/AI 成本与时长。':''}</span>`
-        : `<span class="muted">至少勾选 1 个关键词（在自动化 · 找客户策略里选）。</span>`;
-    }
+    // v2.1：黄字算式整段 + 滑杆 + 「只搜某国」下拉全删 ⇒ `updateTransparency` / `#dp-transparency` /
+    //   滑杆与「只搜某国」下拉一起退役。预计次数改由 rsPaint() 按**本轮勾选**真算（rs-est 那一行）。
+    //   ⚠️ 「每次取 N 条」的 1–10 夹取没丢：`rsPer()` 里夹（⛔ 闸不能只靠一个已删的控件的 max）。
+    //   ⚠️ 那三个 id 的**读取点也一并删掉**（原来读滑杆 value 时无守卫，元素没了就 TypeError，
+    //     而它在 loadSearchCfg 中段 ⇒ 会把后面整段初始化打断 —— 本仓栽过好几次的同一形状）。
 
     function renderKwInline(){
       $("#dp-kwlist").innerHTML = _fcKwRows.length
@@ -4391,11 +4394,11 @@
             return `<span class="kwitem ${on?'on':''}" data-kw="${esc(k.keyword)}" title="权重 ${k.weight!=null?k.weight:1}（按回复率自动加权）"><label><input type="checkbox" ${on?'checked':''} onchange="fcKwToggle(this)"> ${esc(k.keyword)}</label>${stat}${_fcKwManage?`<i onclick="delKeyword(${k.id})" title="删除">×</i>`:''}</span>`;
           }).join("")
         : `<span class="muted">当前用内置默认 ${_fcKwEffCount} 个关键词。点右上「管理」→「载入默认」把它们变成可编辑、可勾选，或添加自定义词。</span>`;
-      updateTransparency();
+      rsPaint();
       relockFormOf($("#dp-kwlist"));   // C5-49：刚渲染出来的勾选框也要按当前模式锁一次
     }
     window.fcKwToggle = (input) => { if (inPreview('[data-cfg-group="search"]')) { input.checked = !input.checked; return; }   // C5-49 第三层：连勾选态一起回滚
-      const sp=input.closest('.kwitem'); const kw=sp&&sp.dataset.kw; if(!kw) return; if(input.checked) _fcKwChecked.add(kw); else _fcKwChecked.delete(kw); sp.classList.toggle('on',input.checked); updateTransparency(); };
+      const sp=input.closest('.kwitem'); const kw=sp&&sp.dataset.kw; if(!kw) return; if(input.checked) _fcKwChecked.add(kw); else _fcKwChecked.delete(kw); sp.classList.toggle('on',input.checked); rsPaint(); };
     window.fcKwAll = (on) => { if (inPreview('[data-cfg-group="search"]')) return;   // C5-49 第三层
       if(on) _fcKwRows.forEach(k=>_fcKwChecked.add(k.keyword)); else _fcKwChecked.clear(); renderKwInline(); };
     // 批A#3 客户画像展开/收起（批⑳ 改：点标题切 caret + 收起时显摘要行，不再依赖 #fc-profile-toggle 按钮）
@@ -4517,15 +4520,7 @@
       _fcTier1 = cfg.tier1 || [];
       _fcCcChecked = new Set(cfg.countries || []);
       renderCountries();
-      // 单国定向下拉：从 allCountries 填（默认"全部市场"）
-      { const sel = $("#fc-one-country");
-        if (sel) {
-          const cur = sel.value;
-          sel.innerHTML = `<option value="">全部市场（默认）</option>` +
-            Object.entries(_fcAllCountries).sort((a,b)=>a[1].localeCompare(b[1],'zh')).map(([gl,name])=>`<option value="${esc(gl)}">${esc(name)}（${esc(gl)}）</option>`).join("");
-          sel.value = cur;   // 保留已选（重渲染不清空）
-          sel.onchange = updateTransparency;   // 改定向 → 刷新"本轮多少次搜索"估算
-        } }
+      // v2.1：「只搜某国」下拉已删 —— 国家改成弹窗里的多选层（只影响本轮）。元素与接线一起删。
       _fcKwActive = Array.isArray(cfg.activeKeywords) ? cfg.activeKeywords : null;
       // #S1 后台自动搜索开关：**勾选即存**，且**不再跟着「保存配置」一起提交**。
       // 它是"引擎开关"（运行状态），不是配置。以前它被 saveSearchCfg 捎带提交 ——
@@ -4557,18 +4552,10 @@
       // 🔴 C5-53：滑块上限已降到 10（实测 num>10 无效）。⚠️ 但后端存量可能还是 100 ——
       //   `input[type=range]` 会把超出 max 的值**静默钳到 10**，于是界面显示 10、
       //   而库里仍是 100 ⇒ **又一次"界面说谎"**。⇒ 存量 >10 就如实说出来。
-      const perRaw = cfg.perKeyword || 10;
-      const per = Math.min(10, perRaw);
-      { const n = $("#fc-perkw-note");
-        if (n) {
-          if (perRaw > 10) {
-            n.style.display = '';
-            n.innerHTML = `⚠️ 你之前设的是 <b>${perRaw}</b> 条 —— 实测 Serper 单页封顶约 10 条，`
-              + `<b>超过 10 的部分一直没有生效</b>。这里显示 ${per}；下次保存会把它存成 ${per}。`;
-          } else { n.style.display = 'none'; n.textContent = ''; }
-        } }
-      $("#dp-perkw").value = per; $("#fc-perkw-val").textContent = per;
-      $("#dp-perkw").oninput = () => { $("#fc-perkw-val").textContent = $("#dp-perkw").value; updateTransparency(); };
+      // v2.1：滑杆、它旁边的数字、存量提示三个元素全删 ——
+      //   「每词每国」现在是弹窗里的步进器（RS.per，默认 5，1–10 在 rsPer() 里夹）。
+      //   ⚠️ 原来这里直接给滑杆赋 value（**无守卫**）：元素一删就 TypeError，
+      //     而它在本函数中段 ⇒ 会把后面的关键词加载、积压条、进度重置整段打断。元素与读取点一起删。
       // 批㉑：国家勾选墙删了 → 不再有 fc-cc-add / renderCountries / _fcCcManage。关键词那套保留。
       // 批⑳ 画像折叠：填 textarea + 折叠行摘要（前40字）+ 默认/自定义 标记（isDefault，现成，无时间戳）
       fetch("/api/settings/profile").then(r=>r.json()).then(p=>{
@@ -4594,11 +4581,11 @@
         ? new Set(_fcKwRows.map(k=>k.keyword))
         : new Set(_fcKwRows.map(k=>k.keyword).filter(kw=>_fcKwActive.includes(kw)));
       renderKwInline();
-      updateTransparency();   // 批㉑：**显式**兜底跑一次预估行——以前它靠 renderCountries() 触发，
+      rsPaint();   // v2.1：预计次数由 rsPaint 真算（updateTransparency 已随黄字算式删）
                               //   而 renderCountries 已删；不显式调，预估行可能停在空/旧态。
-      $("#dp-progress").style.display = "none";
+      { const pb=$("#dp-bar"); if(pb) pb.style.width = "0"; }
       $("#dp-bar").style.width = "0";
-      $("#dp-log").textContent = "";
+      { const l=$("#rs-prog-t"); if(l) l.textContent = "正在开始…"; }   // v2.1：#dp-log 已删，进度文字在 #rs-prog-t
       $("#dp-msg").textContent = "";
       { const rb=$("#dp-result"); if(rb) rb.innerHTML = ""; }
       // ⚠️ 必须把 cfg 交回去：三个消费方（补货弹窗/方向盘/机器房）都要用它。
@@ -4606,6 +4593,109 @@
       //   而且**看着完全正常**（那一段本来就设计成"读不到就不显示"）。
       return cfg;
     }
+    // ══ 找客户弹窗 v2.1：本轮参数（⛔ 只活在这一轮，不写回自动化设置、不做本地持久化）══
+    //   默认 = 自动化里勾着的那一套；Joe 在这里改只影响这一次 POST /api/discover。
+    //   ⚠️ 重开弹窗（未开始搜索）参数回默认 —— 那正是"这是本轮参数不是设置"的可见证据。
+    const RS = { cc: null, kw: null, per: 5, pick: null, blocked: null, left: null };
+    const rsAllCc = () => Object.keys(_fcAllCountries || {});
+    const rsActiveKw = () => (_fcKwRows || []).filter(k => !k.archived).map(k => k.keyword);
+    function rsResetParams(){
+      // 默认勾选 = 自动化此刻的搜索面（effectiveCountries / 在用关键词），⛔ 不是全目录
+      RS.cc = new Set(_fcCcChecked && _fcCcChecked.size ? [..._fcCcChecked] : rsAllCc());
+      RS.kw = new Set(_fcKwChecked && _fcKwChecked.size ? [..._fcKwChecked] : rsActiveKw());
+      RS.per = 5;
+      RS.pick = null;
+    }
+    window.rsSeg = (which) => {
+      document.querySelectorAll('#rs-seg button').forEach(b => b.classList.toggle('on', b.dataset.seg === which));
+      { const e = $("#rs-search"); if (e) e.hidden = which !== 'search'; }
+      { const e = $("#rs-csv");    if (e) e.hidden = which !== 'csv'; }
+    };
+    window.rsPer = (d) => {
+      // 1–10：Serper 单页封顶约 10（实测），下限 1。边界处**按钮自己变灰**，⛔ 不弹提示
+      RS.per = Math.max(1, Math.min(10, RS.per + d));
+      rsPaint();
+    };
+    /** 预计次数 = 选中词 × 选中国（真算，⛔ 不写死）。今日剩余来自 cfg.serper（与自动化同一字段）。 */
+    function rsPaint(){
+      const nCc = RS.cc ? RS.cc.size : 0, nKw = RS.kw ? RS.kw.size : 0;
+      const total = nCc * nKw;
+      { const b = $("#rs-cc-btn"); if (b) b.textContent = (nCc === rsAllCc().length ? `全部 ${nCc} 国` : `${nCc} 国`) + ' ▾'; }
+      { const b = $("#rs-kw-btn"); if (b) b.textContent = `${nKw} 个在用 ▾`; }
+      { const p = $("#rs-per"); if (p) p.textContent = String(RS.per); }
+      document.querySelectorAll('.rs-step button').forEach((b, i) => { b.disabled = i === 0 ? RS.per <= 1 : RS.per >= 10; });
+      const left = (RS.left != null) ? RS.left : null;   // openRestock 从 cfg.serper 存进来（与自动化同一字段）
+      const est = $("#rs-est");
+      if (est) est.innerHTML = (nCc && nKw)
+        ? `<b>${total}</b> 次搜索 · 每次取 ${RS.per} 条`
+          // ⚠️ 读不到剩余就**不说那半句**，⛔ 不写 0 冒充"还剩零次"
+          + (left != null ? ` · 今日剩 ${left} 次` : '')
+          + (left != null && total > left ? ` · <b>跑不完的明天自动接着</b>` : '')
+        : `至少选 1 个国家和 1 个关键词`;
+      { const run = $("#dp-run"); if (run) run.disabled = !(nCc && nKw) || !!RS.blocked; }
+    }
+    // ── 选择层（国家/关键词共用）──
+    window.rsOpenPick = (kind) => {
+      RS.pick = kind;
+      { const q = $("#rs-pick-q"); if (q) { q.value = ''; q.placeholder = kind === 'cc' ? '搜国家…' : '搜关键词…'; } }
+      { const l = $("#rs-pick-links"); if (l) l.innerHTML = kind === 'cc'
+          ? `<a onclick="rsPickAll(1)">全选</a><a onclick="rsPickAll(0)">清空</a><a onclick="rsPickTier1()">只选一级市场</a>`
+          : `<a onclick="rsPickAll(1)">全选</a><a onclick="rsPickAll(0)">清空</a><a onclick="rsGoKeywords()">改词去自动化 →</a>`; }
+      { const p = $("#rs-pick"); if (p) p.hidden = false; }
+      rsPickRender();
+    };
+    window.rsClosePick = () => { const p = $("#rs-pick"); if (p) p.hidden = true; RS.pick = null; rsPaint(); };
+    window.rsGoKeywords = () => { closeRestock(); rsClosePick(); openMachineRoom(); };
+    window.rsPickAll = (on) => {
+      const set = RS.pick === 'cc' ? RS.cc : RS.kw;
+      const all = RS.pick === 'cc' ? rsAllCc() : rsActiveKw();
+      // 只作用于**当前搜索过滤出来的那些**（否则"清空"会把搜不到的也清掉，人看不见发生了什么）
+      const shown = rsPickItems().map(i => i.v);
+      shown.forEach(v => on ? set.add(v) : set.delete(v));
+      rsPickRender();
+    };
+    window.rsPickTier1 = () => { RS.cc = new Set((_fcTier1 || []).filter(c => rsAllCc().includes(c))); rsPickRender(); };
+    window.rsPickToggle = (v) => {
+      const set = RS.pick === 'cc' ? RS.cc : RS.kw;
+      if (set.has(v)) set.delete(v); else set.add(v);
+      rsPickRender();
+    };
+    function rsPickItems(){
+      const q = ($("#rs-pick-q")?.value || '').trim().toLowerCase();
+      const src = RS.pick === 'cc'
+        ? rsAllCc().map(gl => ({ v: gl, label: (_fcAllCountries || {})[gl] || gl, tier: (_fcTier1 || []).includes(gl) ? 1 : 2 }))
+        : rsActiveKw().map(kw => ({ v: kw, label: kw, tier: 0 }));
+      return q ? src.filter(i => i.label.toLowerCase().includes(q) || i.v.toLowerCase().includes(q)) : src;
+    }
+    window.rsPickRender = () => {
+      const body = $("#rs-pick-body"); if (!body || !RS.pick) return;
+      const set = RS.pick === 'cc' ? RS.cc : RS.kw;
+      const items = rsPickItems();
+      const chip = (i) => `<span class="rs-chip${set.has(i.v) ? ' on' : ''}" onclick="rsPickToggle('${esc(i.v).replace(/'/g, "\\'")}')">${esc(i.label)}</span>`;
+      if (RS.pick === 'cc') {
+        const t1 = items.filter(i => i.tier === 1), t2 = items.filter(i => i.tier === 2);
+        body.innerHTML = (t1.length ? `<div class="rs-grp">一级市场</div><div class="rs-chips">${t1.map(chip).join('')}</div>` : '')
+                       + (t2.length ? `<div class="rs-grp">二级市场</div><div class="rs-chips">${t2.map(chip).join('')}</div>` : '')
+                       + (items.length ? '' : `<div class="u">没有匹配的</div>`);
+      } else {
+        body.innerHTML = items.length ? `<div class="rs-chips">${items.map(chip).join('')}</div>` : `<div class="u">没有匹配的</div>`;
+      }
+      const nCc = RS.cc.size, nKw = RS.kw.size;
+      { const s = $("#rs-pick-sum"); if (s) s.innerHTML = `本次搜 <b>${nCc}</b> 国 · <b>${nKw}</b> 词 · 预计 <b>${nCc * nKw}</b> 次`; }
+      rsPaint();
+    };
+    // ── 进行中态 ──
+    function rsShowRunning(on){
+      { const e = $("#rs-seg");     if (e) e.hidden = !!on; }
+      { const e = $("#rs-search");  if (e) e.hidden = !!on || $("#rs-seg .on")?.dataset.seg !== 'search'; }
+      { const e = $("#rs-csv");     if (e) e.hidden = !!on || $("#rs-seg .on")?.dataset.seg !== 'csv'; }
+      { const e = $("#rs-running"); if (e) e.hidden = !on; }
+    }
+    window.rsCancelRound = async () => {
+      // 复用已上线的 cancel 端点（顶栏芯片 ✕ 同一条路）。⛔ 不新造停止机制。
+      await sbCancelTask(null, 'search');
+      { const t = $("#rs-prog-t"); if (t) t.textContent = '正在取消…下一个组合处停下'; }
+    };
     // ══ C5-3：「➕ 补货」弹窗 ══
     //   打开时才读一次配置（关键词/国家/预算是估算的分母，不能拿旧值算）。
     window.openRestock = async () => {
@@ -4614,16 +4704,32 @@
       // ⚠️ C5-26：**跑着的时候重开要保留进度态**。原来无条件回到两卡 ——
       //   于是"关掉 → 点 chip 回来"看到的是配置表单，进度不见了，跟"它停了"长得一模一样。
       //   判据用 pipelineRunning 这个真值（跑没跑它自己知道），不猜。
-      if (!pipelineRunning) _ov.classList.remove("rs-running");   // 没在跑才回到两卡
+      // v2.1：进行中/表单态由 rsShowRunning() 按 pipelineRunning 切（见下），⛔ 不再用 .rs-running 类
       const cfg = await loadSearchCfg();
       // ⚠️ 「今日还剩 X 次」的分母/分子都来自同一份 cfg.serper —— 与机器房读同一个字段。
       //    这是**决策时点的瞬态展示**（总工已批），机器房仍是它唯一的常驻展示位。
-      const st = $("#dp-transparency");
-      if (cfg && cfg.serper && st) {
-        const left = Math.max(0, (cfg.serper.budget ?? 0) - (cfg.serper.usedToday ?? 0));
-        st.dataset.left = String(left);
+      // v2.1：今日剩余次数存进 RS.left（原来挂在 #dp-transparency 的 dataset 上，那个元素已删）。
+      //   ⚠️ 读不到就置 null ——「不知道」不许伪装成一个数（rsPaint 读不到就不说那半句）。
+      RS.left = (cfg && cfg.serper && cfg.serper.budget != null && cfg.serper.usedToday != null)
+        ? Math.max(0, cfg.serper.budget - cfg.serper.usedToday) : null;
+      // ── v2.1 ──
+      rsSeg('search');
+      if (!pipelineRunning) rsResetParams();   // 未开始搜索时参数回默认（= 自动化那套），⛔ 不做本地持久化
+      rsShowRunning(!!pipelineRunning);        // 有在跑的轮次 → 直接进进行中态（收起再点回来看到的是进度，不是表单）
+      // 预算用满：**问服务端要那句话**（/api/discover 的 blocked.reason），⛔ 前端不自己判预算、不自己拼数字
+      RS.blocked = null;
+      { const b = $("#rs-blocked"); if (b) { b.hidden = true; b.textContent = ''; } }
+      {
+        // ⚠️ 与「开始搜索」真被拦时**同一个判定、同一句话**（服务端 discoverBlocked 一处出）。
+        //   读不到就当没拦：真正的闸仍在按下去那一刻（服务端回 blocked），⛔ 这里不自己判预算。
+        const probe = await fetch('/api/discover/blocked').then(r => r.ok ? r.json() : null).catch(() => null);
+        if (probe && probe.blocked) {
+          RS.blocked = probe.reason;
+          const b = $("#rs-blocked");
+          if (b) { b.hidden = false; b.innerHTML = `${esc(probe.reason)} · <a onclick="rsGoKeywords()">调预算去自动化</a>`; }
+        }
       }
-      updateTransparency();
+      rsPaint();
     };
     window.closeRestock = () => $("#restock-overlay").classList.remove("show");
     $("#restock-overlay").onclick = (e) => { if (e.target.id === "restock-overlay") closeRestock(); };
@@ -4670,7 +4776,10 @@
       // ⭐ 批㉑：**不再提交国家**（勾选墙删了；搜索面永远全量，由后端 getSearchConfig 定，
       //   不受这里影响）。只存关键词勾选 + 每关键词条数。
       await fetch("/api/settings/search", {method:"POST",headers:{"content-type":"application/json"},
-        body:JSON.stringify({ activeKeywords:(_fcKwRows.length ? getSelectedKeywords() : null), perKeyword:Number($("#dp-perkw").value)||10 })});
+        // v2.1：滑杆已删 ⇒ **不再提交 perKeyword**。它现在是弹窗里的"本轮参数"（RS.per），
+        //   按 Joe 定的语义**不写回设置**；这里若拿一个已删控件的值提交，就是拿 undefined 覆盖库里的存量。
+        //   ⚠️ 后端 `perKeyword` 只在字段存在时才写（不传 = 不动），所以直接不传是安全的。
+        body:JSON.stringify({ activeKeywords:(_fcKwRows.length ? getSelectedKeywords() : null) })});
       // 🔴 C5-53：**这里原来还有一条重复的搜索预算提交路径，已删。**
       //   它带着 `.catch(()=>{})` —— 失败被吞掉，保存照样显示"✅ 已保存"。
       //   ⚠️ 而下面 26 行处的注释白纸黑字写着「这里是**唯一**能存它的地方了，别再给它开第二条路」
@@ -4719,21 +4828,26 @@
     let pipelineRunning = false;
     async function runPipeline(opts){
       if (pipelineRunning) return;
-      const countries = getSelectedCountries();   // 批㉑：单国定向选了=只它；否则全部市场（永远≥1）
-      const kws = getSelectedKeywords();
-      if (_fcKwRows.length && !kws.length) { $("#dp-msg").textContent = "请至少勾选一个关键词"; return; }
+      // v2.1：参数来自**本轮**选择层（RS），⛔ 不再读自动化设置里的勾选 —— 那是"设置"，这是"这一轮"。
+      const countries = RS.cc && RS.cc.size ? [...RS.cc] : getSelectedCountries();
+      const kws = RS.kw && RS.kw.size ? [...RS.kw] : getSelectedKeywords();
+      if (!kws.length) { $("#dp-msg").textContent = "至少选 1 个关键词"; return; }
+      if (!countries.length) { $("#dp-msg").textContent = "至少选 1 个国家"; return; }
       pipelineRunning = true;
+      rsShowRunning(true);
+      { const t = $("#rs-prog-t"); if (t) t.textContent = "正在开始…"; }
+      { const pp = $("#rs-prog-p"); if (pp) pp.textContent = `${countries.length} 国 · ${kws.length} 词 · 每词每国 ${RS.per} 条`; }
       // C5-4v B：跑起来 → 两卡收起，只显示进度区。**跑完不自动展开**：
       //   Joe 要能看完"新增 N 家 → 去待分析"再走，展开回去会把结果挤没。
       //   下次开弹窗时 openRestock 会清掉这个类。
-      { const ov=$("#restock-overlay"); if(ov) ov.classList.add("rs-running"); }
+      // v2.1：进行中态由 rsShowRunning(true) 切（已在上面调过），⛔ 不再用 .rs-running 类
       ["dp-run","dp-save"].forEach(id=>{ const e=$("#"+id); if(e) e.disabled=true; });
       $("#dp-msg").textContent = ""; $("#dp-msg").style.color = "";   // 上一次的预算红字别赖着
       { const rb=$("#dp-result"); if(rb) rb.innerHTML = ""; }
-      $("#dp-progress").style.display = "block";
-      const bar = $("#dp-bar"), log = $("#dp-log");
-      const setBar = p => bar.style.width = Math.min(100,Math.max(0,p)) + "%";
-      const setLog = m => log.textContent = m;
+      // v2.1：进度区常驻在进行中态里（上面 rsShowRunning(true) 已切），⛔ 不再显隐那个旧的进度容器；
+      //   文字位从 #dp-log 换成 #rs-prog-t。两者都带守卫 —— 死绑定闸刚因为这三个 id 报红，正是它该抓的。
+      const setBar = p => { const b = $("#dp-bar"); if (b) b.style.width = Math.min(100, Math.max(0, p)) + "%"; };
+      const setLog = m => { const l = $("#rs-prog-t"); if (l) l.textContent = m; };
       try {
         // 🔴🔴 C5-56：这里原来第一件事是 `await saveSearchCfg()` —— **一个动作按钮在写配置**。
         //   Joe 的现场：自动化页把预算设成 5000 存好（库=5000）→ 回列表 → 点「开始搜索」
@@ -4747,7 +4861,7 @@
         //     更根本地：**动作不该有持久化副作用。**
         //   ✅ 删掉它是安全的：`/api/discover` 本来就收 `{keywords, perKeyword, countries}`
         //     （`index.ts:2513`）—— 本轮参数**当入参传**即可，⛔ 不必写进 settings。
-        const per = Number($("#dp-perkw").value)||8;
+        const per = RS.per || 5;   // v2.1 步进器（1–10），⛔ 滑杆已删
         // ① 搜索
         // ⭐ C5-26：原来这里写「约需 10-40 秒」—— **那是句谎话**。实测一轮 26 个关键词是分钟级
         //   （美国轮入库 101 家）。Joe 三次以为"卡住了"，其实机器一直在跑，是文案在骗他。
@@ -4778,7 +4892,12 @@
         } finally { clearInterval(poll); paintStatusBar(); }
         if (d.error){ setLog("① 搜索失败：" + d.error); return; }
         // 预算锁死修法：预算满时服务端**没建任务**（无 round、无芯片、按钮不灰），这里行内红字说原因即可
-        if (d.blocked){ const m=$("#dp-msg"); if(m){ m.textContent = "⚠️ " + (d.reason || "今日搜索预算用满，明天恢复"); m.style.color = "var(--red)"; } $("#dp-progress").style.display = "none"; { const ov=$("#restock-overlay"); if(ov) ov.classList.remove("rs-running"); } return; }
+        // v2.1：回到表单态并把那句话（**服务端给的**）放进红字位；⛔ 不在前端另拼一句
+        if (d.blocked){ RS.blocked = d.reason;
+          rsShowRunning(false);
+          const b = $("#rs-blocked");
+          if (b) { b.hidden = false; b.innerHTML = `${esc(d.reason || "今日搜索预算用满，明天恢复")} · <a onclick="rsGoKeywords()">调预算去自动化</a>`; }
+          rsPaint(); return; }
         if (d.cancelled){ setLog(`已取消：跑了 ${d.searched} 次搜索、入库 ${d.inserted} 家后停下。`); loadStats(); loadList(); loadFacets(); return; }
         setLog(`① 搜索完成：执行 ${d.searched} 次搜索，新增 ${d.inserted} 家，去重/跳过 ${d.skipped}。`
           + (d.msTotal ? `（用时 ${Math.round(d.msTotal/1000)} 秒：搜索 ${Math.round((d.msSearch||0)/1000)} 秒 + 入库 ${Math.round((d.msDb||0)/1000)} 秒）` : "")
@@ -6152,13 +6271,13 @@ ${esc(d.ours.body||'')}</div></details>`
         + card('力气该花哪儿？', b2)
         + card('哪里在漏水？', b3);
     }
-    // C5-7：从看板「补一轮这国」进补货 —— 打开弹窗并**预选该国**。
-    //   ⚠️ 预选必须等 openRestock 里的 loadSearchCfg 把下拉填好之后再设，
-    //      否则设的是一个还不存在的 option —— 静默失效，看不出任何异常。
+    // C5-7：从看板「补一轮这国」进补货 —— 打开弹窗并**只勾这一国**。
+    //   ⚠️ 必须等 openRestock 里的 loadSearchCfg + rsResetParams 跑完再改（否则会被默认值覆盖回去，
+    //     静默失效、看不出异常 —— 原来那版就是设一个"还不存在的 option"）。
+    //   ⚠️ 只有这一国**真在目录里**才改；不在就保持默认全选，⛔ 不把范围设成空（那等于什么都搜不到）。
     window.openRestockFor = async (gl) => {
       await openRestock();
-      const sel = $("#fc-one-country");
-      if (sel && [...sel.options].some(o=>o.value===gl)) { sel.value = gl; updateTransparency(); }
+      if (RS.cc && Object.keys(_fcAllCountries || {}).includes(gl)) { RS.cc = new Set([gl]); rsPaint(); }
     };
     // #47 行动建议：数据看板 + 今日待办共用的渲染 + 跳转
     function actionPanelHtml(actions, title){
@@ -6565,8 +6684,7 @@ ${esc(d.ours.body||'')}</div></details>`
     $("#btn-today").onclick = openToday;
     $("#today-overlay").onclick = (e) => { if (e.target.id==="today-overlay") closeToday(); };
 
-    // 导入
-    $("#btn-import").onclick = () => $("#import-overlay").classList.add("show");
+    // v2.1：#btn-import 与独立的 #import-overlay 已删 —— CSV 导入是找客户弹窗的第二段（rsSeg('csv')）。
 
     // 顶栏「⚙设置▾」与工具栏「更多▾」下拉：点开合、互斥、外点/选项关闭
     function wireDropdown(btnId, ddId){
@@ -6582,7 +6700,6 @@ ${esc(d.ours.body||'')}</div></details>`
       if (!e.target.closest(".settings-menu") && !e.target.closest(".dd-wrap"))
         document.querySelectorAll(".dd-menu.show").forEach(m => m.classList.remove("show"));
     });
-    $("#cancel-import").onclick = () => $("#import-overlay").classList.remove("show");
     $("#do-import").onclick = async () => {
       const csv = $("#csv-input").value;
       $("#import-result").textContent = "导入中…";
