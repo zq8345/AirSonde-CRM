@@ -4065,6 +4065,52 @@ app.get("/api/admin/decode-channels", async (c) => {
   return c.json({ matchedRows: (rows.results || []).length, wouldChange: changes.length, write, updated, changes });
 });
 
+// ══ v8 补丁③ 存量重刷：replies.is_auto 是 isNoiseReply 的缓存列，规则改了（DMARC 主题识别）就整表重算。
+//   默认干跑：报 before（is_auto=1 条数）+ 会变的行；`?confirm=write` 才写（条件带旧值），并报 after。机器判定字段，总工裁定可动。
+app.get("/api/admin/restamp-replies", async (c) => {
+  await ensureReplyColumns(c.env);
+  const rows = await c.env.DB.prepare(
+    "SELECT id, from_email, subject, content, raw_headers, is_auto FROM replies"
+  ).all<any>();
+  const count = async () => Number((await c.env.DB.prepare("SELECT COUNT(*) AS n FROM replies WHERE COALESCE(is_auto,0)=1").first<{ n: number }>())?.n || 0);
+  const before = await count();
+  const changes: { id: number; from_email: string; subject: string; was: number; now: number }[] = [];
+  for (const r of rows.results || []) {
+    const now = isNoiseReply({ raw_headers: r.raw_headers, content: r.content, from_email: r.from_email, subject: r.subject }) ? 1 : 0;
+    const was = Number(r.is_auto || 0);
+    if (now !== was) changes.push({ id: r.id, from_email: r.from_email, subject: String(r.subject || "").slice(0, 80), was, now });
+  }
+  const write = c.req.query("confirm") === "write";
+  let updated = 0;
+  if (write) {
+    for (const ch of changes) {
+      const res = await c.env.DB.prepare("UPDATE replies SET is_auto=? WHERE id=? AND COALESCE(is_auto,0)=?").bind(ch.now, ch.id, ch.was).run();
+      updated += Number(res.meta?.changes || 0);
+    }
+  }
+  return c.json({ total: (rows.results || []).length, before, wouldChange: changes.length, write, updated, after: write ? await count() : before, changes });
+});
+
+// ══ v8 补丁⑪：「记为已联系」—— 手动触达（社媒/电话）后的**唯一**写路径：status='sent' + bench_channel + bench_contacted_at。
+//   ⛔ 不在点「手动触达」那一刻标（他还没联系呢）；只允许从「待联系」（approved/queued）进；合规终态照拦。
+//   记完线索进「已联系」格：跟进链按 email 有无自然跳过（sendFollowupBatch 的 WHERE 要求有邮箱），replyFunnel 分母按 status 含它（联系过了，对）。
+const BENCH_CHANNELS = new Set(["linkedin", "whatsapp", "facebook", "instagram", "phone", "other"]);
+app.post("/api/leads/:id/contacted", async (c) => {
+  const id = Number(c.req.param("id"));
+  const b = await jsonBody<{ channel?: string }>(c);
+  const channel = String(b.channel || "").trim().toLowerCase();
+  if (!Number.isFinite(id)) return c.json({ error: "invalid id" }, 400);
+  if (!BENCH_CHANNELS.has(channel)) return c.json({ error: "渠道不合法" }, 400);
+  const cur = await c.env.DB.prepare("SELECT status FROM leads WHERE id=?").bind(id).first<{ status: string }>();
+  if (!cur) return c.json({ error: "not found" }, 404);
+  if (["unsubscribed", "blacklisted", "bounced"].includes(cur.status)) return c.json({ error: `「${cur.status}」是合规终态，不能记为已联系` }, 409);
+  if (!["approved", "queued"].includes(cur.status)) return c.json({ error: `只有「待联系」里的线索能记为已联系（当前 ${cur.status}）` }, 409);
+  await c.env.DB.prepare(
+    "UPDATE leads SET status='sent', bench_channel=?, bench_contacted_at=datetime('now'), updated_at=datetime('now') WHERE id=? AND status IN ('approved','queued')"
+  ).bind(channel, id).run();
+  return c.json({ ok: true, id, status: "sent", channel });
+});
+
 app.get("/api/version", async (c) => {
   const v = c.env.CF_VERSION;
   let build: any = null;

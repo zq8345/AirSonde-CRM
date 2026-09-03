@@ -503,7 +503,6 @@
     .fail-badge.fail-retry { background:var(--panel); color:var(--muted); }
     /* 批⑲b：阶段列里的紧凑「他回了」——同一行、不占新行、不增加行高 */
     .stgcol { white-space:nowrap; }   /* 徽章 + 他回了 同一行不换行（否则 ②组行会高一截）*/
-    .stg-reply { margin-left:8px; padding:1px 7px; font-size:12px; vertical-align:middle; }
     /* 批⑲b：脏渠道值（拼不出合法链接）显示原文但不可点，灰 + ⚠️ 一眼可辨 */
     .chbad { color:var(--muted); cursor:default; opacity:.8; }
     /* 批⑲b 追加：整页加载失败横幅（可见 + 可重试，别让登录过期看着像系统坏了）*/
@@ -1777,7 +1776,7 @@
     const EMPTY_TEXT = {
       all:         "还没有线索，点右上「找客户」",
       unscored:    "排队空了，机器每分钟自动找",
-      noscore:     `没有${STAGE_LABEL.noscore}的`,
+      noscore:     "没有抓不到官网的",   // 总工验收定稿（格名改「无官网」后套模板读着别扭，单独写）
       review:      "没有等你拍板的",
       ready:       "没有可联系的，去待审批批几条",
       sent:        "还没发出过信",
@@ -2368,10 +2367,8 @@
     //   渠道深链回归右侧渠道列（chanCell，且已加脏值守卫）；这里**只保留一个「他回了」**，
     //   放进阶段列徽章后面（见行模板），**不占新行、不增加行高**。
     //   「他回了」每条渠道不同 → 天然单条，放行级最合适。
-    function readyReplyBtn(l){
-      if (current !== 'ready' || readyGroupOf(l) !== 'B') return "";
-      return `<button class="mini stg-reply" onclick="event.stopPropagation();rowMarkReplied(${l.id})" title="标记这家已回复（手动聊出回音后点）">💬 他回了</button>`;
-    }
+    // v8 补丁⑪：待联系行内「💬 他回了」（readyReplyBtn）已删 —— 正路 = 手动触达 → 详情页「记为已联系」→ 已联系格工具栏「跟进 / 他回了」。
+    //   删的前提（总工核过）：写路径 POST /api/leads/:id/contacted 已存在，能力没有跟入口一起消失。
     // C5-12：取某一组的 id —— 计数与动作**共用这一个函数**，页顶「跳到」也用它，
     //   免得"横带说 5 条、按钮发了 6 条"那种两处各算各的（铁律五在数据上的同一条）。
     window.readyGroupIds = (g) => (_loadedLeads || []).filter(l => readyGroupOf(l) === g).map(l => l.id);
@@ -2468,7 +2465,6 @@
     window.grpIgnoreAll  = (csv) => { grpSelect(csv); toolStatusSel('ignored','忽略'); };
     window.grpApproveAll = (csv) => { grpSelect(csv); toolStatusSel('approved','批准'); };
     window.grpSendAll    = (csv) => { grpSelect(csv); toolSendSel(); };
-    window.rowMarkReplied = (id) => rowAct(id, () => toolMarkReplied());
     // ⭐ 批⑲ 组③：**按 ids 精确作用于本组**（后端 find-batch 支持 ids）——
     //   所以按钮上的数字是真的，不是"你选 3 条它跑 30 家"那种假数字。
     //   ⚠️ 后端单次上限 30，超过时按钮已写明"前 30 / 共 N"，这里确认框再说一遍。
@@ -2894,7 +2890,7 @@
                  热区是 <label>：点框、点 4px 外沿都只切换勾选，stopPropagation 挡住整行进详情。 */''}
           <td><div class="co-cell"><label class="chk-hit" onclick="event.stopPropagation()"><input type="checkbox" class="rowchk" ${selectedIds.has(String(l.id))?'checked':''} onchange="toggleSel(${l.id},this.checked)"><span class="chk-box"></span></label><div class="co-lines"><div class="co-name" title="${esc(l.company_name)||''}">${isDue(l)?`<span class="due-flag" title="该跟进了：${esc(l.next_action)||''} (${esc(l.next_action_date)})">🔔 </span>`:""}${esc(l.company_name)||"<span class='muted'>—</span>"}${l.has_click?`<span title="点击过开发信（强意向）" style="margin-left:4px">🔥</span>`:(l.has_open?`<span title="打开过开发信" style="margin-left:4px">👀</span>`:"")}</div>${(()=>{const fb=unscoredRowExtra(l);if(l.website){const w=safeHref(l.website);const inner=w?`<a class="wsite" href="${esc(w)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="margin:0;display:inline-block;max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(hostOf(l.website))}</a>`:`<span class="wsite" title="链接协议不合法，已按纯文本显示" style="margin:0;display:inline-block;max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(hostOf(l.website))}</span>`;return `<span class="co-site" style="display:flex;align-items:center;gap:6px;min-width:0">${inner}${fb}</span>`;}return fb?`<span class="co-site" style="display:flex">${fb}</span>`:"";})()}${(current==='replied'&&(l.latest_reply_cat||l.latest_reply_summary))?`<div style="margin-top:3px;display:flex;align-items:center;gap:6px;min-width:0">${l.latest_reply_cat?`<span class="pill" style="background:${catColor[l.latest_reply_cat]||'#6b7480'};color:var(--bg);flex-shrink:0">${esc(catLabel[l.latest_reply_cat]||l.latest_reply_cat)}</span>`:''}${l.latest_reply_summary?`<span class="co-name muted" style="font-size:12px" title="${esc(l.latest_reply_summary)}">🤖 ${esc(l.latest_reply_summary)}</span>`:''}</div>`:''}</div></div></td>
           <td>${scoreBadge(l.match_score)}</td>
-          <td class="stgcol"><span class="stg ${stg.cls}">${stg.badge}</span>${stg.sub?`<span class="stg-sub">${stg.sub}</span>`:""}${readyReplyBtn(l)}</td>
+          <td class="stgcol"><span class="stg ${stg.cls}">${stg.badge}</span>${stg.sub?`<span class="stg-sub">${stg.sub}</span>`:""}</td>
           ${/* ⭐ C5-17：「缺邮箱」红标撤掉，改居中长横线。
                  理由（Joe 指认）：缺邮箱是**信息不全，不是故障**——全库 92 条都顶着红字，
                  红色就此贬值，真正该报警的「抓取失败·403」反而淹在里面。
@@ -3252,6 +3248,10 @@
                  跟进逻辑还会继续追一个已经在聊的人。合规终态(退订/黑名单/退信)不出这个按钮。 */''}
             ${(!isReplied && !['won','unsubscribed','blacklisted','bounced'].includes(lead.status))
               ? `<button class="btn-ghost" onclick="channelReply(${lead.id})" title="任何渠道回话了都算：WhatsApp / LinkedIn / 电话 / 邮件">💬 他回了</button>` : ''}
+            ${/* v8 补丁⑪：「记为已联系」—— 手动触达（社媒/电话）之后的唯一写路径（status=sent + bench_channel + bench_contacted_at）。
+                 只在「待联系」（approved/queued）出现：⛔ 不在点「手动触达」那一刻标，他还没联系呢。渠道用行内下拉选，不弹原生框。 */''}
+            ${['approved','queued'].includes(lead.status)
+              ? `<span class="mc-wrap" style="display:inline-flex;align-items:center;gap:6px"><button class="primary" onclick="markContacted(${lead.id}, this)" title="你已经在社媒/电话上联系过这家 → 记进「已联系」格">记为已联系</button></span>` : ''}
             ${(!isReplied && lead.status!=='won') ? `<button class="btn-ghost" onclick="setStatus(${lead.id},'won')">标记已下单</button>` : ''}
             ${!isReplied ? `<button class="btn-danger-text" onclick="setStatus(${lead.id},'ignored')">忽略</button>` : ''}
             <button class="btn-danger-text" onclick="setStatus(${lead.id},'blacklisted')" title="停止联系并拉黑">加黑名单</button>
@@ -3498,7 +3498,30 @@
                 `<br><span class="hint">选中的 ${noEmail.length} 家都没邮箱 —— 它们每家的渠道和话术都不一样，没法批量。</span>`);
         return;
       }
-      openDetail(noEmail[0].id);   // 详情页：渠道链接 + 一键开聊 + 「💬 他回了」都在那儿
+      await openDetail(noEmail[0].id);   // 详情页：渠道链接 + 一键开聊 + 「记为已联系」+「💬 他回了」都在那儿
+      // v8 补丁⑪：定位到联系方式（手动触达 = 去那儿开聊），⛔ 这里不写任何状态
+      document.querySelector("#v-page .dp-contact")?.scrollIntoView({ block: "center" });
+    };
+
+    // v8 补丁⑪：「记为已联系」—— 在按钮旁展开行内渠道下拉（⛔ 不用原生弹窗），确认后 POST /api/leads/:id/contacted。
+    //   写路径只有后端那一个端点；这里不改任何本地状态，成功后重拉详情 + 列表 + 左栏。
+    const BENCH_CHANNEL_OPTS = [["linkedin","LinkedIn"],["whatsapp","WhatsApp"],["facebook","Facebook"],["instagram","Instagram"],["phone","电话"],["other","其他"]];
+    window.markContacted = (id, btn) => {
+      const wrap = btn.closest(".mc-wrap"); if (!wrap || wrap.querySelector(".mc-form")) return;
+      const form = document.createElement("span"); form.className = "mc-form"; form.style.cssText = "display:inline-flex;align-items:center;gap:6px";
+      form.innerHTML = `<span class="hint">在哪个渠道联系的？</span><select class="mc-ch inlinput"></select><button class="primary mini mc-ok">确认</button><button class="btn-ghost mini mc-cancel">取消</button>`;
+      const sel = form.querySelector(".mc-ch");
+      for (const [k, label] of BENCH_CHANNEL_OPTS) { const o = document.createElement("option"); o.value = k; o.textContent = label; sel.appendChild(o); }
+      form.querySelector(".mc-cancel").addEventListener("click", () => form.remove());
+      form.querySelector(".mc-ok").addEventListener("click", async () => {
+        const res = await fetch(`/api/leads/${id}/contacted`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ channel: sel.value }) })
+          .then(r => r.json()).catch(e => ({ error: String(e) }));
+        if (res.error) { toolMsg("记不了：" + esc(res.error)); return; }
+        toolMsg(`✅ 已记为已联系（${esc(sel.options[sel.selectedIndex].textContent)}）—— 现在在「已联系」格里，跟进 / 他回了 在那儿`);
+        form.remove();
+        await openDetail(id); loadStats(); loadList(); loadFacets();
+      });
+      btn.style.display = "none"; wrap.appendChild(form); sel.focus();
     };
 
     // ⭐ 批⑬②：改网址 —— 「AI 没判成」那批的主出口。
