@@ -80,7 +80,7 @@
 - 现象：按仓库 `schema.sql` 建的全新库上，`GET /api/leads/:id/comm`（v6 新端点）**500 Internal Server Error**，日志 `no such column: error`（它 SELECT 了 `emails.error`，index.ts:1788）。生产库有该列 ⇒ 生产不受影响。
 - 影响面：一切"从 schema.sql 起库"的场景——本地 dev、新同事上手、灾备重建、以及**审计窗自己**（我今天正是被它拦了一次）。今日新增的 `GET /api/admin/restamp-replies` 同样写 `replies.is_auto`，同样会在新库上炸。
 - 复现：`wrangler d1 execute airsonde_crm --local --file=./schema.sql` → 起 dev → `curl /api/leads/106/comm`。
-- 建议修法（⛔ 不动手）：给 schema.sql 补 `emails.error TEXT` 与 `replies.is_auto INTEGER NOT NULL DEFAULT 0`，并核 `leads.is_test` 是仓里多写的还是生产漏加的；长期上给部署闸加一条"schema.sql 起的空库能通过冒烟"。
+- 建议修法（⛔ 不动手）：给 schema.sql 补 `emails.error TEXT` 与 `replies.is_auto INTEGER NOT NULL DEFAULT 0`（**已由 `288cbd4` 落地并复验**）；~~并核 `leads.is_test`~~（该项为本窗误报，见上方更正）；长期上给部署闸加一条"schema.sql 起的空库能通过冒烟"——**这一条才是本节的长效价值**：它让下一次漂移当场报红，而不是等灾备时才发现库建不起来。
 
 ---
 
