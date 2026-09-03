@@ -19,6 +19,7 @@ import { ingestReplies, matchReplyToLead } from "./replies";
 import { ensureReplyColumns, stripQuoted, previewOf, isNoiseReply, tabOf, type InboxTab } from "./reply-inbox";
 import { REAL_REPLY_SQL, realReplySql, NOT_TEST_SQL, notTestSql, LEADS_IS_TEST_DDL } from "./noise";
 import { installFetchMeter, meteredDB, mark as subMark, reset as subReset, summary as subSummary } from "./subreq";
+import { engineStatuses } from "./engines";
 import { normalizeCustomerType, customerTypeLabel, classifyKillReason, KILL_REASONS } from "./taxonomy";
 import { normalizePhone, formatPhoneDisplay } from "./scrape";   // C5-31：号码清洗与展示切分，单源
 import { errHuman } from "./errhuman";   // C5-24 第 5 条：机器错误串 → 人话（服务端唯一一份）
@@ -1349,12 +1350,26 @@ app.get("/api/activity", async (c) => {
   }
   if (blocked) { detail = blocked.raw; action = blocked.human; }
 
+  // ⭐⭐ C5-54：四个引擎的真实状态（Joe 指认：搜索预算用满、找客户彻底停了，
+  //   而顶栏还在说「自动·运行中」，**一个字都没说**）。
+  //   ⚠️ 口径在 `engines.ts` 里**算好再出门**，前端只显示 —— ⛔ 前端不许自己判断"预算用满了没"，
+  //     那就是第二个真源（`autoSendBlockedReason` 的注释早就写死了这条规矩）。
+  const engines = await engineStatuses(c.env);
+  const stoppedEngines = engines.filter((e) => e.stopped);
   return c.json({
     badge,                       // auto-running | auto-blocked | manual-busy | stopped
     busy: !!act,                 // 前端据它决定"呼吸"动画 —— **idle 必须静止，别做成永远闪的灯**
     action,                      // 给人看的一句
     detail,                      // 服务器原话（受阻时才有），放 title 供排查
     quotaNote,                   // 额度类静态信息：前端放进 title，不放进常驻小字
+    engines,                     // C5-54：四个引擎逐个的 {id,label,stopped,reason}
+    // 前端只读这两个就够画顶栏：几个停了、最该说的那一条是什么。
+    // ⚠️ 排序不是随便定的：**能让 Joe 立刻做点什么的排前面** ——
+    //   熔断/钥匙缺失要他动手；预算/额度用满是"明天自己好"，优先级更低。
+    stoppedCount: stoppedEngines.length,
+    topStopped: stoppedEngines.length
+      ? (stoppedEngines.find((e) => /熔断|钥匙|失败/.test(e.reason || "")) || stoppedEngines[0])
+      : null,
     blockedKind: blocked ? blocked.kind : null,
     blockedGroup: blocked ? blocked.group : null,
     initiator: act ? act.by : null,

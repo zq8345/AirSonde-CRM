@@ -353,6 +353,10 @@
     .status-bar.auto-running, .status-bar.manual-busy { color:var(--blue); }
     .status-bar.auto-blocked { color:var(--amber); }
     .status-bar.stopped      { color:var(--muted); }
+    /* ⭐ C5-54：**有引擎停了就得看得出不对劲** —— ⛔ 只改一句小字、颜色照旧绿，
+       等于把警告藏进了一行灰字里。Joe 指认的现场正是"顶栏一个字都没说"。
+       ⚠️ 优先级高于 auto-running 的绿（写在它后面即可，同特异性后者赢）。 */
+    .status-bar.has-stopped  { color:var(--amber); }
     /* ⚠️ 呼吸**只作用在圆点上**、且只在真的有活在跑时（.busy）——
        idle 必须静止（一盏永远闪的灯等于没有灯），文字更不能跟着抖。 */
     @keyframes sbPulse { 0%,100% { opacity:1 } 50% { opacity:.3 } }
@@ -3798,14 +3802,42 @@
                       'manual-busy':'手动·工作中', 'stopped':'已停·只收耳朵' };
       el.className = 'status-bar ' + d.badge + (d.busy ? ' busy' : '');
       el.querySelector('.sb-badge').textContent = LABEL[d.badge] || d.badge;
+      // ⭐⭐ C5-54：顶栏要说的是**四个引擎的真实状态**，不只是总开关的状态。
+      //   Joe 指认的现场：今日搜索预算 2500/2500 已用满、**找客户彻底停了**，
+      //   而这里还在显示「自动·运行中」—— 它说了**一半真话**。
+      //
+      // ⚠️ 口径**全部来自后端** `d.engines`（src/engines.ts），⛔ 前端不自己判断任何一条 ——
+      //   "预算用满了没""国家选了没"在前端再算一遍就是第二个真源（今天三次事故全是这个形状）。
+      //
+      // ⚠️ **正常时必须一个字都不多说**：`stoppedCount===0` 走原来的分支，不加任何警告。
+      //   今天刚栽过 `crossed_50_at`（正常运行必定报警）—— 那种告警等于没有告警，而且更坏。
+      //
+      // 📌 多个引擎同时停的显示形状 = **最该先处理的那一条 + 还有几个**（后端已排好序：
+      //   能让他立刻动手的排前面）。⚠️ 这个形状**待总调度确认**，改起来只动这一段。
+      const stoppedN = Number(d.stoppedCount) || 0;
+      const top = d.topStopped;
+      let warnTxt = '';
+      if (stoppedN > 0 && top) {
+        warnTxt = `⚠️ ${top.label}已停（${top.reason || '原因读不到'}）`
+                + (stoppedN > 1 ? ` · 另有 ${stoppedN - 1} 个环节也停了` : '');
+      }
       // 分隔点由 CSS 结构承担，所以小字里不再自己带 ' · '；没有小字时把分隔点一起藏掉
-      el.querySelector('.sb-act').textContent = d.action || '';
-      { const sep = el.querySelector('.sb-sep'); if (sep) sep.style.display = d.action ? '' : 'none'; }
+      const actTxt = [d.action || '', warnTxt].filter(Boolean).join(' · ');
+      el.querySelector('.sb-act').textContent = actTxt;
+      { const sep = el.querySelector('.sb-sep'); if (sep) sep.style.display = actTxt ? '' : 'none'; }
+      // 停了的时候整条状态栏也要**看得出不对劲**（⛔ 别只改一句小字，颜色不变等于没说）
+      if (stoppedN > 0) el.classList.add('has-stopped');
       // C5-28 打磨③：悬浮提示统一成「查看自动化明细」——"可点"这件事要说得出来点了会去哪。
       // 受阻时把**服务器原话**顶在最前面（排查要的是它，不是那句人话）。
       // C5-29：额度类静态信息（今日已发 / 发满 / 明天上限）**只进悬浮**，不占常驻小字 ——
       //   常驻小字只说"正在干什么"。信息没丢，只是换了住处（悬浮 + 机器房）。
+      // C5-54：悬浮里给**四个引擎的全貌** —— 顶栏只说最该先处理的那一条，细节要有地方看得到。
+      //   ⚠️ 在跑的也列出来：只列停了的，会让人以为"没列出来的可能也停了只是没显示"。
+      const engLines = Array.isArray(d.engines) && d.engines.length
+        ? d.engines.map(e => `${e.stopped ? '○' : '●'} ${e.label}：${e.stopped ? (e.reason || '原因读不到') : '在跑'}`).join("\n") + "\n\n"
+        : "";
       el.title = (d.detail ? d.detail + "\n\n" : "")
+        + engLines
         + (d.quotaNote ? d.quotaNote + "\n" : "") + "查看自动化明细";
     }
     window.paintStatusBar = paintStatusBar;
