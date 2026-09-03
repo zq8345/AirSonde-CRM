@@ -2627,7 +2627,7 @@
                   </div>
                   <div class="fp-acts">
                     ${l.email
-                      ? `<button class="btn-green mini" ${l.human_approved?'disabled':''} onclick="event.stopPropagation();flipSend(${l.id},'${esc(l.company_name||'').replace(/'/g,"\\'")}',${l.match_score})">✉️ 手动发这家</button>`
+                      ? `<button class="btn-green mini" ${l.human_approved?'disabled':''} data-act="flip-send" data-id="${l.id}" data-name="${esc(l.company_name||'')}" data-score="${l.match_score}">✉️ 手动发这家</button>`
                       : (channelCount(l.channels)
                           ? `<button class="btn-amber mini" onclick="event.stopPropagation();flipToBench(${l.id})">💬 转工作台</button>`
                           : `<span class="hint">无邮箱无渠道，碰不到</span>`)}
@@ -4319,7 +4319,7 @@
             <b style="flex-shrink:0">${esc(o.from_email)}</b>
             <span class="muted" style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(o.content||'')}">${esc(o.summary||o.subject||'')}</span>
             <span style="flex:1"></span>
-            <button class="btn" style="flex-shrink:0" onclick="linkOrphan(${o.id},'${esc(o.from_email)}')">关联到线索…</button>
+            <button class="btn" style="flex-shrink:0" data-act="link-orphan" data-id="${o.id}" data-from="${esc(o.from_email)}">关联到线索…</button>
           </div>`).join("");
     }
     // 人工关联：三层匹配也有兜不住的时候（换域名回、私人邮箱回）—— 那时得有人能一键接上
@@ -4334,6 +4334,36 @@
       toolMsg(`✅ 已挂到 <b>${esc(res.company_name)}</b>（#${res.lead_id}），状态 → ${esc(res.status)}`);
       loadStats(); loadList(); loadFacets();
     };
+    // ══ 事件委托：把"用户数据"从代码上下文里赶出去 ══
+    //
+    // 🔴 **为什么不是给 esc() 加一个单引号就完事**（2026-09-02 抓到的真洞）：
+    //   原来的写法是 `onclick="linkOrphan(${id},'${esc(from_email)}')"`，而 esc() 只转 & < > "。
+    //   实测 payload：from_email = a',alert(document.cookie),'
+    //     → onclick="linkOrphan(1,'a',alert(document.cookie),'')" ⇒ 任意表达式被执行。
+    //   而 from_email 是**任何人给 sales@ 发一封信就能写进库**的字段 ⇒ 攻击者完全可控。
+    //
+    // ⛔ **给 esc() 加 `'` 在这个上下文里不管用，不是"不够优雅"，是无效防护**：
+    //   浏览器对 onclick 属性是**先解 HTML 实体、再交给 JS 解析** ⇒ `&#39;` 会解回 `'`，照样闭合字符串。
+    //   ⇒ HTML 转义解决不了 JS 字符串上下文的注入。**唯一的根治是让值根本不进代码上下文。**
+    //
+    // ⚠️ **必须用捕获阶段**（第三个参数 true），不能用普通冒泡委托：
+    //   这些按钮的祖先行自己带 onclick（打开详情），原写法靠 `event.stopPropagation()` 拦住它。
+    //   冒泡委托跑在行处理器**之后** ⇒ 点"手动发这家"会连详情面板一起弹出来。
+    //   捕获是 document → 行 → 按钮，我们在行之前就拿到事件，stopPropagation 才拦得住。
+    document.addEventListener("click", (e) => {
+      const btn = e.target && e.target.closest ? e.target.closest("[data-act]") : null;
+      if (!btn) return;
+      if (btn.disabled) return;
+      const act = btn.getAttribute("data-act");
+      const id = Number(btn.getAttribute("data-id"));
+      if (act === "link-orphan") {
+        e.stopPropagation();
+        window.linkOrphan(id, btn.getAttribute("data-from") || "");
+      } else if (act === "flip-send") {
+        e.stopPropagation();
+        window.flipSend(id, btn.getAttribute("data-name") || "", Number(btn.getAttribute("data-score")));
+      }
+    }, true);
     // 手动拉取新回复（Cron 每小时也会自动拉 —— step 0）
     window.toolFetchReplies = async () => {
       toolMsg("拉取中…（连 Lark IMAP，约需 5-15 秒）");
