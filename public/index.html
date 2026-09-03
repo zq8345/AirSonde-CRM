@@ -392,6 +392,11 @@
     .sb-pill.on.warn { color:var(--amber); background:linear-gradient(135deg,#fff4dd,#ffe9bd); }
     .sb-pill.off { color:var(--muted); background:var(--panel); border-color:var(--border); }
     .sb-pill.off .dot { background:var(--border-strong); }
+    /* 🔴 Joe 指认（生产 325fe6a8）：找客户左边挂着一个**空的圆角小白框** —— 无任务时 paintStatusBar 置了 `hidden`，
+       但作者样式 `display:inline-flex` **特异性等于**属性选择器的默认表现、且晚于 UA 的 [hidden]{display:none}
+       ⇒ 元素照样占 32px 高的边框和 gap。⛔ 不能只清 innerHTML（那正是它变成空框的原因）。
+       修法一处、全局生效：[hidden] 一律 display:none !important（下面那条），任何后来的作者样式也压不过它。 */
+    [hidden] { display:none !important; }
     .task { display:inline-flex; align-items:center; gap:8px; height:32px; padding:0 12px 0 8px; border-radius:16px; background:var(--bg);
             border:1px solid var(--border-strong); font-size:12px; animation:sbIn .25s ease-out both; white-space:nowrap; }
     @keyframes sbIn { from { opacity:0; transform:translateX(10px) } to { opacity:1; transform:none } }
