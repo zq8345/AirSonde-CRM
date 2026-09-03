@@ -168,6 +168,10 @@
     .cap-core { font-size:12px; color:var(--brand-strong); background:var(--brand-tint);
                 border-radius:4px; padding:1px 6px; margin-left:6px; }
     .cap-ok { color:var(--brand-strong); font-weight:700; }
+    /* C5-55：只标"零成本"的那几个 —— 让 Joe 一眼看出哪些环节不花钱。
+       ⛔ 这张卡上不写单价：价格会过期，而**过期的价格比没有价格更坏**。 */
+    .cap-free { font-size:12px; color:var(--muted); background:var(--panel);
+                border-radius:4px; padding:1px 6px; margin-left:6px; }
     /* 板块二 行内实时表现：旋钮说"你设了多少"，它说"这个设定此刻的实际表现"。
        ⚠️ 它**永远只读**，不随两态切换 —— 事实不是配置，不该跟着编辑态变样子。 */
     .kw-arch > summary { cursor:pointer; font-size:12px; color:var(--muted); padding:4px 0; }
@@ -185,9 +189,28 @@
     .mr-sec-head { font-size:14px; font-weight:600; color:var(--text);
                    margin:28px 0 12px; padding-top:20px; border-top:1px solid var(--border); }
     .mr-sec-head .hint { font-weight:400; margin:0; }
-    #v-machine .cfg-form .set-card { margin:0 0 12px; }        /* 控制区四块之间统一 12px */
-    #v-machine .cfg-form .set-card:last-of-type { margin-bottom:0; }
-    #mr-status { margin-bottom:4px; }                           /* 状态区与分区线之间的呼吸 */
+    /* ══⭐⭐ C5-55 卡间距：全页**统一 16px**（附录 C.10 第六条）══
+       🔴 这里原来是两个问题叠在一起：
+         ① `#v-machine .cfg-form .set-card { margin-bottom:12px }` 而 `.page-card` 是 **16px**
+            ⇒ **同一页两套间距**，"卡与卡之间该多少"页面自己没有统一答案。
+            ⇒ 统一到 **16**（跟 `.page-card` 走 —— 那是全站其它页在用的那个值）。
+         ② 更要命的那条：`.set-card:last-of-type { margin-bottom:0 }`。
+            🔴 **它是写在旧假设上的规则**：写它的时候「找客户策略」是页面最后一个东西，清零是对的。
+              C5-48 重排之后它后面又接了「API 配置」「产能与班次」⇒ **那个 0 变成了两张卡贴在一起**，
+              而规则本身看起来完全正常。（今天第 N 次同一族：一条规则在别处改动之后默默变成了错的。）
+            🔴 而且它比看起来更广：现在**每个 `.cfg-form` 里只有一张 `.set-card`**
+              ⇒ **两张都命中 `:last-of-type`**，两张的下边距全被清零。
+       ⚠️ 修法**不能再写一条依赖"我是最后一个"的规则** —— 那正是这次出问题的形状。
+         ⇒ 用 `#v-machine > *:last-child`：它问的是"**我是不是这一页最后一个元素**"，
+           而不是"我是不是我父容器里最后一张卡"。以后在后面再加东西，它自己就对了。 */
+       ⚠️ 归属规则：**下边距由"卡"拥有，容器一律 0**。
+         `#mr-status` 里装的是 `.page-card`（自带 16），容器再给 16 就会叠加/塌陷，
+         到底出多少取决于有没有 padding —— **那种"看情况"的间距正是量出来才知道的**。
+         ⇒ 容器清零，间距只有一个出处。 */
+    #v-machine .cfg-form .set-card,
+    #mr-rare .set-card { margin:0 0 16px; }
+    #mr-status, #mr-rare { margin:0; }
+    #v-machine > *:last-child { margin-bottom:0; }
     .db-block { padding:16px 18px; margin-bottom:10px; }        /* 卡间距压一档（原 24/16） */
     .db-t { font-size:13px; font-weight:600; letter-spacing:.02em; margin-bottom:10px; }
     /* ⚠️ 这里原本是 11.5px —— **我自己引入的野字号**（v3 收视觉密度时写的），
@@ -6072,27 +6095,28 @@ ${esc(d.ours.body||'')}</div></details>`
       //   ⇒ 拆分只发生在这一层渲染，并在卡底注明"两项走同一个钥匙"。
       // ⚠️ 模型名取 `today.aiModels`（后端 `scoreModel(env)`/`emailModel(env)` 真读，env 可覆盖），
       //   ⛔ 不写死、也不读 DEFAULT_* 常量。
-      const models = (today && today.aiModels) || null;
+      // ⭐⭐ C5-55：这张卡从「钥匙清单」改成**「每个环节用了什么工具」的全景**。
+      //   Joe 原话：「涉及到工具使用的都放在这里，**我好知道哪个环节使用了什么工具**」
+      //   🔴 原来只列需要钥匙的 8 项 ⇒ 抓官网 / 补邮箱 / 目录源**根本没出现**，
+      //     而留白会让人以为漏了。**"这一环不用外部工具"本身就是答案。**
+      //   ⭐ 它顺带永久回答了 Joe 专门问过的那个问题：**抓官网不是 Serper，是自研抓取。**
+      //   ⚠️ 数据全部来自后端 `ign.pipeline`（engines.ts 的 `pipelineTools`），⛔ 前端不拼任何一行。
       const shortModel = (m) => String(m || '').split('/').pop().replace(/-\d{4}$/, '').replace(/-/g, ' ');
-      const capRow = (label, core, ok, right) =>
-        `<tr><td>${esc(label)}${core ? '<span class="cap-core">核心</span>' : ''}</td>` +
-        `<td style="text-align:right">${ok ? `<b class="cap-ok">${right}</b>` : `<span class="hint">未接 · </span><code>${right}</code>`}</td></tr>`;
-      const apiRows = (ign.capabilities || []).flatMap(c => {
-        const miss = esc((c.missing || []).join(' + '));
-        if (c.id !== 'ai') return [capRow(c.label, c.core, c.ignited, c.ignited ? esc(c.service || '已接') : miss)];
-        // AI：一条能力 → 两行显示，右侧带真实模型名
-        return [
-          capRow('AI 评分', c.core, c.ignited, c.ignited
-            ? `${esc(shortModel(models && models.score))} <span class="hint">${esc((models && models.score) || '')}</span>` : miss),
-          capRow('AI 写信', c.core, c.ignited, c.ignited
-            ? `${esc(shortModel(models && models.email))} <span class="hint">${esc((models && models.email) || '')}</span>` : miss),
-        ];
-      });
+      const toolCell = (t) => {
+        if (t.state === 'ok')      return `<b class="cap-ok">${esc(t.tool)}</b>`
+          + (t.note ? ` <span class="hint">${esc(shortModel(t.note))}</span>` : '');
+        if (t.state === 'none')    return `<b class="cap-ok">${esc(t.tool)}</b> <span class="cap-free">零成本</span>`;
+        if (t.state === 'idle')    return `<b>${esc(t.tool)}</b> <span class="hint">· ${esc(t.note)}</span>`;
+        return `<span class="hint">未接 · </span><code>${esc(t.note)}</code>`;   // missing
+      };
+      const apiRows = (ign.pipeline || []).map(t =>
+        `<tr><td>${esc(t.step)}</td><td style="text-align:right">${toolCell(t)}</td></tr>`);
 
       const apiCard =
-        `<div class="pr-head"><span class="sec-title" style="margin:0">API 配置</span></div>
+        `<div class="pr-head"><span class="sec-title" style="margin:0">环节与工具</span>
+           <span class="hint" style="margin:0">· 每一步用了什么</span></div>
          <table class="cap-tab"><tbody>${apiRows.join('')}</tbody></table>
-         <p class="hint" style="margin:10px 0 0">AI 两项走同一个 OpenRouter 钥匙 · 接法：<code>npx wrangler secret put &lt;钥匙名&gt;</code></p>`;
+         <p class="hint" style="margin:10px 0 0">「自研抓取」= 我们自己的代码直接读网页，不经过第三方、不花钱 · AI 两项走同一个 OpenRouter 钥匙 · 接钥匙：<code>npx wrangler secret put &lt;钥匙名&gt;</code></p>`;
 
       // 🔴 作废文案已修（2026-09-03 实测：`isSearchRound` 那道 0/6/12/18 门已随全速化删除，
       //   index.ts:4366 原话「已随 discovery 搬进 fastTick 一并删除」）。

@@ -19,7 +19,7 @@ import { ingestReplies, matchReplyToLead } from "./replies";
 import { ensureReplyColumns, stripQuoted, previewOf, isNoiseReply, tabOf, type InboxTab } from "./reply-inbox";
 import { REAL_REPLY_SQL, realReplySql, NOT_TEST_SQL, notTestSql, LEADS_IS_TEST_DDL } from "./noise";
 import { installFetchMeter, meteredDB, mark as subMark, reset as subReset, summary as subSummary } from "./subreq";
-import { engineStatuses } from "./engines";
+import { engineStatuses, pipelineTools } from "./engines";
 import { normalizeCustomerType, customerTypeLabel, classifyKillReason, KILL_REASONS } from "./taxonomy";
 import { normalizePhone, formatPhoneDisplay } from "./scrape";   // C5-31：号码清洗与展示切分，单源
 import { errHuman } from "./errhuman";   // C5-24 第 5 条：机器错误串 → 人话（服务端唯一一份）
@@ -3110,7 +3110,9 @@ app.post("/api/settings/notify", async (c) => {
 // ---- 点火状态：这台机器插上电没有 ----------------------------------------
 // ⭐ C2-C：一处真源（ignition.ts）供三方共用 —— 告警要不要吼、面板怎么显示、_whoami 报什么。
 //   ⚠️ 只报**钥匙名**，绝不报值（`_whoami` 类端点的老规矩）。
-app.get("/api/ignition", (c) => c.json(ignitionReport(c.env)));
+// ⭐ C5-55：除了点火状态，additionally 出**管线每个环节用了什么工具**（Joe 要的那张地图）。
+//   ⚠️ 同一个端点加字段，⛔ 不另开端点（机器房已经拉四路，再加一路就是第五次往返）。
+app.get("/api/ignition", async (c) => c.json({ ...ignitionReport(c.env), pipeline: await pipelineTools(c.env) }));
 
 // C6/Y5：每个 isolate 启动时生成一次的短 id。
 // ⚠️ 它回答的是一个**别的字段都答不了**的问题：「我现在打到的，是不是我刚部署的那个进程？」

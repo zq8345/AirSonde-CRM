@@ -20,6 +20,34 @@ import { getSetting } from "./send";
 import { COUNTRIES, BLACKLIST_GL, DEFAULT_COUNTRIES, getSerperUsage } from "./discover";
 import type { Env } from "./index";
 
+/**
+ * ⭐⭐ C5-55：**管线每个环节用了什么工具** —— Joe 的原话：
+ *   「涉及到工具使用的都放在这里，**我好知道哪个环节使用了什么工具**」
+ *
+ * 🔴 它**不是**"钥匙清单"。原来那张卡只列了需要钥匙的 8 项，而管线里有几个环节
+ *   **根本没出现在上面**（抓官网 / 补邮箱 / 目录源），于是留白让人以为漏了。
+ *   ⇒ **"这一环不用外部工具"本身就是答案，必须写出来。**
+ *
+ * ⭐ 这张表直接回答了 Joe 专门问过的一个问题：**抓官网到底是不是 Serper？**
+ *   实证：`service.ts` → `scrape.ts` 的 `scrapeSite()`，**自研 fetch，与 Serper 无关**。
+ *
+ * ⚠️ 排序按**管线真实流程**，⛔ 不按"有没有配钥匙"。
+ * ⚠️ 结构是 `{环节, 工具, 状态}` 三段式，⛔ 不是"每行一个钥匙" ——
+ *   补邮箱那单会加进 DeepSeek 提取，那时它是**同一环节的第二个工具**，这个结构容得下。
+ */
+export interface PipelineTool {
+  /** 管线环节（按真实流程顺序） */
+  step: string;
+  /** 用的什么工具。自研的写「自研抓取」。 */
+  tool: string;
+  /** ok=在用 · none=不需要外部工具 · missing=缺钥匙 · idle=有实现但没启用 */
+  state: "ok" | "none" | "missing" | "idle";
+  /** 补充说明（缺的钥匙名 / 模型 id / 为什么 idle）。⛔ 不写单价——价格会过期，而过期的价格比没有更坏。 */
+  note: string;
+  /** 是否零成本（只标零成本的那几个，让他一眼看出哪些环节不花钱） */
+  free: boolean;
+}
+
 export interface EngineStatus {
   id: "discover" | "send" | "analyze" | "reply";
   label: string;
@@ -29,6 +57,51 @@ export interface EngineStatus {
   reason: string | null;
   /** 这个环节是否**跟随总开关**。收信不跟随（Joe 定的语义：关的是嘴和手，不关耳朵）。 */
   followsMasterSwitch: boolean;
+}
+
+/**
+ * 管线每个环节用了什么工具。**按真实流程顺序**（对着 fastTick / scheduled 的步骤点过一遍）：
+ *   找客户 → 抓官网 → AI 评分 → AI 写信 → 补邮箱 → 发信 → 收信 → 通知 →（目录源）
+ *
+ * ⚠️ 全部从真源推：服务名取 `CAPABILITIES.service`、模型名取 `scoreModel/emailModel`、
+ *   目录源取 `directorySourcesEnabled()`。⛔ 零写死。
+ */
+export async function pipelineTools(env: Env): Promise<PipelineTool[]> {
+  const { CAPABILITIES, missingKeys } = await import("./ignition");
+  const { scoreModel, emailModel } = await import("./openrouter");
+  const { directorySourcesEnabled } = await import("./discover");
+  const cap = (id: string) => CAPABILITIES.find((c) => c.id === id)!;
+  // 一把钥匙的"配没配"—— 与点火面板同一判据，⛔ 不另写 `if (!env.XXX)`
+  const okOf = (id: any) => missingKeys(env, id).length === 0;
+  const missOf = (id: any) => missingKeys(env, id).join(" + ");
+
+  const ext = (step: string, id: any, tool?: string, note = ""): PipelineTool =>
+    okOf(id)
+      ? { step, tool: tool || cap(id).service, state: "ok", note, free: false }
+      : { step, tool: tool || cap(id).service, state: "missing", note: missOf(id), free: false };
+
+  return [
+    ext("找客户（搜公司）", "search"),
+    // 🔴 Joe 专门问过这一条：**抓官网到底是不是 Serper？** 不是。
+    //   实证链路：service.ts → scrape.ts 的 `scrapeSite()`，自研 fetch，零外部服务。
+    { step: "抓官网（读网站内容）", tool: "自研抓取", state: "none", note: "直接读公司官网，不经过任何第三方", free: true },
+    ext("AI 评分", "ai", undefined, scoreModel(env as any)),
+    ext("AI 写开发信", "ai", undefined, emailModel(env as any)),
+    // 补邮箱：Hunter 是**可选增强**，主路径是自研抓联系页 ⇒ 两个工具同属一个环节
+    { step: "补邮箱（找联系方式）", tool: "自研抓取", state: "none", note: "抓 8 条常见联系页路径", free: true },
+    okOf("emailfinder")
+      ? { step: "补邮箱（兜底）", tool: cap("emailfinder").service, state: "ok" as const, note: "官网找不到时才用", free: false }
+      : { step: "补邮箱（兜底）", tool: cap("emailfinder").service, state: "missing" as const, note: missOf("emailfinder"), free: false },
+    ext("发开发信", "send"),
+    ext("收客户回复", "reply"),
+    ext("飞书群通知", "notify"),
+    ext("飞书应用机器人", "appbot"),
+    ext("官网询盘接入", "inbound"),
+    // ⚠️ 判据是函数不是写死：`ENABLED_DIRECTORY_SOURCES` 现在是空数组 ⇒ 一个源都没有，从没抓过。
+    directorySourcesEnabled()
+      ? { step: "目录源采集", tool: "自研抓取", state: "ok" as const, note: "免费线索源", free: true }
+      : { step: "目录源采集", tool: "自研抓取", state: "idle" as const, note: "未配置任何目录源，这一环从未运行", free: true },
+  ];
 }
 
 /**
