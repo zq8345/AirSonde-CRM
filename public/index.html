@@ -625,7 +625,14 @@
        不再给表 min-width，.table-card 也不出横滚；本页专属列吸余宽 ≥ 120。验收视口从这批起 = 1278×dpr1.5，1440 只作第二档。 */
     #v-list table { table-layout:fixed; width:100%; }
     #v-list th { font-size:12px; font-weight:500; color:var(--muted); text-align:left; height:38px; padding:0 10px; border-bottom:1px solid var(--border);
-                 white-space:nowrap; background:#fafbfc; vertical-align:middle; word-break:normal; }
+                 white-space:nowrap; background:#fafbfc; vertical-align:middle; word-break:normal; position:relative; }
+    /* 列宽可拖（Joe：「在表头每个类型之间加个竖线，鼠标移到竖线上，可以对列表的宽度进行调整」）：
+       每两个表头之间一条 1px 竖线（行高内），hover/拖动时变品牌色；拖动改左侧那一列，差值从第 8 列（吸余）进出，表总宽永远 = 容器宽。
+       双击竖线 = 该列回默认。⛔ 不做「重置列宽」按钮。宽度按列 key 存 localStorage（crm.colw），10 页共用同一份。 */
+    #v-list th .rz { position:absolute; top:0; right:-5px; width:11px; height:100%; cursor:col-resize; z-index:2; }
+    #v-list th .rz::after { content:""; position:absolute; left:5px; top:9px; bottom:9px; width:1px; background:var(--border); }
+    #v-list th .rz:hover::after, #v-list th .rz.drag::after { background:var(--brand-strong); }
+    body.col-resizing, body.col-resizing * { cursor:col-resize !important; user-select:none; }
     #v-list td { height:48px; padding:0 10px; border-bottom:1px solid var(--border); font-size:13px; vertical-align:middle;
                  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; word-break:normal; }
     #v-list tr:last-child td { border-bottom:0; }
@@ -1300,7 +1307,7 @@
           <th style="width:70px" class="ac">国家</th>
           <th style="width:160px">邮箱</th>
           <th style="width:150px" class="ac chc">联系方式</th>
-          <th class="ac" id="th-own">本页</th>
+          <th class="ac" id="th-own"><span id="th-own-lab">本页</span></th>   <!-- 列名只改这个 span：th 里还挂着拖线 .rz，写 th.textContent 会把线抹掉 -->
           <th style="width:80px" class="ac">时间</th>
         </tr></thead>
         <tbody id="rows"></tbody>
@@ -2961,16 +2968,16 @@
         return isNaN(d) ? `${Number(m[1])}-${Number(m[2])}-${Number(m[3])}` : `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`; };
       const fmtMD = (s) => { const m = String(s||"").match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${Number(m[2])}-${Number(m[3])}` : ""; };
       // 第 8 列「本页专属」：列名与内容按页（SPEC §2 表）
-      const OWN_HEAD = { all:"命中关键词", unscored:"命中关键词", ignored:"命中关键词", noscore:"失败原因", review:"触达方式", ready:"触达方式", sent:"邮件 · 跟进", won:"邮件 · 跟进", replied:"回复", blacklisted:"原因" };
+      // Joe：「把命中关键词从列表里去掉，在详情页里面显示即可」⇒ 全部/已忽略 → 触达方式（与待审批/待联系同一组件）· 待分析 → 状态
+      const OWN_HEAD = { all:"触达方式", unscored:"状态", ignored:"触达方式", noscore:"失败原因", review:"触达方式", ready:"触达方式", sent:"邮件 · 跟进", won:"邮件 · 跟进", replied:"回复", blacklisted:"原因" };
       const ownCell = (l) => {
         switch (current) {
-          case "all": case "unscored": case "ignored": {
-            const kw = l.keyword ? `<span class="t" title="${esc(l.keyword)}">${esc(l.keyword)}</span>` : "";
-            const retry = (current === "unscored" && (Number(l.fetch_fail_count)||0) > 0) ? ` <span class="pill retry" title="机器自动重试中，无需操作">⏳ 重试 ${Number(l.fetch_fail_count)}/3</span>` : "";
-            return (kw || retry) ? kw + retry : mu; }
+          case "unscored": {
+            const n = Number(l.fetch_fail_count) || 0;
+            return n > 0 ? `<span class="pill retry" title="机器自动重试中，无需操作">⏳ 重试 ${n}/3</span>` : `<span class="t">排队中</span>`; }
           case "noscore":
             return `<span class="pill fail" title="${esc(l.reason||'')}">${esc(failCode(l.reason))}</span> <span class="t" title="${esc(l.reason||'')}">${esc(failShort(l.reason))}</span>`;
-          case "review": case "ready": {
+          case "all": case "ignored": case "review": case "ready": {
             const g = readyGroupOf(l);   // 现成谓词：A 有邮箱 / B 只有社媒 / C 都没有
             return g === "A" ? `<span class="t">机器发信</span>` : g === "B" ? `<span class="t">手动 · 社媒</span>` : `<span class="pill fail">缺邮箱</span>`; }
           case "sent": case "won": {
@@ -2990,7 +2997,7 @@
           default: return mu;
         }
       };
-      { const th = $("#th-own"); if (th) th.textContent = OWN_HEAD[current] || "本页"; }
+      { const lab = $("#th-own-lab"); if (lab) lab.textContent = OWN_HEAD[current] || "本页"; }   // 只改文字 span，别碰 th（拖线 .rz 在里面）
       const rowHtml = (l) => { return `
         <tr class="row" data-id="${l.id}">
           ${/* ① 公司：复选框（v8 补丁① 的 20×20 方框 + 撑满两行块的热区）+ 公司名 13 + 域名 12 --brand */''}
@@ -3018,7 +3025,8 @@
       renderGroupJump(current, leads);   // 计数用**未筛的** leads（见上）
       document.querySelectorAll("tr.row").forEach(tr =>
         tr.onclick = () => openDetail(tr.dataset.id));
-      buildHeaderFilters();   // nav-table-v2：列宽拖动/记忆整套已删（table-layout:fixed + thead 写死宽度）
+      buildHeaderFilters();   // 首次建表头筛选 + 列宽拖线（一次）
+      applyColWidths();       // 每次都装配：存的列宽 ∪ 默认，缩到容器放得下（视图刚显示时 clientWidth 才有值）
       refreshHeaderActive();
       refreshBulkBar(); syncSelAll();
     }
@@ -3063,9 +3071,77 @@
     const FILT_COL = { 1:"stage", 2:"score", 3:"category", 4:"country", 5:"email", 6:"ch" };
     const SEL_OF = { country:"f-country", category:"f-type", email:"f-email", score:"f-score" };
     const CH_MENU = [["linkedin","LinkedIn"],["whatsapp","WhatsApp"],["facebook","Facebook"],["instagram","Instagram"],["phone","电话"]];
+    // ── 列宽可拖（thead 里写死的宽 = 默认真源；存的只是 Joe 的覆盖值）──
+    //   规则：每列最小宽（公司 140 / 其它 48）；固定 8 列合计 > 容器宽 − 120 时按比例缩到放得下（只改落地，不改存的值），
+    //   所以视口变小也不会把表撑出容器；第 8 列不写宽、吸余（table-layout:fixed + width:100%）。
+    const COL_KEYS = ["company","stage","score","category","country","email","ch","own","time"];
+    const COL_MIN = { company:140 }, COL_MIN_DEF = 48, OWN_MIN = 120, COLW_LS = "crm.colw";
+    let COL_DEF = null;
+    const colMin = (k) => COL_MIN[k] || COL_MIN_DEF;
+    function colDefaults(){
+      if (COL_DEF) return COL_DEF;
+      COL_DEF = {};
+      document.querySelectorAll("#v-list thead th").forEach((th, i) => { const k = COL_KEYS[i]; if (k && k !== "own") COL_DEF[k] = parseInt(th.style.width, 10) || 80; });
+      return COL_DEF;
+    }
+    function loadColW(){ try { const o = JSON.parse(localStorage.getItem(COLW_LS) || "{}"); return (o && typeof o === "object" && !Array.isArray(o)) ? o : {}; } catch { return {}; } }
+    function saveColW(o){ try { localStorage.setItem(COLW_LS, JSON.stringify(o)); } catch {} }
+    function applyColWidths(){
+      const ths = [...document.querySelectorAll("#v-list thead th")]; if (ths.length !== COL_KEYS.length) return null;
+      const card = document.querySelector("#v-list .table-card"), avail = card ? card.clientWidth : 0;
+      const def = colDefaults(), stored = loadColW(), fixedKeys = COL_KEYS.filter(k => k !== "own"), w = {};
+      fixedKeys.forEach(k => { const v = Number(stored[k]); w[k] = Math.max(colMin(k), (Number.isFinite(v) && v > 0) ? Math.round(v) : def[k]); });
+      if (avail > 0) {   // 视图隐藏时 clientWidth = 0：跳过装配，等 loadList 再来
+        const maxFixed = avail - OWN_MIN;
+        let sum = fixedKeys.reduce((s, k) => s + w[k], 0);
+        for (let pass = 0; pass < 3 && sum > maxFixed; pass++) {
+          const f = maxFixed / sum;
+          fixedKeys.forEach(k => { w[k] = Math.max(colMin(k), Math.floor(w[k] * f)); });
+          sum = fixedKeys.reduce((s, k) => s + w[k], 0);
+        }
+      }
+      ths.forEach((th, i) => { const k = COL_KEYS[i]; th.style.width = k === "own" ? "" : w[k] + "px"; });
+      return w;
+    }
+    function buildColResizers(){
+      const ths = [...document.querySelectorAll("#v-list thead th")]; if (ths.length !== COL_KEYS.length) return;
+      ths.forEach((th, i) => {
+        if (i === ths.length - 1 || th.querySelector(".rz")) return;   // 最后一列右边没有下一列，不放线
+        const k = COL_KEYS[i];
+        // 拖第 8 列右边那条线 = 改「时间」列（第 8 列吸余，所以方向相反）；其它线 = 改本列，余量从第 8 列进出
+        const tk = (k === "own") ? "time" : k, sign = (k === "own") ? -1 : 1;
+        const rz = document.createElement("span"); rz.className = "rz"; rz.title = "拖动调整列宽 · 双击恢复默认";
+        rz.addEventListener("click", e => e.stopPropagation());   // 别触发表头筛选菜单
+        rz.addEventListener("dblclick", e => { e.stopPropagation(); const s = loadColW(); delete s[tk]; saveColW(s); applyColWidths(); });
+        rz.addEventListener("pointerdown", e => {
+          if (e.button !== 0) return;
+          e.preventDefault(); e.stopPropagation();
+          const w0 = applyColWidths() || colDefaults();
+          const room = Math.max(0, ths[COL_KEYS.indexOf("own")].getBoundingClientRect().width - OWN_MIN);   // 第 8 列只能让出这么多
+          const start = w0[tk], lo = colMin(tk), hi = start + room, x0 = e.clientX, target = ths[COL_KEYS.indexOf(tk)];
+          let cur = start;
+          rz.classList.add("drag"); document.body.classList.add("col-resizing");
+          const mv = ev => { cur = Math.round(Math.min(hi, Math.max(lo, start + sign * (ev.clientX - x0)))); target.style.width = cur + "px"; };
+          const up = () => {
+            window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up);
+            rz.classList.remove("drag"); document.body.classList.remove("col-resizing");
+            const s = loadColW(); s[tk] = cur; saveColW(s); applyColWidths();
+          };
+          window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
+        });
+        th.appendChild(rz);
+      });
+    }
+    let _colwResizeT = null;
     function buildHeaderFilters(){
       const table = document.querySelector(".main table"); if (!table || table.dataset.hfbuilt) return;
       table.dataset.hfbuilt = "1";
+      buildColResizers();
+      // 容器宽一变（窗口 resize / 侧栏变化）就重新装配：存的固定值不许把表撑出容器
+      const refit = () => { clearTimeout(_colwResizeT); _colwResizeT = setTimeout(applyColWidths, 80); };
+      window.addEventListener("resize", refit);
+      const card = document.querySelector("#v-list .table-card");
+      if (card && window.ResizeObserver) new ResizeObserver(refit).observe(card);
       [...table.querySelectorAll("thead th")].forEach((th,i) => {
         const type = FILT_COL[i]; if (!type) return;
         th.classList.add("filt");
