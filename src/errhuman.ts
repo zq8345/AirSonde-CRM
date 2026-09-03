@@ -24,6 +24,7 @@ export type ErrKind =
   | "secret"      // 钥匙：某个密钥失效
   | "serper"      // 钱：搜索额度用尽/欠费
   | "platform"    // 保险丝：平台额度（子请求/CPU）
+  | "content"     // 内容：这封信自己不合规被通道退回（等多久都不会自己好）
   | "unknown";    // ⚠️ 认不出 —— 不硬归类
 
 export interface ErrHuman {
@@ -32,8 +33,8 @@ export interface ErrHuman {
   human: string;
   /** 服务器原话，原样带出，渲染方放进 title 供排查。 */
   raw: string;
-  /** 归到哪一组处置动线：钱 / 钥匙 / 保险丝 / 未知。 */
-  group: "钱" | "钥匙" | "保险丝" | "未知";
+  /** 归到哪一组处置动线：钱 / 钥匙 / 保险丝 / 内容 / 未知。 */
+  group: "钱" | "钥匙" | "保险丝" | "内容" | "未知";
 }
 
 /**
@@ -56,6 +57,17 @@ export function errHuman(raw?: string | null): ErrHuman {
   //   里面**没有"熔断"二字**。只认那三个词会让它落进"未知"（单测用真串时抓出来的）。
   if (low.includes("熔断") || low.includes("tripped") || low.includes("breaker") || /退订.*=\s*[\d.]+\s*%/.test(s))
     return mk("breaker", "退订的人太多，机器自己停了自动发信。要恢复得你先看一眼信写得怎么样，再到自动化 · 发信闸门里手动重开", "保险丝");
+
+  // ── 内容 ───────────────────────────────────────────────
+  // 🔴 生产实证（emails #301）：`validation_error: The subject field must be less than 2000 characters`
+  //   —— 这封信是**它自己不合规**被发信通道当场拒收的，不是通道坏了。
+  // ⚠️ 必须排在 resend 之前：原话里含 "resend" 字样，落到 resend 分支会给出
+  //   "通道恢复就会发出去" 这句**错的处置建议** —— 通道好着呢，是这封信本身发不出去，
+  //   它等到天亮也不会自己好。（与上面"缺钥匙要排在服务不可用之前"是同一个错法。）
+  if (low.includes("validation_error") || low.includes("validation error"))
+    return mk("content", /subject/.test(low)
+      ? "这封信的主题不合规（多半是 AI 写得太长），通道当场退回了 —— 已经加了长度闸，重新分析一次再发即可"
+      : "这封信本身不合规，通道当场退回了（原话见悬浮提示）—— 重新分析生成一封再发", "内容");
 
   // ── 钥匙 / 供应 ─────────────────────────────────────────
   // ⚠️ 顺序要紧：**"缺钥匙"必须排在"服务不可用"之前**。

@@ -99,8 +99,11 @@ export interface Capability {
 /** ⭐ 能力清单 = **单一真源**。加新能力只在这里加一条；
  *  ⛔ 别在别处再写一次 `if (!env.XXX_KEY)` 式的"配没配"判断 —— 那正是漂移的开始。 */
 export const CAPABILITIES: Capability[] = [
-  { id: "search", label: "自动找客户", keys: ["SEARCH_API_KEY"], core: true, service: "Serper",
-    unlocks: "按关键词搜出新公司（Serper）" },
+  // ⚠️ 显示名用「搜索服务」：宪法禁词表禁的是**把供应商内部名摆到 Joe 面前**（他不需要知道是哪家，
+  //   需要知道的是"这一环靠一个外部搜索服务、要钥匙"）。⛔ 环境变量名与代码里的 Serper 字样不改
+  //   —— 那是技术真源，改它才是制造第二套叫法。
+  { id: "search", label: "自动找客户", keys: ["SEARCH_API_KEY"], core: true, service: "搜索服务",
+    unlocks: "按关键词搜出新公司" },
   // ⚠️ AI 是**一把钥匙两件事**（打分 / 写信，两个不同的模型）。
   //   界面上按 Joe 的要求拆成两行显示，但**能力仍然只有这一条** ——
   //   ⛔ 别在这里拆成两个 capability：钥匙是同一把，拆了就会出现"配了一半"这种不存在的状态。

@@ -23,7 +23,7 @@ import { engineStatuses, pipelineTools } from "./engines";
 import { normalizeCustomerType, customerTypeLabel, categoryValuesFor, classifyKillReason, KILL_REASONS } from "./taxonomy";
 import { normalizePhone, formatPhoneDisplay, decodeEntities } from "./scrape";   // C5-31：号码清洗与展示切分，单源；v8 补丁⑨：实体解码同源
 import { errHuman } from "./errhuman";   // C5-24 第 5 条：机器错误串 → 人话（服务端唯一一份）
-import { currentActivity, setActivity, clearActivity, type ActivityKind } from "./activity";   // C5-28：机器活动真源
+import { currentActivity, setActivity, clearActivity, readActivity, type ActivityKind } from "./activity";   // C5-28：机器活动真源
 
 /**
  * ⭐⭐ C5-14：**一条线索一行数据长什么样，只在这里说一次。**
@@ -2773,6 +2773,16 @@ app.post("/api/activity/cancel", async (c) => {
   const b = await jsonBody<{ kind?: string }>(c);
   const kind = String(b.kind || "").trim() as ActivityKind;
   if (!["search", "analyze", "findmail", "send", "inbox"].includes(kind)) return c.json({ error: "invalid kind" }, 400);
+  // 🔴 审计发现：这个端点原来**能清掉机器自己的活动**（by='auto'）。清了之后活干得好好的，
+  //   而状态栏说"没在跑" ⇒ **界面开始说谎**，且下一次 publishProgress 之前没人看得出来。
+  //   ⚠️ 「取消」这个动作的语义只对**你交办的**那类成立（芯片上才有 ✕）；机器自己的班次要停
+  //     得去自动化页关总开关。⇒ 只接受 by==='user'，其余 400 并说清为什么。
+  {
+    const cur = await readActivity(c.env, kind);
+    if (cur && cur.by !== "user") {
+      return c.json({ error: "这条是机器自己的班次，不能在这里取消（要停它请去自动化页关自动模式）" }, 400);
+    }
+  }
   if (kind === "search") {
     const roundId = (await getSetting(c.env, "discover_round_id", "")).trim();
     if (roundId) await setSetting(c.env, "discover_cancel", roundId);

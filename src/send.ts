@@ -191,6 +191,26 @@ export async function isEmailSuppressed(env: Env, email: string | null | undefin
   } catch (err) { console.error("isEmailSuppressed:", err); return false; } // 迁移未就绪时退回 status 闸兜底
 }
 
+/**
+ * 主题长度上限。
+ *
+ * 🔴 生产实证（emails #301）：AI 写出来的 subject 超长，Resend 当场 422
+ *   `validation_error: The subject field must be less than 2000 characters` ⇒ 那封信**根本没发出去**，
+ *   而界面上只说"发送失败"。
+ * ⚠️ 夹在 **200** 而不是 Resend 的 2000：正常的商务主题不该超过 200 字符 —— 一个 300 字的主题
+ *   即使发得出去也是**事故**（在收件箱里显示成一整段，像垃圾邮件）。
+ *   ⇒ 这道闸挡的不是"技术上会被拒"，是"这封信不该以这个样子发出去"。
+ * ⛔ 这个夹取**只装在 deliverEmail 一处**（所有发送路径的唯一汇合点）——
+ *   在 parseEmail 里再夹一次会变成两个真源，而落库的 subject 与真发出去的 subject 必须逐字一样。
+ */
+const SUBJECT_MAX = 200;
+export function clampSubject(s: string): string {
+  const t = String(s || "").trim();
+  // 截断而不是丢弃：主题前半段通常是对的，整条丢掉会退回 "Hello from AirSonde"（更差）。
+  // ⛔ 不在发送路径里"重生成"——那要再调一次模型，发送路径不该带 AI 副作用。
+  return t.length > SUBJECT_MAX ? t.slice(0, SUBJECT_MAX).trimEnd() : t;
+}
+
 // 把 "Subject: xxx\n\n正文" 拆成 {subject, body}
 function parseEmail(recommended: string): { subject: string; body: string } {
   const text = (recommended || "").trim();
@@ -522,7 +542,10 @@ export async function getBreakerStatus(env: Env): Promise<BreakerStatus> {
 
 // 发信核心：落 queued 记录 → 调 Resend → 回写 email 状态。不改 lead 状态（调用方决定）。
 // L2：kind 增加 'reply'（卡内回信）。导出给回调用——回调侧先过状态闸,本函数内 isEmailSuppressed 终极闸照过（双闸）。
-export async function deliverEmail(env: Env, lead: any, subject: string, body: string, kind: "initial" | "followup" | "confirmation" | "reply", autoSent = false): Promise<SendOutcome> {
+export async function deliverEmail(env: Env, lead: any, subjectIn: string, body: string, kind: "initial" | "followup" | "confirmation" | "reply", autoSent = false): Promise<SendOutcome> {
+  // ⭐ 主题夹取放在**这一处**：初次/跟进/手动/自动四条路都从这里过（唯一汇合点），
+  //   而且它在 INSERT 之前 ⇒ 落库的 subject 与真发出去的 subject 逐字一样。见 SUBJECT_MAX。
+  const subject = clampSubject(subjectIn);
   // M3 终极闸：持久压制名单命中即 skip（不依赖 status，两跳洗白/重导入也拦得住）
   if (await isEmailSuppressed(env, lead.email)) {
     return { ok: false, id: lead.id, skipped: "邮箱在压制名单，不发送" };
