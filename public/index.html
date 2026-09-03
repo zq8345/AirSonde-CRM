@@ -168,10 +168,7 @@
     .cap-core { font-size:12px; color:var(--brand-strong); background:var(--brand-tint);
                 border-radius:4px; padding:1px 6px; margin-left:6px; }
     .cap-ok { color:var(--brand-strong); font-weight:700; }
-    /* C5-55：只标"零成本"的那几个 —— 让 Joe 一眼看出哪些环节不花钱。
-       ⛔ 这张卡上不写单价：价格会过期，而**过期的价格比没有价格更坏**。 */
-    .cap-free { font-size:12px; color:var(--muted); background:var(--panel);
-                border-radius:4px; padding:1px 6px; margin-left:6px; }
+    /* Joe（09-03）：「零成本」小标全删（.cap-free 随之删）；⛔ 这张卡上仍不写单价——价格会过期，过期的价格比没有价格更坏。 */
     /* 板块二 行内实时表现：旋钮说"你设了多少"，它说"这个设定此刻的实际表现"。
        ⚠️ 它**永远只读**，不随两态切换 —— 事实不是配置，不该跟着编辑态变样子。 */
     .kw-arch > summary { cursor:pointer; font-size:12px; color:var(--muted); padding:4px 0; }
@@ -4154,7 +4151,8 @@
         const paused = !d.auto && id !== 'reply';           // 收信不随总开关
         const r = { name, cls:'idle', word:SB_WORD.idle, num:numIdle, bar:null, raw:'' };
         if (paused) { r.cls = 'idle'; r.word = SB_WORD.paused; r.num = numPaused; return r; }
-        if (e && e.stopped) { r.cls = 'no'; r.word = SB_WORD.blocked; r.num = `${e.reason || '原因读不到'}${numIdle ? ' · ' + numIdle : ''}`; r.raw = (id === 'send' && d.detail) ? d.detail : ''; return r; }
+        // Joe（09-03）：受阻时 reason 里通常已带数（「预算用满（5000/5000）」）——再拼 numIdle 就是同一个数说两遍，删
+        if (e && e.stopped) { r.cls = 'no'; r.word = SB_WORD.blocked; r.num = e.reason || '原因读不到'; r.raw = (id === 'send' && d.detail) ? d.detail : ''; return r; }
         if (running(kind)) { r.cls = 'ok run'; r.word = act.by === 'user' ? SB_WORD.user : SB_WORD.run; r.num = [sbProg(act), act.note].filter(Boolean).join(' · ') || numIdle;
           r.bar = act.total ? Math.max(2, Math.min(100, Math.round(100 * (act.done || 0) / act.total))) : null; return r; }
         r.cls = 'ok'; return r;
@@ -4339,8 +4337,9 @@
     window.sendOne = async (id) => {
       if (!(await uiConfirm({ title:'确认发送开发信', body:'确认用 sales@airsonde.net 给这条线索发送开发信？\n发出不可撤。', confirmText:'确认发送' }))) return;
       const res = await fetch(`/api/leads/${id}/send`, { method:"POST" }).then(r=>r.json()).catch(e=>({error:String(e)}));
-      if (res.error) { alert("发送失败: " + res.error); return; }
-      if (res.skipped) { alert("已跳过: " + res.skipped); return; }
+      // toolbar-v9 补：发送路径的两个 alert 换 toolMsg（同一批动发送按钮；剩余原生弹窗见队列）
+      if (res.error) { toolMsg("发送失败: " + esc(res.error)); return; }
+      if (res.skipped) { toolMsg("已跳过: " + esc(res.skipped)); return; }
       await openDetail(id); loadStats(); loadList();
     };
 
@@ -6560,7 +6559,7 @@ ${esc(d.ours.body||'')}</div></details>`
         if (t.state === 'ok') return t.note && /\//.test(t.note)
           ? `<b class="cap-ok">${esc(shortModel(t.note))}</b>`
           : `<b class="cap-ok">${esc(t.tool)}</b>${t.note ? ` <span class="hint">${esc(t.note)}</span>` : ''}`;
-        if (t.state === 'none')    return `<b class="cap-ok">${esc(t.tool)}</b> <span class="cap-free">零成本</span>`;
+        if (t.state === 'none')    return `<b class="cap-ok">${esc(t.tool)}</b>`;   // Joe（09-03）：「零成本」小标全删，只留工具名（页脚那句"不花钱"保留）
         if (t.state === 'idle')    return `<b>${esc(t.tool)}</b> <span class="hint">· ${esc(t.note)}</span>`;
         return `<span class="hint">未接 · </span><code>${esc(t.note)}</code>`;   // missing
       };
