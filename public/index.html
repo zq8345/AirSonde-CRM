@@ -2670,7 +2670,7 @@
       const cntTxt = total != null ? `<span class="cnt">(${total})</span>` : "";
       // toolbar-v9 页头副标（真值判）：待审批报分数线构成（facets.scoreBuckets）；待联系报 A/B/C 三数（readyGroupIds 同源）
       let subTxt = "";
-      if (current === "review" && _facets && _facets.scoreBuckets) {
+      if (current === "review" && _facets && _facets.scoreBuckets && _facetsGroup === "review") {
         const hi = Number(_facets.scoreBuckets.bAuto) || 0;
         subTxt = `<span class="cnt">· ${hi > 0 ? `其中 ≥${SCORE_LINE} 分 ${hi} 家` : `全部低于 ${SCORE_LINE} 分线`}</span>`;
       } else if (current === "ready") {
@@ -2883,10 +2883,14 @@
     //   f) 未打分 = 没有分数的全体（LEFT JOIN 口径，与筛选同一条 SQL） g) 分类按归一后标签合并，不再重复
     //   h) 国家「全部」+「中文名 (N)」按 N 降序（只列本格有的）
     let _facets = null;   // 最近一次 facets（阶段/渠道菜单在 hdrOpts 里读它）
+    let _facetsGroup = "";   // toolbar-v9：这份 facets 是哪个格的 —— 页头副标要按格判，别拿上一格的数说这一格的话（生产实测：切到待审批的头一秒显示的是全部页的 452）
     async function loadFacets() {
-      const f = await fetch(`/api/leads/facets?group=${encodeURIComponent(current)}`).then(r=>r.json()).catch(()=>null);
+      const forGroup = current;
+      const f = await fetch(`/api/leads/facets?group=${encodeURIComponent(forGroup)}`).then(r=>r.json()).catch(()=>null);
       if (!f) return;
-      _facets = f;
+      if (forGroup !== current) return;   // 期间切走了 → 这份是旧格的，别覆盖
+      _facets = f; _facetsGroup = forGroup;
+      renderGroupTools();   // 副标（待审批分数线构成）靠它 —— 数据到了让工具栏跟上
       const N = (n) => ` (${Number(n)||0})`;
       // 国家
       const cSel = $("#f-country"), cur = cSel.value;
