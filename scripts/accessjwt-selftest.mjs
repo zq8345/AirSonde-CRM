@@ -180,6 +180,19 @@ check("② 签名被改一个片段 → 拒", (await observeAccessJwt({}, reqWit
 check("⑫ KNOWN_TENANTS 仍是硬编码的两个", KNOWN_TENANTS.length === 2 && KNOWN_TENANTS.includes("wanewgroup"),
   KNOWN_TENANTS.join(","));
 
+// ── ⑬ AUD 不是从 wanew-crm 抄来的那个 ──
+//  🔴 **为什么单独立一条**：上面每一条都拿 `DEFAULT_ACCESS_AUD` 同时当"签票用的 aud"和
+//     "期望的 aud" ⇒ 那个值**填成什么都会全绿**，包括填成别的项目的。
+//     2026-09-02 它确实就是错的（整份文件从 wanew-crm 复制，AUD 却是每个 Access 应用一个），
+//     而 ①–⑫ 十二条**一条都没红** —— 这就是"闸照的不是要照的东西"。
+//  ⚠️ 这条闸能挡的只有"再抄一次 wanew 的值"这一种错法，**挡不住抄成第三个错值**。
+//     真正的判据在网上（`curl -sI https://crm.airsonde.com/` 的 `kid=`），
+//     但自测是离线的、mock 掉了 fetch ⇒ ⛔ 不把网络依赖塞进自测。**这条只是回归闸，不是正确性证明。**
+const WANEW_CRM_AUD = "9a9ae044d1db07e6ce75992743d4698fedc9b246898b2c0ad4f39e20dcf7ef97";
+check("⑬ DEFAULT_ACCESS_AUD 不是 wanew-crm 那个（跨项目复制回归闸）",
+  DEFAULT_ACCESS_AUD !== WANEW_CRM_AUD && /^[0-9a-f]{64}$/.test(DEFAULT_ACCESS_AUD),
+  `${DEFAULT_ACCESS_AUD.slice(0, 12)}…（应为 crm.airsonde.com 的，实测见 src/accessjwt.ts 注释）`);
+
 // ---------- 收尾 ----------
 fs.rmSync(TMP, { recursive: true, force: true });
 console.log("【Access JWT 验签自测】");

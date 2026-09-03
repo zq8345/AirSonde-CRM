@@ -19,12 +19,31 @@
 /** 已知租户白名单。⚠️⚠️ **绝不能用 token 自称的 iss 去决定抓哪个 URL**：
  *  那等于让攻击者用一个 `iss: https://evil.cloudflareaccess.com` 的伪票，
  *  指挥我们的 Worker 去他的服务器取"公钥"—— 既是 SSRF，也让验签变成走过场。
- *  claimed iss **只用来决定先试哪一个**，永远不用来扩大这个集合。 */
+ *  claimed iss **只用来决定先试哪一个**，永远不用来扩大这个集合。
+ *
+ *  ⚠️ **`wanewgroup` 出现在 airsonde 仓里不是串味，是对的** —— 别"顺手修正"它。
+ *  2026-09-02 实测：`crm.airsonde.com` 的 Access 登录跳转指向
+ *  `wanewgroup.cloudflareaccess.com/cdn-cgi/access/login/crm.airsonde.com`
+ *  ⇒ 两个站**同一个 Cloudflare 账号、同一个团队域**，只是各自是一个独立的 Access 应用。
+ *  ⭐ 团队域相同 ≠ AUD 相同：**AUD 是每个应用一个**（这正是上面那行曾经错掉的地方）。 */
 export const KNOWN_TENANTS = ["wanewgroup", "wanew"] as const;
 export type Tenant = typeof KNOWN_TENANTS[number];
 
-/** wanew-crm 这个 Access 应用的 AUD（非机密；在登录跳转 URL 的 kid= 参数里公开可见）。 */
-export const DEFAULT_ACCESS_AUD = "9a9ae044d1db07e6ce75992743d4698fedc9b246898b2c0ad4f39e20dcf7ef97";
+/** `crm.airsonde.com` 这个 Access 应用的 AUD（非机密；在登录跳转 URL 的 kid= 参数里公开可见）。
+ *
+ *  🔴 **这一行曾经是 wanew-crm 的 AUD**（`9a9ae044…`）—— 整个文件是从 wanew-crm 整体复制过来的，
+ *     而 **AUD 是"每个 Access 应用一个"**，不是每个账号一个 ⇒ 复制过来必然是错的。
+ *     它没炸只是因为**这个模块还没接线**（全仓没有任何 src 文件 import 它，只有自测脚本）。
+ *     ⚠️ 接线那天才会发现的话，症状是**所有人 403，包括 Joe** —— 正是这个文件开头那句话要避免的事。
+ *
+ *  ⭐ **别照抄下面这个值，自己量一遍**（照抄正是它出错的原因）。匿名请求即可，不需要登录：
+ *     ```
+ *     curl -sI https://crm.airsonde.com/ | grep -i ^location:
+ *     ```
+ *     `Location` 里的 **`kid=` 参数就是 AUD**；同一条 URL 的 `meta=` 是一个 JWT，
+ *     其 payload 的 `aud` 必须与 `kid=` **完全相同** —— 两个独立字段对得上才可采信（2026-09-02 已如此核过）。
+ *     顺带那条 URL 的主机名就是团队域 ⇒ 见下面 KNOWN_TENANTS 的注释。 */
+export const DEFAULT_ACCESS_AUD = "b7c3296b15d1012a18800aee72f009e9d5a2910133715eb90958b0b947291233";
 
 const JWKS_TTL_MS = 60 * 60 * 1000;   // 1 小时。Access 的签名密钥轮换很慢，遇到未知 kid 会强制回源。
 
