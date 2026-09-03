@@ -1357,7 +1357,17 @@
           <!-- ③ 用什么关键词 -->
           <div class="subhead"><span class="num">3</span>
             <span class="field" style="font-size:14px">用什么关键词</span>
-            <span class="toolbar"><button class="mini" type="button" onclick="fcKwAll(true)">全选</button><button class="mini" type="button" onclick="fcKwAll(false)">全不选</button><button class="mini" id="fc-kw-manage" type="button" onclick="fcToggleManage()">管理</button><button id="dp-kwseed" class="mini" type="button">载入默认</button></span></div>
+            <span class="toolbar"><button class="mini" type="button" onclick="fcKwAll(true)">全选</button><button class="mini" type="button" onclick="fcKwAll(false)">全不选</button><button class="mini" id="fc-kw-manage" type="button" onclick="fcToggleManage()">管理</button></span></div>
+          <!-- 🔴 C5-50（Joe：「这个按钮没有保留的价值，反而误导人」）：「载入默认」按钮**已删**。
+               三条依据，逐条查过：
+               ① 它此刻**恒无效**：`DEFAULT_KEYWORDS` 逐字等于库里那批词，点了什么都不会发生。
+               ② C5-50 之后它会变成**误导**：它恢复的那份"默认"里含我们刚用数据证明该扔的 5 个
+                  （0% / 2.6% / 4.2% / 12.1% / 13.3%），却不含新增的 12 个 ——「默认」这个词从此是错的。
+               ③ 它有一个**名字没说的副作用**：点完会把 `_fcKwChecked` 重置成全选，
+                  Joe 特意取消过的勾选一点就全回来了，而且没有二次确认。
+             ⚠️ **后端那条路径保留**（`POST /api/keywords {seedDefaults:true}` → `seedDefaultKeywords`）：
+               grep 出它有**第二个调用方** —— 本文件 ~4210 行「关键词表为空时自动灌入默认词」。
+               ⇒ 它不是死码，删了新库就进不去初始页面。**判死码要查调用方，⛔ 不看它长得像不像没人用。** -->
           <div class="sec-indent">
             <!-- 🔴 C5-48：加词那一行**改成常显**（原来藏在「管理」态后面）。
                  理由：加一个关键词是**可逆**动作（加错了删掉即可），把它藏起来的成本
@@ -4278,13 +4288,11 @@
       _fcKwChecked.add(kw);                 // 新加默认勾选
       $("#dp-kwnew").value=""; await reloadKw();
     };
-    $("#dp-kwseed").onclick = async () => {
-      await fetch("/api/keywords", {method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({seedDefaults:true})});
-      const data = await fetch("/api/keywords").then(r=>r.json());
-      _fcKwRows = data.keywords||[]; _fcKwEffCount=(data.effective||[]).length;
-      _fcKwChecked = new Set(_fcKwRows.map(k=>k.keyword));  // 载入默认后全部勾选
-      renderKwInline();
-    };
+    // 🔴 C5-50：`#dp-kwseed`（载入默认）的按钮与**这段绑定一起删**。
+    //   ⛔ 只删元素留绑定，`$()` 会返回 null 然后 `.onclick =` 直接抛 TypeError，
+    //     而这一整段初始化会从那里中断 —— 本仓为这个形状修过线上故障（cfg-auto-min 那次）。
+    //   删掉的副作用里最该记的一条：它原来会 `_fcKwChecked = new Set(全部)`，
+    //   **把 Joe 特意取消过的勾选全部勾回来，且无二次确认**。那是按钮名字没说的事。
     async function saveSearchCfg(){
       // ⚠️ 这里**故意不带 discoveryEnabled**：后端只在该字段存在时才写（typeof === "boolean"），
       //    不带 = 一个字都不动。自动搜索开关已改成"勾选即存"（见 openDiscover 里的 #dp-auto）。
