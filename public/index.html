@@ -286,7 +286,7 @@
     .page-card:last-child { margin-bottom:0; }
     @media (max-width:820px){ .page-card { padding:18px 16px; } }
     /* 长表格页：表格自己就是那张卡 —— 内边距收窄，让表格贴着卡边（附录 C.5 的例外，已写进宪法） */
-    .table-card { padding:0; overflow:hidden; }
+    .table-card { padding:0; overflow:auto; }   /* nav-table-v2：表有 min-width，窄窗口在卡内横向滚（原 hidden 会把最右的「时间」列裁掉） */
     .table-card table { margin:0; }
     /* C5-4v A：次级小按钮 —— 「重置筛选/重置列宽」不该与主动作平级 */
     /* ══ C5-4v B：补货弹窗 —— 两张选择卡 ══ */
