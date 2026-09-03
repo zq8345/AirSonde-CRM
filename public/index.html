@@ -1264,14 +1264,19 @@
              它说的是「这个开关**不受总开关管**」，而那正是 Joe 最容易误解的地方
              （关了自动模式会不会连回信都收不到）。Joe 定的语义是「关的是机器的嘴和手，
              不关它的耳朵」—— 那句话要在屏幕上，不能藏在一个他不会去点的问号里。 -->
+        <!-- 🔴 C5-48 上线后当场发现并修：这一行原来同时放了 `#mr-live-ntf`（"● 已连接"）
+             和下面的 `#notify-status`（"● 已连接(?)"）—— **同一个事实两处**，铁律五。
+             ⇒ 留信息更全的那个（`#notify-status` 带 (?) 解释与配置指引），
+               把 `#mr-live-ntf` 收进这一行**末尾**当兜底位（live() 仍会写它，⛔ 不删元素留绑定）。
+             ⚠️ 两个都留着的时候，屏幕上那条孤零零的绿横条正是 Joe 会问"这是什么"的东西。 -->
         <div class="pr-row"><span class="pr-k">飞书通知</span>
-          <span class="pr-v"><span class="mr-live" id="mr-live-ntf"></span>
-            <button class="btn-secondary mini" id="ntf-test">发送测试</button>
+          <span class="pr-v"><button class="btn-secondary mini" id="ntf-test">发送测试</button>
             <label class="tgl tgl-sm"><input type="checkbox" id="ntf-enabled"><span class="tgl-track"><span class="tgl-knob"></span></span></label>
             <span class="hint">有热回复时推群</span>
             <span class="hint" id="ntf-result"></span>
-            <span class="hint">· 收信和通知永远在线，不跟随自动模式开关</span></span></div>
-        <div id="notify-status" class="transparency" style="margin:10px 0 0"></div>
+            <span class="hint">· 收信和通知永远在线，不跟随自动模式开关</span>
+            <span class="mr-live" id="mr-live-ntf" hidden></span></span>
+          <span class="pr-k"></span><span id="notify-status" class="hint" style="margin:0"></span></div>
       </div>
 
 <div class="set-card">
