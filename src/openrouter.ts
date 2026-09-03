@@ -310,9 +310,10 @@ export async function scoreLead(
   }
 
   const cc = String(obj.country_code ?? "").trim().toLowerCase();
-  const buyerType = String(obj.buyer_type ?? "").trim();   // H3 合格买家类型判定
-  const reasonRaw = String(obj.reason ?? "").trim();
-  const reason = (buyerType ? `【${buyerType}】` : "") + reasonRaw;   // 把资格判定前置到 reason，详情页可见
+  // detail-v6：reason 不再拼 `【buyer_type】` 前缀 —— buyer_type 与入库 customer_category 可能不一致且是英文 slug
+  //   （生产 Akcp：理由写 end-buyer、分类是 unclear）。显示层用 customerTypeLabel(customer_category) 做前缀；
+  //   存量 reason 里的 `【…】` 由前端显示时剥掉。buyer_type 仍参与上面的 conflicted() 一致性判定，只是不落进 reason。
+  const reason = String(obj.reason ?? "").trim();
   return {
     // slug 走 customer_type（分类真源）；中文描述走 customer_desc（仅展示）。
     // ⚠️ 模型偶尔把中文塞进 customer_type —— normalizeCustomerType 认不出就落 unclear，**不猜**：

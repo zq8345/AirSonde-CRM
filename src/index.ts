@@ -1770,10 +1770,11 @@ app.get("/api/leads/:id/timeline", async (c) => {
   const lead = await c.env.DB.prepare("SELECT created_at, source, keyword FROM leads WHERE id=?").bind(id).first<any>();
   if (!lead) return c.json({ error: "not found" }, 404);
   const events: { time: string; type: string; label: string; detail?: string; kind?: string }[] = [];
-  events.push({ time: lead.created_at, type: "discovered", label: `线索录入${lead.source ? `（来源 ${lead.source}${lead.keyword ? ` · ${lead.keyword}` : ""}）` : ""}` });
+  // detail-v6：录入那条写「录入 · 搜到：<关键词>」（关键词从列表撤掉后只在详情页出现：侧栏基本信息 + 这里）
+  events.push({ time: lead.created_at, type: "discovered", label: `录入${lead.keyword ? ` · 搜到：${lead.keyword}` : (lead.source ? ` · ${lead.source}` : "")}` });
 
   const a = await c.env.DB.prepare("SELECT analyzed_at, match_score FROM lead_analysis WHERE lead_id=?").bind(id).first<any>();
-  if (a?.analyzed_at) events.push({ time: a.analyzed_at, type: "analyzed", label: `AI 分析打分 ${a.match_score ?? "—"}` });
+  if (a?.analyzed_at) events.push({ time: a.analyzed_at, type: "analyzed", label: a.match_score != null ? `AI 分析 · ${a.match_score} 分` : "抓官网失败 · 判不了分" });
 
   const emails = await c.env.DB.prepare(
     "SELECT kind, status, subject, sent_at, created_at, error FROM emails WHERE lead_id=? ORDER BY id ASC"
@@ -1781,27 +1782,102 @@ app.get("/api/leads/:id/timeline", async (c) => {
   for (const e of emails.results as any[]) {
     const t = e.sent_at || e.created_at;
     const kindLabel = e.kind === "followup" ? "跟进信" : "开发信";
-    const stLabel = e.status === "sent" ? "已发送" : e.status === "bounced" ? "退信" : e.status === "failed" ? "发送失败" : "待发";
+    const stLabel = e.status === "sent" ? "发出" : e.status === "bounced" ? "退信" : e.status === "failed" ? "发送失败" : "待发";
     // ⭐ C5-24 第 5 条：失败事件原来只写"开发信发送失败"，**一个字都不说为什么** ——
     //   Joe 看到它无从判断是钱、钥匙还是保险丝，也就不知道要不要动手。
     //   现在给一句人话（errHuman），**原话原样带在 detail 里**给排查用（渲染方放进 title）。
     //   ⛔ 落库那份 error 一个字不动 —— 那是排查真源，翻译只是给人看的第二层。
     const eh = e.status === "failed" ? errHuman(e.error) : null;
+    // detail-v6：主题不进一行标签（详情页正文卡里看得到），挂在 detail 供悬停
     events.push({ time: t, type: `email_${e.status}`,
-      label: `${kindLabel}${stLabel}${e.subject ? `：${e.subject}` : ""}${eh ? ` —— ${eh.human}` : ""}`,
-      detail: eh ? eh.raw : undefined, kind: eh ? eh.kind : undefined });
+      label: `${kindLabel}${stLabel}${eh ? ` —— ${eh.human}` : ""}`,
+      detail: eh ? eh.raw : (e.subject || undefined), kind: eh ? eh.kind : undefined });
   }
 
   const replies = await c.env.DB.prepare(
     "SELECT category, summary, received_at FROM replies WHERE lead_id=? ORDER BY id ASC"
   ).bind(id).all();
   for (const r of replies.results as any[]) {
-    events.push({ time: r.received_at, type: "reply", label: `收到回复（${r.category || "?"}）${r.summary ? `：${r.summary}` : ""}` });
+    events.push({ time: r.received_at, type: "reply", label: `收到回信${r.category ? ` · ${REPLY_CAT_ZH[r.category] || r.category}` : ""}`, detail: r.summary || undefined });
   }
 
   // 按时间升序；无时间的排最后
   events.sort((x, y) => String(x.time || "").localeCompare(String(y.time || "")));
   return c.json({ events });
+});
+
+// ---- detail-v6：详情页「沟通」数据 —— 我们发的信 + 对方回信 + 统计 + 机器下一步，一次取齐 ----
+// ⚠️ 口径全在服务端：机器自动跟进日期（开关 + 间隔 + 首封 sent_at）、「下一班约 N 分钟」（自动模式 + 今日额度 + 发信间隔，
+//   与 /api/activity 同一组函数）。⛔ 前端不自己算这些数。
+const REPLY_CAT_ZH: Record<string, string> = { interested: "有兴趣", inquiry: "询价", not_interested: "无兴趣", complaint: "投诉", other: "其他" };
+app.get("/api/leads/:id/comm", async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!Number.isFinite(id)) return c.json({ error: "invalid id" }, 400);
+  const lead = await c.env.DB.prepare("SELECT id, status FROM leads WHERE id=?").bind(id).first<any>();
+  if (!lead) return c.json({ error: "not found" }, 404);
+  await ensureReplyColumns(c.env);
+  const emails = (await c.env.DB.prepare(
+    "SELECT id, kind, status, subject, body, sent_at, created_at, open_count, click_count, error FROM emails WHERE lead_id=? ORDER BY id ASC"
+  ).bind(id).all()).results as any[];
+  const replies = (await c.env.DB.prepare(
+    "SELECT id, category, summary, content, from_email, subject, received_at, handled_at, draft, raw_headers FROM replies WHERE lead_id=? ORDER BY id ASC"
+  ).bind(id).all()).results as any[];
+  const sent = emails.filter((e) => e.status === "sent");
+  const followups = sent.filter((e) => e.kind === "followup");
+  const stats = {
+    sent: sent.length,
+    openCount: sent.reduce((s, e) => s + (Number(e.open_count) || 0), 0),
+    clickCount: sent.reduce((s, e) => s + (Number(e.click_count) || 0), 0),
+    followups: followups.length,
+    firstSentAt: sent.length ? sent[0].sent_at : null,
+    lastSentAt: sent.length ? sent[sent.length - 1].sent_at : null,
+  };
+  // 机器自动跟进：关着 → off；已跟够 → done；发过信 → 上一封 + 间隔天数（打开/点过用 engaged 间隔）；没发过 → none
+  const fuEnabled = (await getSetting(c.env, "followup_enabled", "0")) === "1";
+  const delayDays = Number(await getSetting(c.env, "followup_delay_days", "4")) || 4;
+  const engagedDays = Number(await getSetting(c.env, "engaged_follow_up_delay_days", "2")) || 2;
+  const maxFu = Number(await getSetting(c.env, "followup_max", "1")) || 1;
+  let autoFollowup: { state: "off" | "done" | "planned" | "none"; at?: string } = { state: "none" };
+  if (!fuEnabled) autoFollowup = { state: "off" };
+  else if (followups.length >= maxFu) autoFollowup = { state: "done" };
+  else if (stats.lastSentAt) {
+    const base = new Date(String(stats.lastSentAt).replace(" ", "T") + (/[Zz]|[+-]\d\d:?\d\d$/.test(String(stats.lastSentAt)) ? "" : "Z"));
+    if (!isNaN(base.getTime())) {
+      base.setUTCDate(base.getUTCDate() + ((stats.clickCount > 0 || stats.openCount > 0) ? engagedDays : delayDays));
+      autoFollowup = { state: "planned", at: base.toISOString().slice(0, 10) };
+    }
+  }
+  // 下一班：与 /api/activity 同一组函数取值，前端只挑字
+  const auto = await automationEnabled(c.env);
+  const { effective } = await systemDailySendLimit(c.env);
+  const today = await coldSentToday(c.env);
+  const blockedWhy = auto ? ((await autoSendBlockedReason(c.env)) || null) : null;
+  const gapSec = Math.max(0, Number(await getSetting(c.env, "send_interval_seconds", String(SEND_INTERVAL_DEFAULT))) || 0);
+  const send = {
+    auto, today, limit: effective, blockedWhy,
+    etaMin: (auto && !blockedWhy && today < effective) ? Math.max(1, Math.ceil(Math.max(60, gapSec) / 60)) : null,
+    sender: String(SENDER_PRIMARY || ""),
+  };
+  return c.json({
+    emails: emails.map((e) => ({ id: e.id, kind: e.kind || "initial", status: e.status, subject: e.subject, body: e.body, sent_at: e.sent_at, created_at: e.created_at,
+      open_count: Number(e.open_count) || 0, click_count: Number(e.click_count) || 0, error: e.error ? errHuman(e.error).human : null })),
+    replies: replies.map((r) => ({ id: r.id, category: r.category, category_label: REPLY_CAT_ZH[r.category] || r.category || "", summary: r.summary,
+      clean: stripQuoted(r.content || ""), raw: r.content || "", from_email: r.from_email, subject: r.subject, received_at: r.received_at,
+      handled_at: r.handled_at, draft: r.draft || "", is_noise: isNoiseReply(r) })),
+    stats, autoFollowup, send,
+  });
+});
+
+// ---- detail-v6：备注（leads.notes，只有 Joe 看得到；自动保存）----
+// ⚠️ 不碰 updated_at：它参与「进入本格时间」的推导，写备注不该让列表的时间列跳
+app.patch("/api/leads/:id/notes", async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!Number.isFinite(id)) return c.json({ error: "invalid id" }, 400);
+  const b = await jsonBody<{ notes?: string }>(c);
+  const notes = String(b.notes ?? "").slice(0, 4000);
+  const res = await c.env.DB.prepare("UPDATE leads SET notes=? WHERE id=?").bind(notes || null, id).run();
+  if (!res.meta.changes) return c.json({ error: "not found" }, 404);
+  return c.json({ ok: true, id, len: notes.length });
 });
 
 // ---- 冲刺1a：今日待办作战台（聚合 该跟进 / 未处理热回复 / 今日参与）----
