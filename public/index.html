@@ -1420,7 +1420,7 @@
 
           <!-- 搜索预算：⛔ 不再拼「今日 x/y」（Joe：「今日预算 5000/5000 是多余的」——顶栏面板与卡一那行已经在报） -->
           <div class="pr-row"><span class="pr-k">搜索预算</span>
-            <span class="pr-v"><input id="fc-serper-budget" type="number" min="0" max="20000" step="100" class="set-num"><span class="hint">次 / 天</span>
+            <span class="pr-v"><input id="fc-serper-budget" type="number" min="0" max="20000" step="100" class="set-num"><span class="u">次 / 天</span>
               <span class="gj-help" data-help title="Serper 每次搜索算 1 次。预算 = 你愿意每天花多少次；找到多少家取决于关键词 × 国家的组合数。用满就停到明天。">(?)</span>
               <span class="mr-live" id="mr-live-search"></span></span></div>
 
@@ -1471,7 +1471,7 @@
           </span></div>
         <!-- 打分线：一个真源派生三段（中/低两段只读）。后端一直收 auto_approve_min（index.ts） -->
         <div class="pr-row"><span class="pr-k">打分线</span>
-          <span class="pr-v"><span class="hint">≥</span><input id="cfg-approve-min" type="number" min="1" max="100" class="set-num"><span class="hint">批准 · <b id="rb-mid">…</b> 你来看 · ≤<b id="rb-lo">…</b> 忽略</span>
+          <span class="pr-v"><span class="u">≥</span><input id="cfg-approve-min" type="number" min="1" max="100" class="set-num"><span class="u">批准 · <b id="rb-mid">…</b> 你来看 · ≤<b id="rb-lo">…</b> 忽略</span>
             <span class="gj-help" data-help title="≥线：自动模式开着时机器直接批准进待联系。中段：多为资料不全，AI 没看清 ≠ 不合格，你看一眼再批。≤低线：建议忽略，随时可从「已忽略」退回。三个数都从后端真值来。">(?)</span>
             <span class="mr-live" id="mr-live-review"></span></span></div>
         <!-- 工具行（抓官网 / AI 评分 / 补邮箱 / 补邮箱兜底 四条） -->
@@ -1496,35 +1496,35 @@
         <div class="hint" id="cfg-automation-why"></div>
 
         <div class="pr-row"><span class="pr-k">每天最多发</span>
-          <span class="pr-v"><input id="cfg-limit" type="number" min="1" class="set-num"><span class="hint">封</span>
+          <span class="pr-v"><input id="cfg-limit" type="number" min="1" class="set-num"><span class="u">封</span>
             <span id="cfg-limit-badge" class="pill" style="display:none"></span>
             <span class="gj-help" data-help title="手动 + 自动 + 跟进 共用这一个上限，跨全部发件域计数。系统物理上跑得动多少见 (?) 里的产能数，超出的顺延不会丢。">(?)</span><span class="mr-live" id="mr-live-limit"></span></span></div>
 
         <div class="pr-row"><span class="pr-k">机器自己发</span>
           <span class="pr-v">
             <label class="tgl tgl-sm"><input type="checkbox" id="cfg-auto-on"><span class="tgl-track"><span class="tgl-knob"></span></span></label>
-            <span class="hint">最多</span>
-            <input id="cfg-auto-limit" type="number" min="1" class="set-num"><span class="hint">封/天</span>
+            <span class="u">最多</span>
+            <input id="cfg-auto-limit" type="number" min="1" class="set-num"><span class="u">封/天</span>
             <span class="gj-help" data-help title="开 = 另给自动通道设一个自己的上限；关 = 不另设限，用满上面那个「每天最多发」。">(?)</span>
             <span class="hint" id="cfg-auto-used"></span>
             <!-- ⚠️ 实时位必须是**兄弟节点**：fillSettingsFields 会重写 #cfg-auto-used 的内容，嵌进去会被冲掉 -->
             <span class="mr-live" id="mr-live-auto"></span></span></div>
 
         <div class="pr-row"><span class="pr-k">每封间隔</span>
-          <span class="pr-v"><input id="cfg-send-gap" type="number" min="0" class="set-num"><span class="hint">秒</span>
+          <span class="pr-v"><input id="cfg-send-gap" type="number" min="0" class="set-num"><span class="u">秒</span>
             <span class="pill" id="cfg-gap-src" style="display:none"></span>
             <span class="gj-help" data-help title="两封开发信之间至少隔这么久。0 = 不限速。留空 = 用系统默认。机器每分钟检查一次是否该发。">(?)</span><span class="mr-live" id="mr-live-gap"></span></span></div>
 
         <div class="pr-row"><span class="pr-k">新域保护</span>
           <span class="pr-v"><label class="tgl tgl-sm"><input id="cfg-ramp" type="checkbox"><span class="tgl-track"><span class="tgl-knob"></span></span></label>
-            <span class="hint">起步</span><input id="cfg-ramp-floor" type="number" min="1" class="set-num">
-            <span class="hint">封 · 每天 ×</span><input id="cfg-ramp-factor" type="number" min="1" step="0.1" class="set-num">
+            <span class="u">起步</span><input id="cfg-ramp-floor" type="number" min="1" class="set-num">
+            <span class="u">封 · 每天 ×</span><input id="cfg-ramp-factor" type="number" min="1" step="0.1" class="set-num">
             <span class="gj-help" data-help title="新域名一上来就大量发信会被判垃圾。开着时每天实际上限 = max(起步值, 昨天发出量 × 倍数)，慢慢爬到你设的「每天最多发」。关掉就直接按上限发。建议开着。">(?)</span>
             <span class="pill" id="cfg-ramp-src" style="display:none"></span></span></div>
 
         <div class="pr-row"><span class="pr-k">退订就停</span>
-          <span class="pr-v"><span class="hint">最近</span><input id="cfg-brk-win" type="number" min="5" class="set-num">
-            <span class="hint">封里超过</span><input id="cfg-brk-th" type="number" min="1" max="90" class="set-num"><span class="hint">% 就停</span>
+          <span class="pr-v"><span class="u">最近</span><input id="cfg-brk-win" type="number" min="5" class="set-num">
+            <span class="u">封里超过</span><input id="cfg-brk-th" type="number" min="1" max="90" class="set-num"><span class="u">% 就停</span>
             <span class="pill" id="cfg-brk-src" style="display:none"></span>
             <span class="gj-help" data-help title="只停自动发信，分析 / 批准 / 手动发不受影响。停了不会自动恢复，这里会出现「恢复自动发信」按钮。样本不足时不判——5 封里 2 封退订说明不了任何事。">(?)</span><span class="mr-live" id="mr-live-brk"></span>
             <!-- 熔断态：这一行右端出绿实心「恢复自动发信」（走现有重开路径），只在真熔断时插入 -->
@@ -1532,10 +1532,10 @@
 
         <div class="pr-row"><span class="pr-k">无回复跟进</span>
           <span class="pr-v"><label class="tgl tgl-sm"><input type="checkbox" id="fu-enabled"><span class="tgl-track"><span class="tgl-knob"></span></span></label>
-            <input id="fu-delay" type="number" min="1" max="60" class="set-num"><span class="hint">天后 · 点过链接</span>
-            <input id="fu-engaged-delay" type="number" min="1" max="60" class="set-num"><span class="hint">天 · 最多</span>
-            <input id="fu-max" type="number" min="1" max="5" class="set-num"><span class="hint">次 ·</span>
-            <input id="fu-noreply" type="number" min="1" max="90" class="set-num"><span class="hint">天放弃</span>
+            <input id="fu-delay" type="number" min="1" max="60" class="set-num"><span class="u">天后 · 点过链接</span>
+            <input id="fu-engaged-delay" type="number" min="1" max="60" class="set-num"><span class="u">天 · 最多</span>
+            <input id="fu-max" type="number" min="1" max="5" class="set-num"><span class="u">次 ·</span>
+            <input id="fu-noreply" type="number" min="1" max="90" class="set-num"><span class="u">天放弃</span>
             <span class="gj-help" data-help title="几天后跟进：建议 3-5 天，太快像催、太慢对方已经忘了你是谁。点过链接的：那个人此刻正在关注你，建议 1-2 天。最多跟几次：建议 1-2 次，跟太多次会从提醒变骚扰。多久后放弃：跟满还没回音就归档。">(?)</span></span></div>
         <!-- 工具行（AI 写开发信 / 发开发信 两条 + 发件地址） -->
         <div class="mr-tools" id="mr-tools-send"></div>
