@@ -421,9 +421,10 @@
     .tb button:disabled, .tb .b-off { opacity:.45; cursor:not-allowed; }
     .tb .zR button { width:auto; padding:7px 12px; }
     .tb .b-qui { background:transparent; border:1px solid var(--border); color:var(--muted); font-size:12px; padding:6px 10px !important; }
-    .tb .skip { font-size:12px; color:var(--hint); text-align:center; line-height:32px; display:inline-block; }
+    /* 总工验收裁定：说明文字槽 line-height 与按钮等高（28px），否则「已成交」页比其它 9 页高 3px */
+    .tb .skip { font-size:12px; color:var(--hint); text-align:center; line-height:28px; display:inline-block; }
     .tb .chk { display:inline-flex; align-items:center; gap:5px; font-size:12px; color:var(--muted); white-space:nowrap; cursor:pointer; }
-    .tb .none-txt { font-size:12px; color:var(--hint); line-height:32px; text-align:center; }
+    .tb .none-txt { font-size:12px; color:var(--hint); line-height:28px; text-align:center; }
     .tb #bulk-msg { font-size:12px; color:var(--muted); white-space:nowrap; }
     /* 分析进行中（toolAnalyzeSel 给 #tb 加 .analyzing）：沿用旧批量条的琥珀语言 */
     .tb.analyzing { border-color:var(--amber); }
@@ -2070,9 +2071,9 @@
       //   这里那段 innerHTML/display 控制随元素一起删（别只删元素留绑定）。
       $("#side").innerHTML = navTop + tabHtml(TABS[0]) + `<div class="side-div"></div>` +
         chain.map((t,i) => tabHtml(t) + (i < chain.length - 1 ? `<div class="side-arrow">↓</div>` : "")).join("");
+      // 点漏斗格 = 退出待跟进视图 + 清掉待联系页的分组筛选，然后走 gotoGroup 这个唯一切页入口（它负责 clearSel）
       document.querySelectorAll(".tab").forEach(el =>
-        el.onclick = () => { current = el.dataset.k; dueMode = false; clearReadyFilter();
-          showMainView('list'); loadStats(); loadList(); });   // 点漏斗格=退出待跟进视图 + 清掉待联系页的分组筛选
+        el.onclick = () => { dueMode = false; clearReadyFilter(); gotoGroup(el.dataset.k); });
       refreshNavHighlight();   // #42 侧栏重渲后校正高亮（跟随 activeView，而非只看 current）
       // 工具栏 v8：标题里的「(条数)」读的就是上面这份 groupCount —— 计数一更新，工具栏跟着重画。
       renderGroupTools();
@@ -2092,7 +2093,10 @@
     //   筛选**跟着跑过去、而那格没有开关可以看见它** → Joe 看到一个被静默过滤的列表，
     //   还以为那格就这么点数据。**看不见的筛选比没有筛选糟。**
     //   （点漏斗格那条路本来就 dueMode=false；这里补上 gotoGroup —— 待办卡/找客户跳格都走它。）
-    window.gotoGroup = (k) => { current = k; if (k !== 'sent') dueMode = false; showMainView('list'); loadStats(); loadList(); };
+    // ⭐⭐ 总工验收（v8 必修）：切页**唯一入口**，左栏 tab 点击也走这里。
+    //   切页必须 clearSel()：v8 让「忽略/加黑名单」在每一页都亮，勾选集若跨页残留，
+    //   在官网抓不到勾 1 条切到全部 → 忽略按钮亮着、点下去忽略的是屏幕上看不见的那条。
+    window.gotoGroup = (k) => { current = k; if (k !== 'sent') dueMode = false; clearSel(); showMainView('list'); loadStats(); loadList(); };
 
     // 批③D：列表页绿横幅(#hs-banner)已撤 —— 列表页只回答"这一格靠什么排空"，不挂跨页横幅。
     // 批⑤ 两档制：「🎯 X 家高分可批准」那条建议也已删 —— 自动批准干这活了，
@@ -4095,14 +4099,17 @@
     function renderBacklog(b){
       const el = $("#fc-backlog"); if(!el) return;
       if(!b){ el.style.display='none'; return; }
-      const un=b.unscored||0, ne=b.noEmail||0, sd=b.sendable||0;
-      const total=un+ne+sd;
+      // 工具栏 v8（总工验收补）：「没打分」拆成两个数，与左栏两格逐字同源 ——
+      //   排队打分 = 待分析（status=new，机器会自动啃）· 官网抓不到 = 要人改网址的那批。
+      //   原来一个并集数会和左栏打架（弹窗 567 vs 左栏 347）。
+      const un=b.unscored||0, ns=b.noscore||0, ne=b.noEmail||0, sd=b.sendable||0;
+      const total=un+ns+ne+sd;
       if(!total){ el.style.display='none'; return; }   // 管道通畅就别唠叨
-      const jam=un+ne;
+      const jam=un+ns+ne;
       // C5-3：积压条现在住在「➕ 补货」弹窗里 → 跳转前**先关弹窗**，
       //   否则弹窗会盖在跳转后的列表上（总工点名的实现注意点）。
       const lnk=(n,txt,grp)=> n?`<a class="bk-lnk" onclick="closeRestock();gotoGroup('${grp}')">${n} ${txt}</a>`:'';
-      const parts=[lnk(un,'没打分','unscored'),lnk(ne,'缺邮箱','review'),lnk(sd,'能发没发','ready')].filter(Boolean);
+      const parts=[lnk(un,'排队打分','unscored'),lnk(ns,'官网抓不到','noscore'),lnk(ne,'缺邮箱','review'),lnk(sd,'能发没发','ready')].filter(Boolean);
       el.style.display='block';
       el.innerHTML = `<span class="bk-ic">${jam>200?'⚠️':'🚦'}</span><b>管道积压 ${total} 条</b>`
         + (parts.length?`（${parts.join(' · ')} → 去处理）`:'')

@@ -342,14 +342,18 @@ const ALLOWED_STATUS = new Set([
 
 // 批④ 找客户「积压刹车条」：进货前先看管道里堵了多少。
 // 瓶颈往往不是线索不够，是 199 家没打分 / 296 家缺邮箱堵在中间 —— 这时再抓 1300 家只会堵得更死。
-async function getBacklog(env: Env): Promise<{ unscored: number; noEmail: number; sendable: number }> {
+async function getBacklog(env: Env): Promise<{ unscored: number; noscore: number; noEmail: number; sendable: number }> {
   const db = env.DB;
   const q = async (sql: string) => (await db.prepare(sql).first<{ n: number }>())?.n || 0;
   return {
-    // 没打分：进来了还没过 AI（cron 会慢慢消化，但堆太多就是堵）
-    // 批⑭②：待分析 = new + analyzed无分。⚠️ 用 LEFT JOIN —— 连 analysis 行都没有的（从没分析过）
-    //   也是"没分数"，INNER JOIN 会漏掉它们（那正是要找的那批，抓不到官网可能压根没建 analysis 行）。
-    unscored: await q("SELECT COUNT(*) AS n FROM leads l LEFT JOIN lead_analysis a ON a.lead_id=l.id WHERE (l.status='new' OR (l.status IN ('analyzed','pending') AND a.match_score IS NULL))"),
+    // 排队打分：进来了还没过 AI（机器每分钟自动啃，但堆太多就是堵）
+    // ⭐ 工具栏 v8（同一口径改动的第 4 处，总工验收补的）：这里原来是 new ∪ analyzed-无分 的并集，
+    //   会和左栏「待分析」（现在只数 new）打架 —— 弹窗写 567、左栏写 347。
+    //   拆成两个数，谓词与 /api/stats 逐字同源：unscored = UNSCORED_SHOW_WHERE，noscore = NO_SCORE_WHERE。
+    //   ⚠️ LEFT JOIN：status='new' 的多半还没有 analysis 行，INNER JOIN 会数成 0。
+    unscored: await q(`SELECT COUNT(*) AS n FROM leads l LEFT JOIN lead_analysis a ON a.lead_id=l.id WHERE ${UNSCORED_SHOW_WHERE}`),
+    // 官网抓不到：AI 判不了分，等人改网址（左栏独立一格，与 /api/stats 的 noscoreShow 同一谓词）
+    noscore: await q(`SELECT COUNT(*) AS n FROM leads l JOIN lead_analysis a ON a.lead_id=l.id WHERE ${NO_SCORE_WHERE}`),
     // 缺邮箱：打了分但没邮箱 → 发不出去，卡在待审批
     noEmail: await q("SELECT COUNT(*) AS n FROM leads l JOIN lead_analysis a ON a.lead_id=l.id WHERE (l.email IS NULL OR l.email='') AND l.status IN ('analyzed','pending','approved','queued')"),
     // 能发没发：真能发出去却还躺着（与待办事项 sendable 同一口径）
