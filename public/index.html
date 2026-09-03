@@ -402,6 +402,8 @@
     .ringp .fg { stroke:var(--brand); stroke-linecap:round; transform:rotate(-90deg); transform-origin:50% 50%; stroke-dasharray:44; animation:sbDash 2.4s ease-in-out infinite; }
     @keyframes sbDash { 0% { stroke-dashoffset:44 } 50% { stroke-dashoffset:12 } 100% { stroke-dashoffset:44 } }
     .task b { color:var(--brand-strong); } .task .n { color:var(--muted); }
+    .task .x { color:var(--hint); cursor:pointer; padding:0 2px; font-size:12px; line-height:1; }   /* 预算锁死修法：任务可取消 */
+    .task .x:hover { color:var(--red); }
     /* 面板：永远四行 */
     .pop { position:absolute; right:0; top:44px; width:330px; background:var(--bg); border:1px solid var(--border); border-radius:12px;
            box-shadow:0 12px 32px rgba(16,20,24,.12); padding:6px 14px 10px; z-index:60; font-size:13px; text-align:left; animation:sbPop .18s ease-out both; }
@@ -4138,7 +4140,8 @@
         if (mine) {
           const label = SB_ACT_LABEL[d.act.kind] || d.act.kind;
           const num = [sbProg(d.act), d.act.note].filter(Boolean).join(' · ');
-          chip.innerHTML = `<svg class="ringp" viewBox="0 0 18 18"><circle class="bg" cx="9" cy="9" r="7"/><circle class="fg" cx="9" cy="9" r="7"/></svg><b>${esc(label)}</b>${num ? `<span class="n">${esc(num)}</span>` : ''}`;
+          // 预算锁死修法：你交办的任务可取消（✕）——POST /api/activity/cancel，搜索循环下个组合就停
+          chip.innerHTML = `<svg class="ringp" viewBox="0 0 18 18"><circle class="bg" cx="9" cy="9" r="7"/><circle class="fg" cx="9" cy="9" r="7"/></svg><b>${esc(label)}</b>${num ? `<span class="n">${esc(num)}</span>` : ''}<span class="x" title="取消这个任务" data-kind="${esc(d.act.kind)}" onclick="sbCancelTask(event, this.dataset.kind)">✕</span>`;
           chip.hidden = false;
         } else chip.hidden = true;
       }
@@ -4146,6 +4149,14 @@
       if (!document.getElementById('sb-pop').hidden) sbRenderPop();   // 面板开着时跟着刷新
     }
     window.paintStatusBar = paintStatusBar;
+    // 预算锁死修法：取消「你交办的」任务。服务端清活动 + 给搜索循环递刀（discover_cancel）；按钮在下一次轮询里恢复。
+    window.sbCancelTask = async (ev, kind) => {
+      if (ev) ev.stopPropagation();
+      const r = await fetch('/api/activity/cancel', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind }) })
+        .then(r => r.json()).catch(e => ({ error: String(e) }));
+      if (r && r.error) { console.error('取消失败：', r.error); return; }
+      paintStatusBar();
+    };
     /** 常驻轮询。⚠️ 有活在跑时快一点、闲着时慢下来 —— 闲着还每 3 秒打一次是白烧额度。 */
     function startStatusPolling(){
       const tick = async () => {
@@ -4730,7 +4741,7 @@
       //   下次开弹窗时 openRestock 会清掉这个类。
       { const ov=$("#restock-overlay"); if(ov) ov.classList.add("rs-running"); }
       ["dp-run","dp-save"].forEach(id=>{ const e=$("#"+id); if(e) e.disabled=true; });
-      $("#dp-msg").textContent = "";
+      $("#dp-msg").textContent = ""; $("#dp-msg").style.color = "";   // 上一次的预算红字别赖着
       { const rb=$("#dp-result"); if(rb) rb.innerHTML = ""; }
       $("#dp-progress").style.display = "block";
       const bar = $("#dp-bar"), log = $("#dp-log");
@@ -4779,6 +4790,9 @@
             body:JSON.stringify({countries, keywords:(_fcKwRows.length ? kws : undefined), perKeyword:per})}).then(r=>r.json()).catch(e=>({error:String(e)}));
         } finally { clearInterval(poll); paintStatusBar(); }
         if (d.error){ setLog("① 搜索失败：" + d.error); return; }
+        // 预算锁死修法：预算满时服务端**没建任务**（无 round、无芯片、按钮不灰），这里行内红字说原因即可
+        if (d.blocked){ const m=$("#dp-msg"); if(m){ m.textContent = "⚠️ " + (d.reason || "今日搜索预算用满，明天恢复"); m.style.color = "var(--red)"; } $("#dp-progress").style.display = "none"; { const ov=$("#restock-overlay"); if(ov) ov.classList.remove("rs-running"); } return; }
+        if (d.cancelled){ setLog(`已取消：跑了 ${d.searched} 次搜索、入库 ${d.inserted} 家后停下。`); loadStats(); loadList(); loadFacets(); return; }
         setLog(`① 搜索完成：执行 ${d.searched} 次搜索，新增 ${d.inserted} 家，去重/跳过 ${d.skipped}。`
           + (d.msTotal ? `（用时 ${Math.round(d.msTotal/1000)} 秒：搜索 ${Math.round((d.msSearch||0)/1000)} 秒 + 入库 ${Math.round((d.msDb||0)/1000)} 秒）` : "")
           + (d.budgetStopped ? `\n⚠️ 已达今日 Serper 预算上限（${d.serperUsedToday}/${d.serperBudget}），本轮提前停止。可在上方调高预算或明天再跑。` : ""));

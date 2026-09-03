@@ -468,6 +468,7 @@ export interface DiscoverResult {
   contentSkipped: number; // 快赢②：被判为文章/攻略页而过滤掉的数量
   errors: string[];
   budgetStopped?: boolean;    // P0-c：本轮因触及今日 Serper 预算上限而提前停
+  cancelled?: boolean;        // 预算锁死修法：Joe 点了芯片 ✕（discover_cancel 命中本轮 roundId）
   serperUsedToday?: number;   // P0-c：今日累计 Serper 搜索次数
   serperBudget?: number;      // P0-c：今日 Serper 预算上限
   searchFailed?: number;      // 本轮有几次搜索直接失败（额度用尽/4xx）；原话记在 settings.serper_fail_last
@@ -478,7 +479,25 @@ export interface DiscoverResult {
 }
 
 // 主流程：对每个关键词 × 每个目标国家搜索 → 提取公司域名 → 去重 → 入库(status=new)
-export async function runDiscovery(env: Env, opts: { keywords?: string[]; perKeyword?: number; countries?: string[]; maxCombos?: number } = {}): Promise<DiscoverResult> {
+// 预算锁死修法（Joe 批，09-03）：
+//   · opts.by = 发起方（/api/discover 传 'user'，每分钟 tick 传 'auto'，缺省 'auto'）。
+//     🔴 根因就在这：publishProgress 原来把 by 写死 "user"（注释声称"这条管道只有人点得动"），
+//     而 tick-discover 后来也走了 runDiscovery ⇒ **cron 每分钟把「你交办的」芯片重新点亮一次**，
+//     3 分钟过期形同虚设，预算满后它还每分钟灌一条 0/25 —— Joe 看到的正是这个。
+//   · opts.roundId = 这一轮的 discover_round_id（只有 /api/discover 传）。取消：settings.discover_cancel
+//     写成该 roundId，循环每个组合开头查一次，命中就 break（tick 不传 roundId ⇒ 查不中，不受影响）。
+//   · 预算满 ⇒ **最前面直接返回**：不预载全表判重索引、不写 activity/progress（原来这两样在循环前无条件跑）。
+export async function runDiscovery(env: Env, opts: { keywords?: string[]; perKeyword?: number; countries?: string[]; maxCombos?: number; by?: "user" | "auto"; roundId?: string } = {}): Promise<DiscoverResult> {
+  // ── 预算闸最先查：满了就什么都不做（不建进度、不写活动、不预载索引）──
+  {
+    const braw0 = Number(await getS(env, "serper_daily_budget", String(SERPER_DAILY_BUDGET_DEFAULT)));
+    const budget0 = Math.max(0, Number.isFinite(braw0) ? braw0 : SERPER_DAILY_BUDGET_DEFAULT);
+    const used0 = Number(await getS(env, `serper_used_${new Date().toISOString().slice(0, 10)}`, "0")) || 0;
+    if (used0 >= budget0) {
+      return { keywords: 0, searched: 0, inserted: 0, skipped: 0, contentSkipped: 0, errors: [],
+               budgetStopped: true, serperUsedToday: used0, serperBudget: budget0, searchFailed: 0, msTotal: 0, msSearch: 0, msDb: 0 };
+    }
+  }
   const keywords = opts.keywords?.length ? opts.keywords : await getKeywords(env);
   const cfg = await getSearchConfig(env);
   const perKeyword = Math.min(Math.max(opts.perKeyword || cfg.perKeyword, 1), 100);   // #45 放开到 100，尊重滑块
@@ -560,17 +579,20 @@ export async function runDiscovery(env: Env, opts: { keywords?: string[]; perKey
         done: comboDone, total: combos.length, inserted, skipped, searched,
       }));
       // C5-28：同一份进度也喂给状态栏的活动真源（一处产出、两处消费，不是两份数据）。
-      //   ⚠️ 发起方保持 "user"：这条管道只有人点得动（cron 走的是另一条）。
+      //   🔴 发起方来自调用方（opts.by）：原来写死 "user"，而每分钟 tick 也走这条 ⇒ cron 冒充 Joe 点灯（预算锁死那单的根因）。
       await setS(env, "activity_search", JSON.stringify({
-        kind: "search", by: "user", at: Date.now(),
+        kind: "search", by: opts.by || "auto", at: Date.now(),
         done: comboDone, total: combos.length, note: `已入库 ${inserted}`,
       }));
     } catch { /* 发布进度失败不能拖垮找客户本身 */ }
   };
   await publishProgress();
 
+  let cancelled = false;
   for (const { kw, gl } of combos) {
     if (usedToday >= budget) { budgetStopped = true; break; }   // 触及今日预算 → 停
+    // 取消（只对带 roundId 的人工整轮生效）：Joe 点了芯片上的 ✕ ⇒ discover_cancel = 本轮 id
+    if (opts.roundId && (await getS(env, "discover_cancel", "")).trim() === opts.roundId) { cancelled = true; break; }
     let results: SearchResult[];
     try {
       const _ts = tick();
@@ -639,7 +661,7 @@ export async function runDiscovery(env: Env, opts: { keywords?: string[]; perKey
   if (searchFailed && !searched) console.error(`discovery: ${searchFailed} 次搜索全部失败（额度用尽/密钥失效？）最近一条见 settings.serper_fail_last`);
   console.log(`discovery 耗时分解：总 ${Math.round((Date.now() - t0) / 1000)}s = 搜索 ${Math.round(msSearch / 1000)}s + 其余(判重/入库/标记) ${Math.round(msDb / 1000)}s · ${searched} 次搜索 / ${inserted} 入库`);
   try { await setS(env, "discover_progress", ""); } catch { /* 清进度失败无所谓 */ }
-  return { keywords: keywords.length, searched, inserted, skipped, contentSkipped, errors: errors.slice(0, 10), budgetStopped, serperUsedToday: usedToday, serperBudget: budget, searchFailed,
+  return { keywords: keywords.length, searched, inserted, skipped, contentSkipped, errors: errors.slice(0, 10), budgetStopped, cancelled, serperUsedToday: usedToday, serperBudget: budget, searchFailed,
            msTotal: Date.now() - t0, msSearch, msDb };
 }
 

@@ -23,7 +23,7 @@ import { engineStatuses, pipelineTools } from "./engines";
 import { normalizeCustomerType, customerTypeLabel, categoryValuesFor, classifyKillReason, KILL_REASONS } from "./taxonomy";
 import { normalizePhone, formatPhoneDisplay, decodeEntities } from "./scrape";   // C5-31：号码清洗与展示切分，单源；v8 补丁⑨：实体解码同源
 import { errHuman } from "./errhuman";   // C5-24 第 5 条：机器错误串 → 人话（服务端唯一一份）
-import { currentActivity, setActivity, clearActivity } from "./activity";   // C5-28：机器活动真源
+import { currentActivity, setActivity, clearActivity, type ActivityKind } from "./activity";   // C5-28：机器活动真源
 
 /**
  * ⭐⭐ C5-14：**一条线索一行数据长什么样，只在这里说一次。**
@@ -2602,23 +2602,47 @@ app.get("/u/:token", async (c) => {
 app.post("/api/discover", async (c) => {
   const body = await jsonBody<{ keywords?: string[]; perKeyword?: number; countries?: string[] }>(c);
   try {
+    // 预算锁死修法（Joe 批）：预算用满 ⇒ **不建任务**——不写 round、不写 activity，直接把原因还给弹窗。
+    //   ⛔ 口径只在服务端（getSerperUsage / runDiscovery 头部同一判据），前端只显示这句话。
+    {
+      const u = await getSerperUsage(c.env);
+      if (u.usedToday >= u.budget) {
+        return c.json({ blocked: true, reason: `今日搜索预算用满（${u.usedToday}/${u.budget}），明天恢复` });
+      }
+    }
     // C5-11 B4：给这一轮打个标记，供 /api/discover/round-complete 判重与统计。
     //   ⚠️ **在 runDiscovery 之前写**：搜索途中若被预算闸提前停止，那些已入库的线索也算这一轮。
     //   ⚠️ round_at 用 datetime('now')（UTC，与 leads.created_at 同一口径）——
     //      拿 toISOString() 会带 T 和毫秒，和 created_at 的格式比大小会出错。
     const roundAt = (await c.env.DB.prepare("SELECT datetime('now') AS t").first<{ t: string }>())?.t || "";
-    await setSetting(c.env, "discover_round_id", `${roundAt}#${Math.floor(Math.random() * 1e6)}`);
+    const roundId = `${roundAt}#${Math.floor(Math.random() * 1e6)}`;
+    await setSetting(c.env, "discover_round_id", roundId);
     await setSetting(c.env, "discover_round_at", roundAt);
     // C5-28：这条路径**一定是人点的**（Joe 在找客户弹窗里按的），所以发起方 = user。
     //   状态栏据此加「你交办的：」前缀 —— 发起方是事实，落服务端，不靠前端记自己点没点过。
     await setActivity(c.env, "search", "user", { done: 0, total: 0 });
     try {
-      const out = await runDiscovery(c.env, body);
+      const out = await runDiscovery(c.env, { ...body, by: "user", roundId });
       return c.json(out);
     } finally { await clearActivity(c.env, "search"); }
   } catch (e: any) {
     return c.json({ error: e.message || String(e) }, 500);
   }
+});
+
+// ---- 预算锁死修法：取消「你交办的」任务（芯片上的 ✕）----
+// 只清活动 + 给搜索循环递刀（discover_cancel = 当前轮 id，runDiscovery 每个组合开头查一次）。
+// ⚠️ 只收 by==='user' 语义的取消 —— 机器自己的班次没有取消按钮（关它用自动化页的开关）。
+app.post("/api/activity/cancel", async (c) => {
+  const b = await jsonBody<{ kind?: string }>(c);
+  const kind = String(b.kind || "").trim() as ActivityKind;
+  if (!["search", "analyze", "findmail", "send", "inbox"].includes(kind)) return c.json({ error: "invalid kind" }, 400);
+  if (kind === "search") {
+    const roundId = (await getSetting(c.env, "discover_round_id", "")).trim();
+    if (roundId) await setSetting(c.env, "discover_cancel", roundId);
+  }
+  await clearActivity(c.env, kind);
+  return c.json({ ok: true, kind });
 });
 
 // ---- 批B 免费目录源：零 Serper 费。NMEA 单个 affcode（前端逐个调、间隔 10s 遵守 Crawl-delay）----
@@ -4555,7 +4579,7 @@ async function fastTick(env: Env, ctx: ExecutionContext): Promise<void> {
     // ⚠️ 时间预算照旧看表：搜索是这一 tick 里最不紧急的（发信和分析优先），排在最后且要求余量。
     if (budget.has(20_000)) {
       try {
-        const d = await runDiscovery(env, { perKeyword: 5, maxCombos: TICK_DISCOVER_MAX });
+        const d = await runDiscovery(env, { perKeyword: 5, maxCombos: TICK_DISCOVER_MAX, by: "auto" });   // 预算锁死修法：机器班次别冒充 Joe 点灯
         if (d.searched) {
           console.log(`tick-discover: 搜 ${d.searched} 组合 → 入库 ${d.inserted} 家` +
             (d.budgetStopped ? "（今日搜索预算已用完，停到明天）" : ""));
