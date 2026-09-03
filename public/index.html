@@ -635,7 +635,34 @@
     .bulk-bar { background:var(--panel); border:1px solid var(--blue); border-radius:8px; padding:8px 12px;
                 margin-bottom:10px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
     .bulk-bar b { color:var(--blue); }
-    .rowchk { cursor:pointer; }
+    /* ⭐ 工具栏 v8 补丁①（Joe：「几次都没点上，然后进了信息详情页」）：行复选框加大成正方形，
+       高 = 公司名行顶 → 域名行底。⛔ 不写死像素：公司格是 flex，勾选热区 align-self:stretch，
+       方框 aspect-ratio:1 跟着两行文字块的高度走；两行块高变了它自动跟。
+       热区 = 方框 + 四周 4px padding（label 整体），整个热区 stopPropagation，不进详情。 */
+    .co-cell { display:flex; align-items:stretch; gap:6px; min-width:0; }
+    .co-lines { flex:1; min-width:0; }
+    /* ⚠️ 宽度为什么走 --chk 变量而不是 aspect-ratio：实测两版都不行 ——
+         ① 只给方框 aspect-ratio:1：flex 父按 padding 给 label 算宽（10px），39px 的方框溢出压在公司名上，
+           四角点击三角落在文字上 → 进详情；
+         ② 给 label 也加 aspect-ratio:1：Chrome 不把 stretch 得到的高度回传给 aspect-ratio 算主轴宽，label 仍 10px。
+       ⇒ 高度照旧由 stretch 跟着文字块走；宽度 = 渲染后实测该行 .co-lines 的高（syncChkBoxes 写进 --chk），
+         仍然不是常量：两行块高变了、已回复页多一行，它都自动跟。 */
+    .chk-hit { display:flex; align-items:stretch; align-self:stretch; flex-shrink:0; width:var(--chk,16px); box-sizing:content-box;
+               padding:0 4px; margin:0 -4px; cursor:pointer; }
+    .chk-hit .rowchk { position:absolute; opacity:0; width:0; height:0; margin:0; pointer-events:none; }
+    .chk-box { display:block; flex:1; box-sizing:border-box; position:relative; border-radius:5px;
+               border:1.5px solid var(--border-strong); background:var(--bg); }
+    .chk-hit:hover .chk-box { border-color:var(--brand); }
+    .chk-hit .rowchk:checked + .chk-box { background:var(--brand); border-color:var(--brand); }
+    .chk-hit .rowchk:checked + .chk-box::after { content:""; position:absolute; left:50%; top:46%; width:26%; height:50%;
+               border:solid #fff; border-width:0 2.5px 2.5px 0; transform:translate(-50%,-50%) rotate(45deg); }
+    /* 表头全选框：自己画、与行框同宽（宽度由 syncSelAllWidth 从第一行实测同步，左边缘对齐一列）、高度保持小 */
+    #sel-all { appearance:none; -webkit-appearance:none; width:16px; height:16px; margin:0 6px 0 0; vertical-align:middle; cursor:pointer;
+               box-sizing:border-box; border:1.5px solid var(--border-strong); border-radius:4px; background:var(--bg); position:relative; }
+    #sel-all:checked { background:var(--brand); border-color:var(--brand); }
+    #sel-all:checked::after { content:""; position:absolute; left:50%; top:44%; width:26%; height:52%; border:solid #fff; border-width:0 2px 2px 0; transform:translate(-50%,-50%) rotate(45deg); }
+    #sel-all:indeterminate { background:var(--brand-tint); border-color:var(--brand); }
+    #sel-all:indeterminate::after { content:""; position:absolute; left:25%; right:25%; top:50%; height:2px; margin-top:-1px; background:var(--brand); }
     .bulk-bar.analyzing { border-color:var(--amber); background:var(--tint-amber); color:var(--amber); }
     .bulk-bar.analyzing b { color:var(--amber); }
     .bulk-prog { display:inline-block; width:130px; height:7px; background:var(--bg); border:1px solid var(--border); border-radius:4px; overflow:hidden; vertical-align:middle; margin-left:8px; }
@@ -1813,9 +1840,10 @@
       if (s==='sent')     return 'sent';
       if (s==='approved' || s==='queued') return 'ready';
       // ⚠️ 这一支**必须带 match_score 维度**，否则就退回成上面那个病：
-      //    有分 →「待审批」(REVIEW_WHERE)；无分 →「待分析」(UNSCORED_SHOW_WHERE)
-      if (s==='analyzed' || s==='pending') return (l.match_score == null) ? 'unscored' : 'review';
-      return 'unscored';   // status='new'
+      //    有分 →「待审批」(REVIEW_WHERE)；无分 →「官网抓不到」(NO_SCORE_WHERE)
+      // v8 补丁②：「官网抓不到」已是左栏独立一格 ⇒ 这里也独立成 key，主词 = 格名（批⑱ 原则不许被新格破）
+      if (s==='analyzed' || s==='pending') return (l.match_score == null) ? 'noscore' : 'review';
+      return 'unscored';   // status='new'（UNSCORED_SHOW_WHERE）
     }
     // C5-14：把打分理由拆成「结论句 + 证据段」。
     // ⚠️ 判据要能吃两种真实格式（都在生产里存在）：
@@ -1874,11 +1902,10 @@
       }
       if (key==='ready')  return { badge:`📤 ${name}`, cls:"st-send", next:'点"发送已批准"' };
       if (key==='review') return { badge:`📋 ${name}`, cls:"st-new",  next:"审核→批准发送" };
-      // unscored 一格装两类：new 等 AI 打分 / analyzed 无分 是官网抓不到需要人介入。
-      // **同格同名**（都叫「待分析」），只有"下一步"不同 —— 名实相符，但不丢信息。
-      return l.status==='new'
-        ? { badge:`🆕 ${name}`, cls:"st-todo", next:"等 AI 打分（后台每小时自动跑）" }
-        : { badge:`🆕 ${name}`, cls:"st-todo", sub:"官网抓不到", next:"补个能打开的网址→重新分析" };
+      // v8 补丁②：「官网抓不到」独立成格 ⇒ 主词就是格名（以前是待分析的副标，被新格破了批⑱ 的"主词=格名"）
+      if (key==='noscore') return { badge:`🌐 ${name}`, cls:"st-todo", next:"补个能打开的网址→重新分析" };
+      // unscored 现在只剩 status='new'：等 AI 打分
+      return { badge:`🆕 ${name}`, cls:"st-todo", next:"等 AI 打分（机器每分钟自动跑）" };
     }
     // 联系渠道（快赢①）：把 leads.channels JSON 渲染成可点击链接
     const CHANNEL_META = { linkedin:{icon:"💼",label:"LinkedIn"}, whatsapp:{icon:"🟢",label:"WhatsApp"},
@@ -2136,6 +2163,20 @@
     // 批⑩C：删了「取消选择」之后，表头这个框就是**唯一**的清空入口 → 它的状态必须读得准。
     // 半选态用 indeterminate 表达（选了一部分 ≠ 一条没选）。原生 checkbox 的行为正好是我们要的：
     // 半选/未选时点一下 → checked=true → 全选；全选时点一下 → checked=false → 全不选。
+    // v8 补丁①：表头全选框宽度跟第一行方框走（行方框由两行文字块高度决定，不是常量 ⇒ 实测而不是写死）。
+    //   没有行（空列表）时保持 CSS 默认 16px；高度不动（总工：表头可保持小）。
+    // v8 补丁①：每行方框的宽 = 该行文字块（.co-lines）实测高 —— 写进该行的 --chk，CSS 用它定 label 宽；
+    //   高由 flex stretch 自然跟着块走，于是 宽==高（正方形）而且不是常量。见 .chk-hit 的注释（为什么不是 aspect-ratio）。
+    function syncChkBoxes(){
+      document.querySelectorAll("#rows .co-cell").forEach(c => {
+        const lines = c.querySelector(".co-lines"); if (!lines) return;
+        const h = lines.getBoundingClientRect().height; if (h > 0) c.style.setProperty("--chk", h + "px");
+      });
+    }
+    function syncSelAllWidth(){
+      const sa=$("#sel-all"), box=document.querySelector("#rows .chk-box"); if(!sa || !box) return;
+      const w = box.getBoundingClientRect().width; if (w > 0) sa.style.width = w + "px";
+    }
     function syncSelAll(){
       const sa=$("#sel-all"); if(!sa) return;
       const picked = _loadedIds.filter(id=>selectedIds.has(id)).length;
@@ -2842,7 +2883,9 @@
       // 阶段列取代原公司名旁的状态徽章（更信息量：漏斗阶段+下一步）；保留 🔔待跟进 + 🔥/👀参与标记
       const rowHtml = (l) => { const stg = stageOf(l); return `
         <tr class="row" data-id="${l.id}">
-          <td><div style="display:flex;align-items:center;gap:6px"><input type="checkbox" class="rowchk" ${selectedIds.has(String(l.id))?'checked':''} onclick="event.stopPropagation()" onchange="toggleSel(${l.id},this.checked)"><div class="co-name" title="${esc(l.company_name)||''}">${isDue(l)?`<span class="due-flag" title="该跟进了：${esc(l.next_action)||''} (${esc(l.next_action_date)})">🔔 </span>`:""}${esc(l.company_name)||"<span class='muted'>—</span>"}${l.has_click?`<span title="点击过开发信（强意向）" style="margin-left:4px">🔥</span>`:(l.has_open?`<span title="打开过开发信" style="margin-left:4px">👀</span>`:"")}</div></div>${(()=>{const fb=unscoredRowExtra(l);if(l.website){const w=safeHref(l.website);const inner=w?`<a class="wsite" href="${esc(w)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="margin:0;display:inline-block;max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(hostOf(l.website))}</a>`:`<span class="wsite" title="链接协议不合法，已按纯文本显示" style="margin:0;display:inline-block;max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(hostOf(l.website))}</span>`;return `<span style="display:flex;align-items:center;gap:6px;margin-left:22px;min-width:0">${inner}${fb}</span>`;}return fb?`<span style="display:flex;margin-left:22px">${fb}</span>`:"";})()}${(current==='replied'&&(l.latest_reply_cat||l.latest_reply_summary))?`<div style="margin-left:22px;margin-top:3px;display:flex;align-items:center;gap:6px;min-width:0">${l.latest_reply_cat?`<span class="pill" style="background:${catColor[l.latest_reply_cat]||'#6b7480'};color:var(--bg);flex-shrink:0">${esc(catLabel[l.latest_reply_cat]||l.latest_reply_cat)}</span>`:''}${l.latest_reply_summary?`<span class="co-name muted" style="font-size:12px" title="${esc(l.latest_reply_summary)}">🤖 ${esc(l.latest_reply_summary)}</span>`:''}</div>`:''}</td>
+          ${/* v8 补丁①：公司格 = [勾选热区(整高正方框)][文字块：公司名 / 域名 / (已回复页)回信摘要]。
+                 热区是 <label>：点框、点 4px 外沿都只切换勾选，stopPropagation 挡住整行进详情。 */''}
+          <td><div class="co-cell"><label class="chk-hit" onclick="event.stopPropagation()"><input type="checkbox" class="rowchk" ${selectedIds.has(String(l.id))?'checked':''} onchange="toggleSel(${l.id},this.checked)"><span class="chk-box"></span></label><div class="co-lines"><div class="co-name" title="${esc(l.company_name)||''}">${isDue(l)?`<span class="due-flag" title="该跟进了：${esc(l.next_action)||''} (${esc(l.next_action_date)})">🔔 </span>`:""}${esc(l.company_name)||"<span class='muted'>—</span>"}${l.has_click?`<span title="点击过开发信（强意向）" style="margin-left:4px">🔥</span>`:(l.has_open?`<span title="打开过开发信" style="margin-left:4px">👀</span>`:"")}</div>${(()=>{const fb=unscoredRowExtra(l);if(l.website){const w=safeHref(l.website);const inner=w?`<a class="wsite" href="${esc(w)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="margin:0;display:inline-block;max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(hostOf(l.website))}</a>`:`<span class="wsite" title="链接协议不合法，已按纯文本显示" style="margin:0;display:inline-block;max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(hostOf(l.website))}</span>`;return `<span class="co-site" style="display:flex;align-items:center;gap:6px;min-width:0">${inner}${fb}</span>`;}return fb?`<span class="co-site" style="display:flex">${fb}</span>`:"";})()}${(current==='replied'&&(l.latest_reply_cat||l.latest_reply_summary))?`<div style="margin-top:3px;display:flex;align-items:center;gap:6px;min-width:0">${l.latest_reply_cat?`<span class="pill" style="background:${catColor[l.latest_reply_cat]||'#6b7480'};color:var(--bg);flex-shrink:0">${esc(catLabel[l.latest_reply_cat]||l.latest_reply_cat)}</span>`:''}${l.latest_reply_summary?`<span class="co-name muted" style="font-size:12px" title="${esc(l.latest_reply_summary)}">🤖 ${esc(l.latest_reply_summary)}</span>`:''}</div>`:''}</div></div></td>
           <td>${scoreBadge(l.match_score)}</td>
           <td class="stgcol"><span class="stg ${stg.cls}">${stg.badge}</span>${stg.sub?`<span class="stg-sub">${stg.sub}</span>`:""}${readyReplyBtn(l)}</td>
           ${/* ⭐ C5-17：「缺邮箱」红标撤掉，改居中长横线。
@@ -2865,6 +2908,8 @@
       //   与待联系页（C5-12）同一处理。分组没消失：它变成了工具栏上的筛选 chips。
       //   ⚠️ renderUnscoredGroups 一并删除（撤了横带它就没有调用点了，留着是死代码）。
       $("#rows").innerHTML = rowsData.map(rowHtml).join("");
+      syncChkBoxes();      // v8 补丁①：每行方框宽 = 该行文字块实测高（正方形、跟块高走）
+      syncSelAllWidth();   // v8 补丁①：表头全选框宽度 = 第一行方框实测宽度（左边缘对齐一列，不写死像素）
       renderGroupJump(current, leads);   // 计数用**未筛的** leads（见上）
       document.querySelectorAll("tr.row").forEach(tr =>
         tr.onclick = () => openDetail(tr.dataset.id));
@@ -2886,6 +2931,7 @@
     const STAGE_OPTS = [
       ["",            "全部阶段"],
       ["unscored",    `🆕 ${STAGE_LABEL.unscored}`],
+      ["noscore",     `🌐 ${STAGE_LABEL.noscore}`],   // v8 补丁②：与左栏格一一对应（后端 STAGE_SQL.noscore 已有）
       ["review",      `📋 ${STAGE_LABEL.review}`],
       ["ready",       `📤 ${STAGE_LABEL.ready}`],
       ["sent",        `✅ ${STAGE_LABEL.sent}`],
