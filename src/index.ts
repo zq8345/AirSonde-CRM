@@ -1105,6 +1105,20 @@ app.get("/api/leads", async (c) => {
   return c.json({ leads: (rows.results as any[]).map(withCategoryLabel).map(withPhoneDisplay) });
 });
 
+// ---- toolbar-v9：「选中全部 N」—— 当前筛选下的**全量** id + 按钮计数要用的最小字段 ----
+// ⚠️ 与 /api/leads 同一个 leadsWhere（服务端同一 WHERE，⛔ 前端翻页拼）。不带 LIMIT 300，硬顶 5000 防失控。
+// 字段刻意最小：e=有无邮箱 · sc=分数 · st=status · rs=失败原因前 80 字（无官网页分「值得重试/403/空壳」要用）。
+app.get("/api/leads/ids", async (c) => {
+  const { where, binds } = leadsWhere((k) => c.req.query(k));
+  let sql = `SELECT l.id, CASE WHEN l.email IS NOT NULL AND l.email != '' THEN 1 ELSE 0 END AS e,
+                    a.match_score AS sc, l.status AS st, substr(COALESCE(a.reason,''),1,80) AS rs
+               FROM leads l LEFT JOIN lead_analysis a ON a.lead_id = l.id`;
+  if (where.length) sql += " WHERE " + where.join(" AND ");
+  sql += " LIMIT 5000";
+  const rows = await c.env.DB.prepare(sql).bind(...binds).all();
+  return c.json({ rows: rows.results });
+});
+
 // ---- 筛选维度可选值（国家 / 规范客户分类），供前端下拉动态生成 ----
 // ---- 翻牌堆：<60 被机器扔掉的，按"被杀原因"分组给 Joe 复核 ----
 // 为什么值得做这个视图：机器**误杀**一个真客户 = 损失一单、不可见、无兜底。
@@ -1613,28 +1627,46 @@ app.post("/api/leads/:id/status", async (c) => {
 //     这个端点根本碰不到它们）
 //   · 不发信，只置 approved —— 发送仍走 sendApprovedBatch 那条唯一的发送路径
 // 存在的理由：机器误杀一个真客户 = 损失一单、不可见、无兜底。Joe 在翻牌堆里认出来的，得有路发出去。
-app.post("/api/leads/:id/human-approve", async (c) => {
-  const id = Number(c.req.param("id"));
-  if (!Number.isFinite(id)) return c.json({ error: "invalid id" }, 400);
-  const cur = await c.env.DB.prepare(
+// toolbar-v9：单条逻辑抽成函数 —— 批量端点逐条调**同一个**它（不另造判定）。
+async function humanApproveOne(env: Env, id: number): Promise<{ ok?: true; id: number; score?: number | null; error?: string; code: number }> {
+  if (!Number.isFinite(id)) return { id, error: "invalid id", code: 400 };
+  const cur = await env.DB.prepare(
     "SELECT l.status, l.email, a.match_score FROM leads l LEFT JOIN lead_analysis a ON a.lead_id = l.id WHERE l.id = ?"
   ).bind(id).first<{ status: string; email: string; match_score: number | null }>();
-  if (!cur) return c.json({ error: "not found" }, 404);
+  if (!cur) return { id, error: "not found", code: 404 };
   // M3 合规终态照拦：human override 只越过分数线，不越过合规
   const PROTECTED = new Set(["unsubscribed", "blacklisted", "bounced"]);
   if (PROTECTED.has(cur.status)) {
-    return c.json({ error: `「${cur.status}」是合规终态，不能手动发（这条线是合规红线，不是分数线）` }, 409);
+    return { id, error: `「${cur.status}」是合规终态，不能手动发（这条线是合规红线，不是分数线）`, code: 409 };
   }
   // 走同一条护栏，humanApproved=true 让它跳过**分数线**和**"必须有分数"**两项（批⑭①：人工豁免）。
   //   批⑨①：缺邮箱不再拦 —— Joe 亲手按「手动碰这家」时，他要碰的可能就是社媒。
   //   批⑭①：未打分也不再拦 —— 抓不到官网的线索，Joe 凭公司名+国家人工判就能批准去联系。
   //   M3 合规终态在上面已单独拦（人工豁免碰不到它）。
   const gate = approveGateReason(cur.email, cur.match_score, true);
-  if (gate) return c.json({ error: gate }, 409);
-  await c.env.DB.prepare(
+  if (gate) return { id, error: gate, code: 409 };
+  await env.DB.prepare(
     "UPDATE leads SET human_approved=1, status='approved', updated_at=datetime('now') WHERE id=?"
   ).bind(id).run();
-  return c.json({ ok: true, id, score: cur.match_score, note: "已加入待发送（人工放行）。发送仍受每日上限/压制名单/幂等约束。" });
+  return { ok: true, id, score: cur.match_score, code: 200 };
+}
+app.post("/api/leads/:id/human-approve", async (c) => {
+  const r = await humanApproveOne(c.env, Number(c.req.param("id")));
+  const { code, ...rest } = r;
+  if (r.ok) return c.json({ ...rest, note: "已加入待发送（人工放行）。发送仍受每日上限/压制名单/幂等约束。" });
+  return c.json(rest as any, code as any);
+});
+// toolbar-v9：批量人工放行（待审批/无官网 工具栏「批准 (N)」）。逐条走 humanApproveOne —— 合规终态逐条被挡并报回。
+app.post("/api/leads/human-approve", async (c) => {
+  const b = await jsonBody<{ ids?: number[] }>(c);
+  const ids = Array.isArray(b.ids) ? [...new Set(b.ids.map(Number).filter(Number.isFinite))].slice(0, 2000) : [];
+  if (!ids.length) return c.json({ error: "ids 不能为空" }, 400);
+  let ok = 0; const blocked: { id: number; error: string }[] = [];
+  for (const id of ids) {
+    const r = await humanApproveOne(c.env, id);
+    if (r.ok) ok++; else blocked.push({ id, error: r.error || "失败" });
+  }
+  return c.json({ ok, total: ids.length, blocked: blocked.slice(0, 20), blockedCount: blocked.length });
 });
 
 // ---- 翻牌堆 →「转工作台」：<60 但有社媒渠道的，进 D 的手动触达队列 ----

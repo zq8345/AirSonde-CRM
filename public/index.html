@@ -448,12 +448,14 @@
     .tb .ttl { font-size:15px; font-weight:700; white-space:nowrap; width:118px; flex-shrink:0; }
     .tb .cnt { font-size:13px; font-weight:400; color:var(--muted); margin-left:5px; }
     .tb button .cnt { color:inherit; opacity:.8; margin-left:4px; }   /* 按钮里的 (N)：同款括号计数，随按钮字色、略淡 */
+    .tb .sel .lnk-selall { color:var(--blue); cursor:pointer; margin-left:6px; }   /* toolbar-v9：「选中全部 N」链接 */
+    .tb .sel .lnk-selall:hover { text-decoration:underline; }
     .tb .sel { font-size:13px; color:var(--brand-strong); font-weight:600; width:52px; flex-shrink:0; }
     .tb .sel.none { color:var(--hint); font-weight:400; }
     .tb .div { width:1px; height:18px; background:var(--border-strong); opacity:.5; flex-shrink:0; }
     /* 左：看勾选的 5 个固定槽 */
     .tb .zB { display:flex; gap:7px; flex-shrink:0; }
-    .tb .zB.off { opacity:.4; }
+    /* toolbar-v9：.zB.off 的整片 opacity 调暗已删 —— 半透明的绿实心看着像能点；禁用态统一走上面那条灰样式 */
     .tb .s1 { width:86px; } .tb .s2 { width:80px; } .tb .s4 { width:88px; } .tb .s5 { width:52px; } .tb .s6 { width:74px; }
     .tb .s1, .tb .s2, .tb .s4, .tb .s5, .tb .s6 { flex-shrink:0; display:inline-block; }
     /* 右：不看勾选的全量动作 + 筛选；重置筛选永远最右 */
@@ -462,7 +464,9 @@
     .tb .b-pri { background:var(--brand); border:1px solid var(--brand); color:#fff; font-weight:600; }
     .tb .b-sec { background:var(--bg); border:1px solid var(--border-strong); color:var(--text); }
     .tb .b-dan { background:var(--bg); border:1px solid var(--border); color:var(--red); }
-    .tb button:disabled, .tb .b-off { opacity:.45; cursor:not-allowed; }
+    /* toolbar-v9 总规则：禁用态统一 = 灰字 + 灰边 + 无底色（淡绿/淡红的禁用态看着像能点）。主/次/危险三级禁用后长得一样。 */
+    .tb button:disabled, .tb .b-off { background:var(--bg) !important; border-color:var(--border) !important; color:var(--hint) !important; font-weight:400; opacity:1; cursor:not-allowed; }
+    .tb button:disabled .cnt, .tb .b-off .cnt { color:var(--hint); }
     .tb .zR button { width:auto; padding:7px 12px; }
     .tb .b-qui { background:transparent; border:1px solid var(--border); color:var(--muted); font-size:12px; padding:6px 10px !important; }
     /* 总工验收裁定：说明文字槽 line-height 与按钮等高（28px），否则「已成交」页比其它 9 页高 3px */
@@ -2259,7 +2263,7 @@
     //   切页必须 clearSel()：v8 让「忽略/加黑名单」在每一页都亮，勾选集若跨页残留，
     //   在无官网勾 1 条切到全部 → 忽略按钮亮着、点下去忽略的是屏幕上看不见的那条。
     // v8 补丁⑧e：列头菜单的数字是**本格**口径 ⇒ 切页必须重取 facets
-    window.gotoGroup = (k) => { current = k; if (k !== 'sent') dueMode = false; clearSel(); showMainView('list'); loadStats(); loadList(); loadFacets(); };
+    window.gotoGroup = (k) => { current = k; if (k !== 'sent') dueMode = false; _failFilter = ""; clearSel(); showMainView('list'); loadStats(); loadList(); loadFacets(); };   // 失败原因筛选是无官网页专属，换格清掉（_readyFilter 同族规矩）
 
     // 批③D：列表页绿横幅(#hs-banner)已撤 —— 列表页只回答"这一格靠什么排空"，不挂跨页横幅。
     // 批⑤ 两档制：「🎯 X 家高分可批准」那条建议也已删 —— 自动批准干这活了，
@@ -2294,7 +2298,30 @@
     let _loadedLeads = [];   // 批⑩B：当前列表的线索对象 —— 发送确认弹窗要按邮箱有无分组，光有 id 算不出来
     window.toggleSel = (id, checked) => { const s=String(id); if(checked) selectedIds.add(s); else selectedIds.delete(s); refreshBulkBar(); syncSelAll(); };
     window.toggleSelAll = (checked) => { _loadedIds.forEach(id => { if(checked) selectedIds.add(id); else selectedIds.delete(id); }); document.querySelectorAll(".rowchk").forEach(cb=>cb.checked=checked); refreshBulkBar(); syncSelAll(); };
-    window.clearSel = () => { selectedIds.clear(); document.querySelectorAll(".rowchk").forEach(cb=>cb.checked=false); const sa=$("#sel-all"); if(sa){sa.checked=false; sa.indeterminate=false;} refreshBulkBar(); };
+    // ══ toolbar-v9：「选中全部 N」——表头全选只圈**本页**（列表 LIMIT 300），链接把当前筛选下的全量 id 圈进来。
+    //   ⚠️ 走服务端同一 WHERE（GET /api/leads/ids 复用 leadsWhere），⛔ 不在前端翻页拼。
+    //   没加载的行只有最小元数据（e=有邮箱 · sc=分数 · st=状态 · rs=失败原因前 80 字）存 _selMeta，按钮计数靠它。
+    const _selMeta = new Map();   // String(id) -> {e,sc,st,rs}
+    window.selectAllGroup = async () => {
+      toolMsg("圈选中…");
+      const r = await fetch(`/api/leads/ids?${filterQuery()}`).then(r=>r.json()).catch(e=>({error:String(e)}));
+      if (r.error || !Array.isArray(r.rows)) { toolMsg("圈不了：" + esc(r.error || "读取失败")); return; }
+      for (const row of r.rows) { const s = String(row.id); selectedIds.add(s); if (!_loadedIds.includes(s)) _selMeta.set(s, row); }
+      document.querySelectorAll(".rowchk").forEach(cb => cb.checked = true);
+      toolMsg(""); refreshBulkBar(); syncSelAll();
+    };
+    // 选中集的**元数据视图**：已加载的行用整条 lead，本页外的用 _selMeta 兜底 —— 按钮上的数字要能对全量选中集算
+    function pickedMeta(){
+      const byId = new Map(_loadedLeads.map(l => [String(l.id), l]));
+      const out = [];
+      for (const s of selectedIds) {
+        const l = byId.get(s);
+        if (l) out.push({ id: Number(s), e: (l.email && String(l.email).trim()) ? 1 : 0, sc: l.match_score ?? null, st: l.status, rs: String(l.reason || "").slice(0, 80) });
+        else { const m = _selMeta.get(s); if (m) out.push({ id: Number(s), e: m.e ? 1 : 0, sc: m.sc ?? null, st: m.st, rs: String(m.rs || "") }); }
+      }
+      return out;
+    }
+    window.clearSel = () => { selectedIds.clear(); if (typeof _selMeta !== "undefined") _selMeta.clear(); document.querySelectorAll(".rowchk").forEach(cb=>cb.checked=false); const sa=$("#sel-all"); if(sa){sa.checked=false; sa.indeterminate=false;} refreshBulkBar(); };
     // 批⑩C：删了「取消选择」之后，表头这个框就是**唯一**的清空入口 → 它的状态必须读得准。
     // 半选态用 indeterminate 表达（选了一部分 ≠ 一条没选）。原生 checkbox 的行为正好是我们要的：
     // 半选/未选时点一下 → checked=true → 全选；全选时点一下 → checked=false → 全不选。
@@ -2335,43 +2362,42 @@
         s2: { t:"批准", cls:"sec", fn:"toolHumanApproveSel()" },
         s5: { t:"忽略", cls:"dan", fn:"toolStatusSel('ignored','忽略')" },
       },
-      // 「无官网」（新页）：批⑬② 那三个出口原样搬进槽位（改网址只许 1 条 —— 网址是每家不一样的事实）
+      // toolbar-v9 §3：「改网址」从工具栏删（详情页失败卡里改）；重新分析 N = 选中里**值得重试**的（超时/52x/网络类；403 与空壳不计入）
       noscore: {
-        s1: { t:"改网址", cls:"pri", only1:true, fn:"toolEditWebsite()" },
-        s2: { t:"重新分析", cls:"sec", fn:"toolAnalyzeSel()" },
-        s5: { t:"忽略", cls:"dan", fn:"toolStatusSel('ignored','忽略')" },
+        s1: { t:"重新分析", n:(p)=>p.retry, cls:"pri",
+              enabled:(p)=> p.retry>0 ? {ok:true} : {ok:false,why:"选中的全是 403/空壳 —— 对方拒抓或正文太少，重试无意义（换网址或忽略）"}, fn:"toolReanalyzeSel()" },
+        s2: { t:"批准", n:(p)=>p.n, cls:"sec", fn:"toolHumanApproveSel()" },
+        s5: { t:"忽略", n:(p)=>p.n, cls:"dan", fn:"toolStatusSel('ignored','忽略')" },
       },
+      // toolbar-v9 §2：批准 = **人工放行选中的全部**（不看分数，human-approve 那条路；这页机器把 ≥60 全批走了，剩的全是 <60）。
+      //   「跳过 N」删（原「批准=只批 ≥60」那套口径作废）。N = 选中数（合规终态由服务端逐条挡、弹层预告 Z）。
       review: {
-        // 批准 N：N = 勾选里可批的（有分且 ≥APPROVE_MIN，toolGate 现有判定）；跳过 M 是说明文字不是按钮，M=0 时留空但宽度不变
-        s1: { t:(p)=> p.n ? `批准 ${p.hi}` : "批准", cls:"pri",
-              enabled:(p)=>p.hi>0?{ok:true}:{ok:false,why:`选中的都 <${APPROVE_MIN} 分或未打分`}, fn:"toolStatusSel('approved','批准')" },
-        s2: { text:true, t:(p)=> (p.n && p.n - p.hi > 0) ? `跳过 ${p.n - p.hi}` : "" },
-        s5: { t:"忽略", cls:"dan", fn:"toolStatusSel('ignored','忽略')" },
+        s1: { t:(p)=> `批准`, n:(p)=>p.n, cls:"pri", fn:"toolHumanApproveSel()" },
+        s5: { t:"忽略", n:(p)=>p.n, cls:"dan", fn:"toolStatusSel('ignored','忽略')" },
       },
       ready: {
-        // Joe（09-03）：「发邮件」→「发选中」（只发勾选里有邮箱的，toolSendSel 不变）；详情页那颗单条「发邮件」不改
-        s1: { t:"发选中", cls:"pri", enabled:(p)=>p.withEmail>0?{ok:true}:{ok:false,why:"选中的都没邮箱"}, fn:"toolSendSel()" },
+        // toolbar-v9 §4：发选中 (N) —— N = 选中里有邮箱的；0 灰 + title。有选中时它是主按钮，右侧发全部降描边。
+        s1: { t:"发选中", n:(p)=>p.withEmail, cls:"pri", enabled:(p)=>p.withEmail>0?{ok:true}:{ok:false,why:"选中的都没邮箱"}, fn:"toolSendSel()" },
         // 手动触达：一家一家聊 → only1；勾选的那条有邮箱时 disabled + title（Joe 定的语义原样保留）
         s2: { t:"手动触达", cls:"sec", only1:true,
               enabled:(p)=> p.withEmail>0 ? {ok:false,why:"这条有邮箱，用发选中"} : {ok:true}, fn:"toolManualReach()" },
-        s4: { t:"退回待审批", cls:"sec", fn:"toolStatusSel('analyzed','退回待审批')" },
-        s5: { t:"忽略", cls:"dan", fn:"toolStatusSel('ignored','忽略')" },
-        // 右边三个数：发送 N = 本列表可发的（A 组）；免费抓 / 付费补 = 无联系方式（C 组）——
-        //   ⚠️ 三个数从现有 readyGroupIds 谓词取，⛔ 没新造口径（库里没有"免费抓过"这个标记，
-        //     所以免费抓 N 与付费补 N 目前是同一个 C 组计数；已如实报总工）。
+        s4: { t:"退回待审批", n:(p)=>p.n, cls:"sec", fn:"toolStatusSel('analyzed','退回待审批')" },
+        s5: { t:"忽略", n:(p)=>p.n, cls:"dan", fn:"toolStatusSel('ignored','忽略')" },
+        // 右边三个数：发全部 (N) = 本列表可发的（A 组）；免费抓/付费补 (N) = 无联系方式（C 组，同一计数，已报总工）
         fleet: [
-          // Joe（09-03）：「发送 N」→「发全部 (N)」，N 仍 = readyGroupIds('A')：不用勾选，发本列表全部可发的；(N) 灰括号与工具栏标题同款
           { t:"发全部", n:()=>readyGroupIds('A').length, cls:"pri", fn:"toolSendReadyAll()" },
-          { t:()=>`免费抓 ${readyGroupIds('C').length}`, cls:"sec", fn:"toolFindMailsReadyC(false)" },
-          { t:()=>`付费补 ${readyGroupIds('C').length}`, cls:"sec", fn:"toolFindMailsReadyC(true)" },
+          { t:"免费抓", n:()=>readyGroupIds('C').length, cls:"sec", fn:"toolFindMailsReadyC(false)" },
+          { t:"付费补", n:()=>readyGroupIds('C').length, cls:"sec", fn:"toolFindMailsReadyC(true)" },
         ],
       },
+      // toolbar-v9 §5：批量「跟进」删（一次给 ≤50 家直接发 AI 改写信=抢机器自动跟进的活）——
+      //   跟进降回单条审稿：only1 → 详情页起草流程（AI 起草 → 你审 → 确认发送）。后端 /api/followup/run 保留给 cron。
       sent: {
-        s1: { t:"跟进", cls:"pri", fn:"toolFollowupSel(null)" },
-        // 「他回了」只能单条：多选时 disabled + title 说明
+        s1: { t:"跟进", cls:"sec", fn:"toolFollowupOne()",
+              enabled:(p)=> p.n===1 ? {ok:true} : {ok:false,why:"一家一家审 —— 机器会按间隔自动跟"} },
         s2: { t:"他回了", cls:"sec", only1:true, fn:"toolMarkReplied()" },
-        s5: { t:"忽略", cls:"dan", fn:"toolStatusSel('ignored','忽略')" },
-        filters: [ "due" ],   // ☐ 只看该跟进的（批⑪B 的那个复选框，只在已联系出现）
+        s5: { t:"忽略", n:(p)=>p.n, cls:"dan", fn:"toolStatusSel('ignored','忽略')" },
+        filters: [ "due" ],   // 「到期该跟进 (N)」复选框（原「只看该跟进的」改名 + 带数）
       },
       replied: {
         s1: { t:"标记成交", cls:"pri", fn:"toolStatusSel('won','标记成交')" },
@@ -2415,6 +2441,19 @@
     // 批㉖：失败原因**简码**（403/404/426/超时/空壳/subrequests…）——徽章只装得下简码，
     //   全文挂 title、处理动作全部在详情页（Joe 原话"不知道为什么待分析会改成这个鬼样子"：
     //   78 条失败 = 78 面按钮墙，与批⑲b「待联系按钮墙」同病）。
+    // toolbar-v9 §3：失败原因**分类**（工具栏计数 + 列头漏斗 + 重试弹层共用一个判定）。
+    //   桶 = 漏斗的 8 项：超时 / 520 / 521 / 526 / 403 / 空壳 / 其它（网络类、别的 5xx、认不出的都归其它）。
+    //   值得重试 = 非 403 且非空壳（403 对方拒抓、空壳正文太少 —— 重跑同一网址无意义）。
+    const FAIL_CLASSES = [["timeout","超时"],["520","520"],["521","521"],["526","526"],["403","403"],["empty","空壳"],["other","其它"]];
+    function failClassOf(rs){
+      const s = String(rs || "");
+      if (/HTTP 403/.test(s)) return "403";
+      if (/空壳|太短|无有效内容|正文太少/.test(s)) return "empty";
+      if (/超时/.test(s)) return "timeout";
+      const m = s.match(/HTTP (52[016])/); if (m) return m[1];
+      return "other";
+    }
+    const failRetryable = (rs) => { const c = failClassOf(rs); return c !== "403" && c !== "empty"; };
     function failCode(reason){
       const s = String(reason || "");
       const m = s.match(/HTTP (\d{3})/);
@@ -2618,43 +2657,63 @@
       const bar = $("#tb"); if(!bar) return;
       const def = GROUP_TOOLS[current] || {};
       const n = selectedIds.size;
-      // 当前选中集的构成 —— 给动态标题 t(p) 和 enabled(p) 用（口径与旧版一字未改）
-      const _picked = _loadedLeads.filter(l => selectedIds.has(String(l.id)));
+      // toolbar-v9：选中集构成走 pickedMeta()（本页行 + 「选中全部」圈进来的页外行，元数据同源）
+      const _pm = pickedMeta();
       const pick = {
         n,
-        withEmail: _picked.filter(l => l.email && String(l.email).trim()).length,
-        noEmail:   _picked.filter(l => !(l.email && String(l.email).trim())).length,
-        // 可批准子集 = 有分且 ≥APPROVE_MIN（未打分批不了）；跳过数用 n - hi，低分和未打分都算进去
-        hi: _picked.filter(l => l.match_score != null && Number(l.match_score) >= APPROVE_MIN).length,
+        withEmail: _pm.filter(m => m.e).length,
+        noEmail:   _pm.filter(m => !m.e).length,
+        hi:        _pm.filter(m => m.sc != null && Number(m.sc) >= APPROVE_MIN).length,
+        retry:     _pm.filter(m => failRetryable(m.rs)).length,   // 无官网页：值得重试的（非 403 且非空壳）
       };
       // 标题 = 当前分组名 + 灰括号条数，条数与左栏同一份数据（window._groupCount，loadStats 填）
       const label = STAGE_LABEL[current] || current;
       const gc = window._groupCount || {};
-      const cntTxt = (typeof gc[current] === "number") ? `<span class="cnt">(${gc[current]})</span>` : "";
-      const selTxt = n > 0 ? `<span class="sel">已选 ${n}</span>` : `<span class="sel none">未选</span>`;
+      const total = (typeof gc[current] === "number") ? gc[current] : null;
+      const cntTxt = total != null ? `<span class="cnt">(${total})</span>` : "";
+      // toolbar-v9 页头副标（真值判）：待审批报分数线构成（facets.scoreBuckets）；待联系报 A/B/C 三数（readyGroupIds 同源）
+      let subTxt = "";
+      if (current === "review" && _facets && _facets.scoreBuckets) {
+        const hi = Number(_facets.scoreBuckets.bAuto) || 0;
+        subTxt = `<span class="cnt">· ${hi > 0 ? `其中 ≥${SCORE_LINE} 分 ${hi} 家` : `全部低于 ${SCORE_LINE} 分线`}</span>`;
+      } else if (current === "ready") {
+        subTxt = `<span class="cnt">· 可发 ${readyGroupIds('A').length} · 手动 ${readyGroupIds('B').length} · 无联系方式 ${readyGroupIds('C').length}</span>`;
+      }
+      // toolbar-v9 全选=本页：整页勾满且组里还有没加载的 → 给「选中全部 N」链接（服务端同一 WHERE 取全量 id）
+      const pageAll = _loadedIds.length > 0 && _loadedIds.every(id => selectedIds.has(id));
+      const selAllLink = (pageAll && total != null && total > n)
+        ? ` <a class="lnk-selall" onclick="selectAllGroup()">选中全部 ${total}</a>` : "";
+      const selTxt = n > 0
+        ? `<span class="sel">已选 ${n}${(pageAll && total != null && total > n) ? "（本页）" : ""}${selAllLink}</span>`
+        : `<span class="sel none">未选</span>`;
       // 一个槽：空 / 说明文字 / 按钮。⚠️ 空槽也要输出 <span class="sX"></span>，宽度才会占住
       const slot = (k) => {
         const d = def[k];
         if (!d) return `<span class="${k}"></span>`;
         const t = typeof d.t === "function" ? d.t(pick) : d.t;
-        // 说明文字槽：s2 用 .skip（待审批「跳过 M」），其余用 .none-txt（已成交「流程终点」）；空串照样占位
-        if (d.text) return `<span class="${k} ${k==='s2' ? 'skip' : 'none-txt'}">${esc(t || "")}</span>`;
-        // 选中类按钮：未勾选 ⇒ 灰（整个 .zB 会 .off），仍用 toolGate 算 why 放进 title
+        if (d.text) return `<span class="${k} none-txt">${esc(t || "")}</span>`;
+        // toolbar-v9 规则 2：按钮带数字 = 真会被处理的家数（d.n(pick)），0 就灰
+        const cnt = typeof d.n === "function" ? Number(d.n(pick)) || 0 : null;
         const g = n === 0 ? { ok:false, why:"先勾选线索" } : toolGate({ sel:true, only1:d.only1, enabled:d.enabled }, pick);
-        return `<span class="${k}"><button class="b-${d.cls}${g.ok?'':' b-off'}"${g.ok?` onclick="${d.fn}"`:` disabled title="${esc(g.why)}"`}>${esc(t)}</button></span>`;
+        const ok = g.ok && (cnt === null || cnt > 0);
+        const why = g.ok ? (cnt === 0 ? "没有会被处理的" : "") : g.why;
+        return `<span class="${k}"><button class="b-${d.cls}${ok?'':' b-off'}"${ok?` onclick="${d.fn}"`:` disabled title="${esc(why)}"`}>${esc(t)}${cnt !== null && n > 0 ? `<span class="cnt">(${cnt})</span>` : ""}</button></span>`;
       };
-      // 右边区：本页全量动作（不看勾选）· 筛选开关 · 重置筛选永远最右
+      // 右边区：本页全量动作 · 筛选开关 · 重置筛选永远最右。
+      // toolbar-v9 规则 1：一屏只一个主按钮 —— 有选中时右侧 pri 降描边（左侧选中动作是主）；N=0 的全量按钮灰。
       const fleet = (def.fleet || []).map(f => {
         const t = typeof f.t === "function" ? f.t() : f.t;
-        const n = typeof f.n === "function" ? `<span class="cnt">(${Number(f.n()) || 0})</span>` : "";   // 「发全部 (N)」：灰括号计数，与标题 (N) 同款
-        return `<button class="b-${f.cls}" onclick="${f.fn}">${esc(t)}${n}</button>`;
+        const fcnt = typeof f.n === "function" ? Number(f.n()) || 0 : null;
+        const cls = (f.cls === "pri" && n > 0) ? "sec" : f.cls;
+        const ok = fcnt === null || fcnt > 0;
+        return `<button class="b-${cls}${ok?'':' b-off'}"${ok?` onclick="${f.fn}"`:` disabled title="没有可处理的"`}>${esc(t)}${fcnt !== null ? `<span class="cnt">(${fcnt})</span>` : ""}</button>`;
       }).join("");
       const filters = (def.filters || []).map(k => k === "due"
-        ? `<label class="chk"><input type="checkbox" ${dueMode?'checked':''} onchange="toggleDueFilter(this.checked)"> 只看该跟进的</label>`
+        ? `<label class="chk"><input type="checkbox" ${dueMode?'checked':''} onchange="toggleDueFilter(this.checked)"> 到期该跟进 <span class="cnt">(${_loadedLeads.filter(isDue).length})</span></label>`
         : "").join("");
       // 分隔线只在"全量动作"之后出现（mockup：全部/待联系/已回复 有 fleet 才有 │；已联系的复选框与重置筛选之间没有）
       bar.innerHTML =
-        `<span class="ttl">${esc(label)}${cntTxt}</span>${selTxt}<div class="div"></div>`
+        `<span class="ttl">${esc(label)}${cntTxt}${subTxt}</span>${selTxt}<div class="div"></div>`
         + `<div class="zB${n===0?' off':''}">${slot('s1')}${slot('s2')}${slot('s4')}${slot('s5')}${slot('s6')}</div>`
         + `<span class="hint" id="bulk-msg"></span>`
         + `<div class="zR">${fleet}${fleet ? `<div class="div"></div>` : ""}${filters}`
@@ -2691,11 +2750,9 @@
       afterMutate();
       if(sk) await uiConfirm({ title:`完成：成功 ${r.updated} 条`, body:`「${label}」已完成。${sk}`, confirmText:"知道了", cancelText:"关闭" });
     };
-    // 待分析：立即分析选中（逐条真跑 AI，带进度）
-    window.toolAnalyzeSel = async () => {
-      const ids=[...selectedIds].map(Number); if(!ids.length) return;
-      const N=ids.length;
-      if(!(await uiConfirm({ title:`立即分析 ${N} 条`, body:`将对**选中的 ${N} 条**逐条抓官网 + AI 打分。\n约每条 10-30 秒，期间请勿关页面。`, confirmText:"开始分析" }))) return;
+    // 逐条真跑 AI 分析（带进度）—— toolAnalyzeSel（待分析页）与 toolReanalyzeSel（无官网页）共用这一个循环
+    async function runAnalyzeIds(ids){
+      const N=ids.length; if(!N) return;
       const bar=$("#tb"); bar.classList.add("analyzing"); bar.querySelectorAll("button").forEach(b=>b.disabled=true);   // 工具栏 v8：条容器改名 #tb
       const prog = k => `⏳ 已分析 <b>${k}</b>/${N}<span class="bulk-prog"><span class="bulk-prog-fill" style="width:${Math.round(k/N*100)}%"></span></span>`;
       toolMsg(prog(0)); let fail=0;
@@ -2708,6 +2765,12 @@
       // 工具栏 v8：#batch-status 那个常驻位已删，完成语走 toolMsg（工具栏内的 #bulk-msg，afterMutate 重画后仍在）。
       afterMutate();
       toolMsg(`✅ 分析完成 ${N} 条${fail?`（失败 ${fail}）`:""}`);
+    }
+    // 待分析：立即分析选中
+    window.toolAnalyzeSel = async () => {
+      const ids=[...selectedIds].map(Number); if(!ids.length) return;
+      if(!(await uiConfirm({ title:`立即分析 ${ids.length} 条`, body:`将对**选中的 ${ids.length} 条**逐条抓官网 + AI 打分。\n约每条 10-30 秒，期间请勿关页面。`, confirmText:"开始分析" }))) return;
+      await runAnalyzeIds(ids);
     };
     // 待审批：≥60有邮箱 一键全批准（复用既有端点，门槛已对齐 APPROVE_MIN_SCORE=60）。
     // 两档制下自动批准本来就会收走这批 —— 这个按钮是**自动批准关掉时**的手动入口，口径必须一致。
@@ -2801,32 +2864,15 @@
           + `其中 <60分／退订／黑名单／已发过的 还会再跳过一些。
 **发出不可撤**（发件 sales@airsonde.net）`;
       }); };
-    // 「已联系」：跟进选中。点过链接的由**后端**自动用「趁热」暖变体（/api/followup/run 里判 has_click）。
-    //
-    // ⭐ 批⑨③ 发现：原来「跟进选中」和「趁热跟进选中」是**两个按钮、一个行为** ——
-    //   `warm` 参数**只改了按钮文案**，请求体里压根没传它（下面 body 只有 ids/limit）。
-    //   也就是说那两个按钮**发出去的信完全一样**，冷热本来就是后端按 has_click 自己判的。
-    //   → 这是个**假选择**：Joe 一直在替一个根本不存在的分叉做决定。删掉它不是"简化"，是**订正**。
-    //   参数保留（传 null）只为兼容可能残留的调用点；它现在不影响任何行为。
-    window.toolFollowupSel = async (_warm) => {
-      const ids=[...selectedIds].map(Number); if(!ids.length) return;
-      const cfg = await fetch("/api/settings/followup").then(r=>r.json()).catch(()=>({}));
-      if(cfg.enabled === false){ toolMsg("自动跟进开关当前是关的（自动化 · 控制区里开）。"); return; }
-      const picked = _loadedLeads.filter(l => selectedIds.has(String(l.id)));
-      const hot = picked.filter(l => l.has_click).length;
-      if(!(await uiConfirm({ title:`跟进选中 ${ids.length} 条`, body:`将给**选中的 ${ids.length} 条**发跟进信（AI 按原信改写）。\n\n· 其中 **${hot} 条点过链接** → 自动用「🔥 趁热」暖变体，其余用常规变体（系统自己判，你不用分）\n· 冷却期未到 / 已跟够 ${cfg.max||3} 次 / 已回复 的会自动跳过\n· 受每日发信上限约束\n· 发出不可撤`, confirmText:`发跟进` }))) return;
-      toolMsg("跟进发送中…");
-      const r=await fetch("/api/followup/run",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({ids, limit:50})}).then(r=>r.json()).catch(e=>({error:String(e)}));
-      if(r.error){ toolMsg("失败: "+esc(r.error)); return; }
-      if(r.disabled){ toolMsg("自动跟进开关是关的，未发送。"); return; }
-      const skipped=(r.results||[]).filter(x=>!x.ok);
-      toolMsg(`✅ 已发跟进 ${r.sent}/${r.processed} 封`);
-      // 🔴 C6-B/P1-2：这里原本是 `${label}` —— 本作用域**根本没有 label**（形参叫 _warm）。
-      //    ReferenceError 抛在**信已经发出去之后**：弹窗不出、下一行 afterMutate() 不跑，
-      //    于是列表不刷新 —— 看起来像"没发成"，其实全发了。与 `b is not defined` 同族：
-      //    页面前半段跑得好好的，错误在尾部，症状伪装成"没反应"。
-      await uiConfirm({ title:`跟进完成：${r.sent} 封`, body:`选中 ${ids.length} 条中实际发出 ${r.sent} 封。${ids.length-r.processed>0?`\n${ids.length-r.processed} 条未进入发送（冷却未到／已跟够次数／状态不符）。`:""}${skipSummary(skipped.map(x=>({reason:x.skipped||x.error||"未知"})))}`, confirmText:"知道了", cancelText:"关闭" });
-      afterMutate();
+    // toolbar-v9 §5：批量「跟进」删（一次给 ≤50 家直接发 AI 改写信 = 抢机器自动跟进的活，且不看内容）。
+    //   跟进降回单条审稿：进详情页起草（AI 起草 → 你审 → 确认发送）。后端 /api/followup/run 保留给 cron 那条自动路。
+    window.toolFollowupOne = async () => {
+      const ids = [...selectedIds].map(Number);
+      if (ids.length !== 1) { toolMsg("「跟进」请只勾选 <b>1 条</b> —— 一家一家审，机器会按间隔自动跟。"); return; }
+      await openDetail(ids[0]);
+      // 详情页的起草入口：detail-v6 的 dvFollowup（第四批上线后生效）；老详情页只有点过链接那张卡有 draftWarm —— 都没有就停在详情页
+      if (typeof window.dvFollowup === "function" && document.getElementById("warm-sec")) { dvFollowup(ids[0]); return; }
+      if (document.getElementById("warm-body")) draftWarm(ids[0]);
     };
     function toggleScoreSort(){
       // 批③C：原「最近参与」互斥逻辑已随该按钮删除
@@ -2986,9 +3032,11 @@
       //   会把屏幕上根本没显示的「无官网」那批一起圈进去
       //   （Joe 实测：全选 136 条把 43 条抓不到的一起圈了）。
       //   ⇒ 先算出当前渲染集 rowsData，再由它决定 _loadedIds。**一个口径，不是两个。**
-      const rowsData = ((current === 'ready' || current === 'unscored') && _readyFilter)
+      let rowsData = ((current === 'ready' || current === 'unscored') && _readyFilter)
         ? leads.filter(l => (current === 'ready' ? readyGroupOf(l) : unscoredGroupOf(l)) === _readyFilter)
         : leads;
+      // toolbar-v9 §3：无官网页失败原因漏斗（纯前端过滤渲染，与上面 _readyFilter 同一层）
+      if (current === 'noscore' && _failFilter) rowsData = rowsData.filter(l => failClassOf(l.reason) === _failFilter);
       _loadedIds = rowsData.map(l => String(l.id));
       // 小修：列表每次 reload 后把已选与当前结果集求交集——去掉不在当前筛选/分组可见集里的 id，
       // 让"已选N条"与批量操作永远=当前可见的选中项（无分页，全量加载，交集剪枝安全）。
@@ -3026,7 +3074,8 @@
             const n = Number(l.fetch_fail_count) || 0;
             return n > 0 ? `<span class="pill retry" title="机器自动重试中，无需操作">⏳ 重试 ${n}/3</span>` : `<span class="t">排队中</span>`; }
           case "noscore":
-            return `<span class="pill fail" title="${esc(l.reason||'')}">${esc(failCode(l.reason))}</span> <span class="t" title="${esc(l.reason||'')}">${esc(failShort(l.reason))}</span>`;
+            // toolbar-v9 §3：只留小标（521 / 403 / 空壳…），截断的原文串删 —— 全文在详情页失败卡（title 悬浮仍有）
+            return `<span class="pill fail" title="${esc(l.reason||'')}">${esc(failCode(l.reason))}</span>`;
           case "sent": case "won": {
             const n = Number(l.email_count) || 0, bits = [];
             if (n > 0) bits.push(`${n} 封`); else if (l.bench_channel) { const m = BENCH_CHANNEL_OPTS.find(([k]) => k === l.bench_channel); bits.push(`手动 · ${esc(m ? m[1] : l.bench_channel)}`); }
@@ -3046,6 +3095,9 @@
       };
       { const lab = $("#th-own-lab"); if (lab) lab.textContent = OWN_HEAD[current] || "本页"; }   // 只改文字 span，别碰 th（拖线 .rz 在里面）
       { const own = $("#th-own"); if (own) own.style.display = pageHasOwn() ? "" : "none"; }   // 四页没有第 8 列：th 连同它的拖线一起藏（td 由 rowHtml 不渲染）
+      // toolbar-v9 §3：第 8 列的漏斗只在无官网页出现（失败原因）；别的页第 8 列没有筛选语义
+      { const oc = $("#own-caret"); if (oc) oc.style.display = current === "noscore" ? "" : "none";
+        const own = $("#th-own"); if (own) own.classList.toggle("filt", current === "noscore"); }
       const rowHtml = (l) => { return `
         <tr class="row" data-id="${l.id}">
           ${/* ① 公司：复选框（v8 补丁① 的 20×20 方框 + 撑满两行块的热区）+ 公司名 13 + 域名 12 --brand */''}
@@ -3119,6 +3171,9 @@
     // nav-table-v2：9 列的列头筛选映射（索引 = thead 顺序：0 公司 · 1 阶段 · 2 评分 · 3 分类 · 4 国家 · 5 邮箱 · 6 联系方式 · 7 本页专属 · 8 时间）。
     //   漏斗只做筛选；排序只在评分列点文字（▼/▲）。联系方式一个菜单（全部 / 有 LinkedIn (N) / 有 WhatsApp (N) …）替代原 5 列各一个。
     const FILT_COL = { 1:"stage", 2:"score", 3:"category", 4:"country", 5:"email", 6:"ch" };
+    // toolbar-v9 §3：无官网页第 8 列（失败原因）也有漏斗 —— 类型按页现算（别的页第 8 列没有筛选语义）
+    const filtColType = (i) => (i === 7 ? (current === "noscore" ? "fail" : null) : FILT_COL[i]);
+    let _failFilter = "";   // 无官网页失败原因筛选（纯前端过滤渲染，与 _readyFilter 同族；换格清掉）
     const SEL_OF = { country:"f-country", category:"f-type", email:"f-email", score:"f-score" };
     const CH_MENU = [["linkedin","LinkedIn"],["whatsapp","WhatsApp"],["facebook","Facebook"],["instagram","Instagram"],["phone","电话"]];
     // ── 列宽可拖（thead 里写死的宽 = 默认真源；存的只是 Joe 的覆盖值）──
@@ -3132,7 +3187,9 @@
     const COL_DEF8 = { stage:88, score:60, category:114, country:70, email:200, ch:150, time:80 };
     const colKeysNow = () => pageHasOwn() ? COL_KEYS : COL_KEYS.filter(k => k !== "own");
     const absorbKey = () => pageHasOwn() ? "own" : "company";
+    // toolbar-v9 §3：无官网页第 8 列只剩小标（≤60px 内容）→ 吸余下限降到 90，省出的 30 正好给分类列 +30（1278 下不挤别的列）
     const ABSORB_MIN = { own:120, company:140 };
+    const absorbMin = (ab) => (ab === "own" && current === "noscore") ? 90 : ABSORB_MIN[ab];
     const lsKey = (k) => pageHasOwn() ? k : "n8:" + k;
     const COL_MIN = { company:140 }, COL_MIN_DEF = 48, COLW_LS = "crm.colw";
     let COL_DEF = null;
@@ -3152,11 +3209,13 @@
     function applyColWidths(){
       const ths = [...document.querySelectorAll("#v-list thead th")]; if (ths.length !== COL_KEYS.length) return null;
       const card = document.querySelector("#v-list .table-card"), avail = card ? card.clientWidth : 0;
-      const ab = absorbKey(), def = pageHasOwn() ? colDefaults() : COL_DEF8, stored = loadColW();
+      // toolbar-v9 §3：无官网页失败原因单元格只剩小标 → 省出的宽给分类列 +30（「资料不足…」不再截断）
+      const baseDef = pageHasOwn() ? colDefaults() : COL_DEF8;
+      const ab = absorbKey(), def = current === "noscore" ? { ...baseDef, category: (baseDef.category || 84) + 30 } : baseDef, stored = loadColW();
       const fixedKeys = colKeysNow().filter(k => k !== ab), w = {};
       fixedKeys.forEach(k => { const v = Number(stored[lsKey(k)]); w[k] = Math.max(colMin(k), (Number.isFinite(v) && v > 0) ? Math.round(v) : def[k]); });
       if (avail > 0) {   // 视图隐藏时 clientWidth = 0：跳过装配，等 loadList 再来
-        const maxFixed = avail - ABSORB_MIN[ab];
+        const maxFixed = avail - absorbMin(ab);
         const sumOf = () => fixedKeys.reduce((s, k) => s + w[k], 0);
         let sum = sumOf();
         if (sum > maxFixed) {   // 第一刀：只收拖宽过的列，最多收回到默认
@@ -3195,7 +3254,7 @@
           const t = targetOf(); if (!t) return;
           const w0 = applyColWidths() || {};
           const target = ths[COL_KEYS.indexOf(t.tk)];
-          const room = Math.max(0, ths[COL_KEYS.indexOf(t.ab)].getBoundingClientRect().width - ABSORB_MIN[t.ab]);   // 吸余列只能让出这么多
+          const room = Math.max(0, ths[COL_KEYS.indexOf(t.ab)].getBoundingClientRect().width - absorbMin(t.ab));   // 吸余列只能让出这么多
           const start = w0[t.tk] ?? Math.round(target.getBoundingClientRect().width), lo = colMin(t.tk), hi = start + room, x0 = e.clientX;
           let cur = start;
           rz.classList.add("drag"); document.body.classList.add("col-resizing");
@@ -3221,11 +3280,14 @@
       const card = document.querySelector("#v-list .table-card");
       if (card && window.ResizeObserver) new ResizeObserver(refit).observe(card);
       [...table.querySelectorAll("thead th")].forEach((th,i) => {
-        const type = FILT_COL[i]; if (!type) return;
+        // toolbar-v9：类型在**点击时**现算（filtColType）——第 8 列只在无官网页有漏斗，构建只发生一次但页会换
+        if (!filtColType(i) && i !== 7) return;
         th.classList.add("filt");
-        if (type === "score") { const sa=document.createElement("span"); sa.className="sortarrow"; th.appendChild(sa); } // 排序指示（▲/▼ 贴文字后）
+        if (FILT_COL[i] === "score") { const sa=document.createElement("span"); sa.className="sortarrow"; th.appendChild(sa); } // 排序指示（▲/▼ 贴文字后）
         const car = document.createElement("span"); car.className = "fcaret"; car.innerHTML = FUNNEL_SVG; car.title = "筛选"; th.appendChild(car);
+        if (i === 7) car.id = "own-caret";   // 无官网页才显示（loadList 里按页开关）
         th.addEventListener("click", e => {
+          const type = filtColType(i); if (!type) return;
           const onCaret = e.target.closest && e.target.closest(".fcaret");   // 点漏斗(含内部 svg)=筛选
           e.stopPropagation();
           if (type === "score" && !onCaret) { toggleScoreSort(); return; } // 评分列：点文字/▲▼=排序，漏斗=分桶筛选
@@ -3236,12 +3298,18 @@
     function hdrGet(type){
       if (type==="stage") return hf.stage;
       if (type==="ch") return hf.ch || "";
+      if (type==="fail") return _failFilter;
       return $("#"+SEL_OF[type]).value;
     }
     function hdrOpts(type){
       if (type==="stage") return stageOpts();
       // 渠道：「全部」+「有 X (N)」，N = 本格里该渠道非空的行数（facets.channels）
       if (type==="ch") return [["","全部"], ...CH_MENU.map(([k,name]) => [k, `有 ${name} (${Number(_facets?.channels?.[k]) || 0})`])];
+      // toolbar-v9 §3：失败原因漏斗 —— N = 本页口径（当前加载行按 failClassOf 分桶，与 v8「N=本页」规则一致）
+      if (type==="fail"){
+        const by = {}; for (const l of _loadedLeads) { const c = failClassOf(l.reason); by[c] = (by[c] || 0) + 1; }
+        return [["","全部"], ...FAIL_CLASSES.map(([k, name]) => [k, `${name} (${by[k] || 0})`])];
+      }
       return [...$("#"+SEL_OF[type]).options].map(o=>[o.value, o.text]);
     }
     // 筛选 chip（工具栏「重置筛选」左边）：每个生效的筛选一颗「维度 值 ×」，点 × 单个去掉
@@ -3251,6 +3319,7 @@
       const selTxt = (t) => { const s=$("#"+SEL_OF[t]); const o=s.options[s.selectedIndex]; return o ? o.text.replace(/\s*\(\d+\)\s*$/,'') : ""; };
       if (hf.stage) chips.push({ type:"stage", label:`阶段 ${STAGE_LABEL[hf.stage] || hf.stage}` });
       if (hf.ch) { const m = CH_MENU.find(([k]) => k === hf.ch); chips.push({ type:"ch", label:`渠道 有 ${m ? m[1] : hf.ch}` }); }
+      if (_failFilter) { const m = FAIL_CLASSES.find(([k]) => k === _failFilter); chips.push({ type:"fail", label:`失败原因 ${m ? m[1] : _failFilter}` }); }
       for (const [t, name] of [["country","国家"],["category","分类"],["email","邮箱"],["score","评分"]]) if ($("#"+SEL_OF[t]).value) chips.push({ type:t, label:`${name} ${selTxt(t)}` });
       return chips;
     }
@@ -3276,13 +3345,14 @@
         if (v && current !== "all") { current = "all"; loadStats(); }
       }
       else if (type==="ch") hf.ch = v;       // v = 渠道 key 或 ""
+      else if (type==="fail") _failFilter = v;   // 纯前端过滤渲染（loadList 的 rowsData）
       else $("#"+SEL_OF[type]).value = v;
       loadList();                            // loadList 内会 refreshHeaderActive
     }
     function refreshHeaderActive(){
       const table = document.querySelector(".main table"); if (!table) return;
       [...table.querySelectorAll("thead th")].forEach((th,i) => {
-        const type = FILT_COL[i]; if (!type) return;
+        const type = filtColType(i); if (!type) { th.classList.remove("on"); return; }
         th.classList.toggle("on", !!hdrGet(type));
       });
       // 评分排序指示（▲ 升 / ▼ 默认降；engaged 时不显）
@@ -3308,7 +3378,7 @@
     //   改成全局函数，按钮用 onclick="resetFilters()" 调它。行为一个字没变。
     window.resetFilters = () => {
       ["f-country","f-type","f-email","f-score"].forEach(id => $("#"+id).value = "");
-      hf.stage = ""; hf.ch = ""; sortMode = "";
+      hf.stage = ""; hf.ch = ""; sortMode = ""; _failFilter = "";
       loadList();
     };
     // 「↔ 重置列宽」按钮已删（Joe 定）—— 它的绑定与实现一并删除：只删元素留绑定，
@@ -3757,42 +3827,45 @@
     //   ⚠️ 跟「改网址/他回了」不同，这个**可以批量** —— 它对每条做的是同一件事（批准去联系），
     //   不涉及"每家不一样的事实"（渠道/网址那种）。逐条走 human-approve 端点，合规终态它自己会拦。
     //   语境跟「手动发这家」（<60 分那个）不同：这里是**无分**（抓不到官网），Joe 凭公司名+国家+邮箱判。
+    // toolbar-v9 §2/§3：「批准 (N)」= **人工放行选中的全部**（不看分数；human-approve 那条路，只豁免分数线）。
+    //   待审批与无官网共用（同一条路、同一弹层模板）；X/Y/Z 从选中集真算（pickedMeta），⛔ 不写死。
+    //   批量走 POST /api/leads/human-approve {ids}（服务端逐条同一函数 humanApproveOne）——选中全部 805 时别打 805 个请求。
     window.toolHumanApproveSel = async () => {
       const ids = [...selectedIds].map(Number);
       if (!ids.length) return;
+      const pm = pickedMeta();
+      const X = pm.filter(m => m.e).length, Y = pm.filter(m => !m.e).length;
+      const Z = pm.filter(m => ["unsubscribed", "blacklisted", "bounced"].includes(m.st)).length;
+      const opener = current === "noscore"
+        ? `这 **${ids.length} 家**官网抓不到、没有 AI 分数 —— 机器不会自动碰。你确认它们是目标客户 → 人工放行进「待联系」。`
+        : `这 **${ids.length} 家**都低于 ${SCORE_LINE} 分线 —— 机器本来不会碰。你判断值得碰 → 人工放行进「待联系」。`;
       if (!(await uiConfirm({
-        title: `人工批准 ${ids.length} 条去联系？`,
-        body: `这些线索**没有 AI 分数**（多半是抓不到官网）。你确认它们是目标客户 → 批准进「待联系」。\n\n· 有邮箱的会进邮件发送队列；只有社媒的等你手动碰\n· 合规终态（退订/黑名单/退信）会被逐条挡下\n· 不打分、不改分，只是放行`,
-        confirmText: "批准去联系",
+        title: `批准 ${ids.length} 家？`,
+        body: `${opener}\n\n· 有邮箱 **${X} 家**：批准后进待联系，自动模式开着就会由机器发信\n· 没邮箱 **${Y} 家**：进待联系等你手动触达\n${Z ? `⚠️ 合规终态（退订/黑名单/退信）**${Z} 家**会被逐条挡下\n` : ""}· 不打分、不改分，只是放行`,
+        confirmText: "批准",
       }))) return;
       toolMsg("批准中…");
-      let ok = 0; const fails = [];
-      for (const id of ids) {
-        const r = await fetch(`/api/leads/${id}/human-approve`, { method: "POST" }).then(r => r.json()).catch(e => ({ error: String(e) }));
-        if (r.ok) ok++; else fails.push(`#${id}: ${r.error || "失败"}`);
-      }
-      toolMsg(`✅ 批准 ${ok}/${ids.length} 条${fails.length ? `　<span class="muted">${esc(fails.slice(0,3).join("；"))}</span>` : ""}`);
+      const r = await fetch("/api/leads/human-approve", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ids }) })
+        .then(r => r.json()).catch(e => ({ error: String(e) }));
+      if (r.error) { toolMsg("批准失败：" + esc(r.error)); return; }
+      toolMsg(`✅ 批准 ${r.ok}/${r.total} 家${r.blockedCount ? `　<span class="muted">挡下 ${r.blockedCount} 家：${esc((r.blocked || []).slice(0, 2).map(b => `#${b.id} ${b.error}`).join("；"))}</span>` : ""}`);
       afterMutate();
     };
 
-    window.toolEditWebsite = async () => {
-      const ids = [...selectedIds].map(Number);
-      if (ids.length !== 1) { toolMsg("「改网址」请只勾选 <b>1 条</b> —— 网址是每家不一样的。"); return; }
-      const lead = _loadedLeads.find(l => Number(l.id) === ids[0]) || {};
-      const cur = lead.website || "";
-      const v = prompt(`${lead.company_name || "#" + ids[0]}
-
-机器连续几次抓不到这个网址，可能它错了/换了。
-改成正确的官网：`, cur);
-      if (v === null) return;
-      const url = String(v).trim();
-      if (!url) { toolMsg("网址不能为空。"); return; }
-      const r = await fetch(`/api/leads/${ids[0]}/website`, {
-        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ website: url })
-      }).then(r => r.json()).catch(e => ({ error: String(e) }));
-      if (r.error) { toolMsg("改不了: " + esc(r.error)); return; }
-      toolMsg(`✅ 已改成 <b>${esc(r.website)}</b> —— ${esc(r.note || "")}`);
-      afterMutate();
+    // toolbar-v9 §3：「重新分析 (N)」—— 默认只重试值得重试的（非 403/空壳）；uiPick 给一个「全部重试」出口（⛔ 原生弹窗）。
+    //   执行走既有的逐条 /api/leads/:id/analyze 循环（与 toolAnalyzeSel 同一条路）。
+    window.toolReanalyzeSel = async () => {
+      const pm = pickedMeta();
+      if (!pm.length) return;
+      const retry = pm.filter(m => failRetryable(m.rs)), n403 = pm.filter(m => failClassOf(m.rs) === "403").length, nEmpty = pm.filter(m => failClassOf(m.rs) === "empty").length;
+      const items = [{ key: "retry", label: `只重试值得重试的 ${retry.length} 家`, note: "（超时 / 52x / 网络类 —— 换个时机再抓可能就通）" }];
+      if (n403 + nEmpty > 0) items.push({ key: "all", label: `全部重试 ${pm.length} 家`, note: `（含 403 对方拒抓 ${n403} 家 · 空壳正文太少 ${nEmpty} 家 —— 重试大概率还是老样子）` });
+      const choice = await uiPick({ title: `重新分析？`,
+        body: `选中 ${pm.length} 家：值得重试 ${retry.length} · 403 对方拒抓 ${n403}（要换网址或放弃）· 空壳 ${nEmpty}（官网正文太少，重试无意义）。每家约 10-30 秒。`, items });
+      if (!choice) return;
+      const runIds = (choice === "all" ? pm : retry).map(m => m.id);
+      if (!runIds.length) { toolMsg("没有可重试的。"); return; }
+      await runAnalyzeIds(runIds);
     };
 
     // ⭐ 批⑨④：列表页的「💬 他回了」—— Joe 今天就是因为列表上没这个按钮才来问总工的。
