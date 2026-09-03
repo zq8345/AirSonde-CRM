@@ -264,9 +264,10 @@
     /* nav-table-v2：左栏条目统一结构 [图标位 25px][名字][灰 (N)]，行高 36，所有文字同一个 x（真源 nav-table-mockup.html .it） */
     .tab { height:36px; padding:0 10px; margin:2px 0; border-radius:7px; cursor:pointer; display:flex; align-items:center; gap:0; color:var(--muted); font-size:13px; white-space:nowrap; }
     .tab:hover { background:var(--panel); }
-    .tab .ico, .side-nav .ico { width:25px; flex-shrink:0; display:inline-flex; align-items:center; color:var(--hint); font-size:12px; }
-    .tab .ico { padding-left:9px; }   /* 「↳」占无官网的图标位，比 SVG 图标略靠右（mockup .it.sub .ico） */
-    .side-nav .ico { padding-left:0; }
+    .tab .ico, .side-nav .ico { width:25px; flex-shrink:0; display:inline-flex; align-items:center; font-size:12px; }
+    .tab .ico { padding-left:9px; color:var(--hint); }   /* 「↳」占无官网的图标位，比 SVG 图标略靠右（mockup .it.sub .ico） */
+    /* 总工追加：选中态图标要跟文字一起变品牌绿 —— 图标槽继承条目颜色（svg stroke=currentColor），⛔ 不给图标槽写死颜色 */
+    .side-nav .ico { padding-left:0; color:inherit; }
     .side-nav .ico .nav-ico { width:16px; height:16px; }
     .side-cap { font-size:12px; color:var(--hint); padding:0 10px 4px 35px; line-height:1.2; }   /* mockup 写 11px，宪法字号闭集最小 12 ⇒ 取 12（已报总工） */
     /* C5-10③（Joe：不要左边那种括号形）：去掉 `box-shadow:inset 3px 0 0` 那道竖条，
@@ -286,7 +287,7 @@
     .page-card:last-child { margin-bottom:0; }
     @media (max-width:820px){ .page-card { padding:18px 16px; } }
     /* 长表格页：表格自己就是那张卡 —— 内边距收窄，让表格贴着卡边（附录 C.5 的例外，已写进宪法） */
-    .table-card { padding:0; overflow:auto; }   /* nav-table-v2：表有 min-width，窄窗口在卡内横向滚（原 hidden 会把最右的「时间」列裁掉） */
+    .table-card { padding:0; overflow:hidden; }   /* 总工裁定：不出横滚——9 列已收窄到 Joe 视口放得下（≤1030），卡不再是滚动容器 */
     .table-card table { margin:0; }
     /* C5-4v A：次级小按钮 —— 「重置筛选/重置列宽」不该与主动作平级 */
     /* ══ C5-4v B：补货弹窗 —— 两张选择卡 ══ */
@@ -620,9 +621,9 @@
        全页同一套 9 列同序同宽：公司 230 · 阶段 96 · 评分 64 · 分类 100 · 国家 80 · 邮箱 190 · 联系方式 158 · 本页专属(吸余宽) · 时间 96。
        表头 12px --muted 500 高 38 底 #fafbfc；正文 13 行高 48；th 与 td 同一对齐（公司/邮箱/分类左，其余居中）。
        ⚠️ 全部作用域限定在 #v-list table：全局 th,td 规则还服务机器房等别的表。列宽拖动/记忆整套已删（SPEC §4）。 */
-    /* ⚠️ 生产实测（Joe 的窗口 1278 宽）：8 列固定宽合计 1014，主区只剩 ~1030 ⇒ 第 8 列被挤成 0 宽、「时间」叠到它上面。
-       给表一个下限（1014 + 本页专属最少 150），窄窗口时在 .main 里横向滚，⛔ 不压列不折叠列。 */
-    #v-list table { table-layout:fixed; width:100%; min-width:1164px; }
+    /* 🔴 总工裁定：横滚不是修复。Joe 视口 1278（主区 1043）下 9 列必须整张放得下 ⇒ 固定列收窄（thead 里的宽 = 真源 COLS），
+       不再给表 min-width，.table-card 也不出横滚；本页专属列吸余宽 ≥ 120。验收视口从这批起 = 1278×dpr1.5，1440 只作第二档。 */
+    #v-list table { table-layout:fixed; width:100%; }
     #v-list th { font-size:12px; font-weight:500; color:var(--muted); text-align:left; height:38px; padding:0 10px; border-bottom:1px solid var(--border);
                  white-space:nowrap; background:#fafbfc; vertical-align:middle; word-break:normal; }
     #v-list td { height:48px; padding:0 10px; border-bottom:1px solid var(--border); font-size:13px; vertical-align:middle;
@@ -647,7 +648,7 @@
     #v-list .t { font-size:12px; color:var(--muted); }
     #v-list .t.due { color:var(--red); }
     /* 联系方式：5 个固定小格 in · WA · f · IG · ☎（24×20）——同一渠道永远同一格，无=空格占位 */
-    #v-list .ch { display:inline-flex; gap:3px; vertical-align:middle; }
+    #v-list .ch { display:inline-flex; gap:2px; vertical-align:middle; }   /* 5×24 + 4×2 = 128 ≤ 联系方式列内容宽 130（150 − 2×10 padding） */
     #v-list .ch a, #v-list .ch i { display:inline-block; width:24px; height:20px; border-radius:5px; font-size:12px; font-weight:600; line-height:20px; font-style:normal;   /* mockup 10px → 宪法闭集最小 12 */
                                    text-align:center; color:var(--brand-strong); background:var(--brand-tint); text-decoration:none; }
     #v-list .ch i.e { background:transparent; }
@@ -1180,8 +1181,7 @@
        ⚠️ 特异性 (0,1,1) 低于 .side-nav.active (0,2,0)，选中态的底色/字重照常生效（第一版写成内联 style 把它们压掉了） */
     button.side-nav { width:100%; border:0; background:none; font:inherit; font-size:13px; text-align:left; }
     /* C5-4v 附录 C.6：图标 stroke=currentColor ⇒ 选中/悬停不必再配第二份颜色 */
-    .nav-ico { flex:0 0 auto; opacity:.75; }
-    .side-nav:hover .nav-ico, .side-nav.active .nav-ico { opacity:1; }
+    .nav-ico { flex:0 0 auto; }   /* 总工裁定：图标不配硬编码 opacity/stroke 色，只跟 currentColor——选中即随文字变品牌绿 */
     .side-nav:hover { background:var(--panel); }
     .side-nav.active { background:var(--tint-blue); color:var(--blue); font-weight:600; }  /* 与漏斗 tab 选中态一致（C5-10③ 同步去竖条） */
     .side-nav.active:hover { background:var(--tint-blue); }
@@ -1289,16 +1289,19 @@
       <div class="page-card table-card">
       <table>
         <!-- nav-table-v2：9 列同序同宽（宽度写死在这里 = 真源 COLS；第 8 列不给宽、吸余量，列名由 loadList 按页填进 #th-own）-->
+        <!-- 🔴 总工裁定（Joe 视口 1278×dpr1.5，主区 1043）：固定 8 列合计 ≤ 910，本页专属吸余 ≥ 120 ⇒ 9 列 ≤ 1030，⛔ 不横滚。
+             公司 200 · 阶段 88 · 评分 60 · 分类 90 · 国家 72 · 邮箱 170 · 联系方式 150 · 专属吸余 · 时间 80（gen-nav-table.mjs COLS 同步改） -->
         <thead><tr>
-          <th style="width:230px"><input type="checkbox" id="sel-all" title="全选当前筛选" onclick="event.stopPropagation();toggleSelAll(this.checked)">公司</th>
-          <th style="width:96px" class="ac">阶段</th>
-          <th style="width:64px" class="ac">评分</th>
-          <th style="width:100px">分类</th>
-          <th style="width:80px" class="ac">国家</th>
-          <th style="width:190px">邮箱</th>
-          <th style="width:158px" class="ac chc">联系方式</th>
+          <!-- 1278 实测：.main 1044 − 卡边框/内距后表宽 1002；总工建议的 910 只给专属列剩 92 ⇒ 再收 28（公司 −10 · 分类 −6 · 国家 −2 · 邮箱 −10）= 882，专属列 120 -->
+          <th style="width:190px"><input type="checkbox" id="sel-all" title="全选当前筛选" onclick="event.stopPropagation();toggleSelAll(this.checked)">公司</th>
+          <th style="width:88px" class="ac">阶段</th>
+          <th style="width:60px" class="ac">评分</th>
+          <th style="width:84px">分类</th>
+          <th style="width:70px" class="ac">国家</th>
+          <th style="width:160px">邮箱</th>
+          <th style="width:150px" class="ac chc">联系方式</th>
           <th class="ac" id="th-own">本页</th>
-          <th style="width:96px" class="ac">时间</th>
+          <th style="width:80px" class="ac">时间</th>
         </tr></thead>
         <tbody id="rows"></tbody>
       </table>
@@ -5995,9 +5998,14 @@ ${esc(d.ours.body||'')}</div></details>`
     // 就地更新导航上那个数字。
     // ⚠️ 不调 refreshNavHighlight —— 它**只切 class，不重建导航文字**（我以为它会，去读了才知道）；
     //    也不调 loadStats —— 为一个数字重跑一整轮统计请求不划算。
+    // 🔴 生产 0fdd45ca 重影真源（Joe 截图「待办待办事项」）：nav-table-v2 把条目改成 [图标位 .ico][文字][.cnt] 后，
+    //   这里仍取「第一个 span」写「待办事项 (N)」—— 第一个 span 已是**图标槽**，文字被塞进图标位与后面的标签叠成两份。
+    //   ⇒ 只动 .cnt：有数就写/建 (N)，0 就删；图标槽永远只放一个 svg。
     function paintTodoCount(){
-      const el = document.querySelector('.side-nav[data-nav="today"] span');
-      if (el) el.textContent = `待办事项${_todoCount ? ` (${_todoCount})` : ''}`;   // 0 时不显示括号
+      const item = document.querySelector('.side-nav[data-nav="today"]'); if (!item) return;
+      let cnt = item.querySelector('.cnt');
+      if (_todoCount) { if (!cnt) { cnt = document.createElement('span'); cnt.className = 'cnt'; item.appendChild(cnt); } cnt.textContent = `(${_todoCount})`; }
+      else if (cnt) cnt.remove();   // 0 时不显示括号
     }
 
     // ══ C5-8 待办事项页重构 ══

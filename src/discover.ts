@@ -608,6 +608,11 @@ export async function runDiscovery(env: Env, opts: { keywords?: string[]; perKey
       // 判重走预载索引（规则同 findDuplicateLead 的网址那把钥匙；这条管道插入时没有邮箱，
       // 邮箱那把本来就不生效 —— 见下方原注释）。
       if (hostIndex.has(domain)) { skipped++; continue; }
+      // 🔴 总工裁定（2026-09-03，生产 10 组同网址重复、全部 search+search 相隔 15–60 分钟）：
+      //   预载的 hostIndex 是**这一轮开始时**的快照；手动整轮（/api/discover）与每分钟 tick 小批并行时，各拿一份过期快照
+      //   ⇒ 同一网址各插一条。插入前再真查一次库（findDuplicateLead，与 nmea/directory 两条路径同款）——多一次 D1 读，换入库正确。
+      //   索引仍留着：它挡住同一轮里的重复，且让绝大多数结果不用打到库。
+      { const dup = await findDuplicateLead(env, { website }); if (dup) { hostIndex.set(domain, dup.id); skipped++; continue; } }
       const company = companyFromDomain(domain) || cleanTitle(r.title);   // M1 域名推名优先，回落标题
       const country = inferCountryFromWebsite(website) || gl.toUpperCase(); // M2 ccTLD 推真实所在国优先，gl 仅兜底；统一大写
       const ins = await env.DB.prepare(

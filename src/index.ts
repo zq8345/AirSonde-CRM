@@ -329,6 +329,13 @@ const STATUS_GROUPS: Record<string, string[]> = {
 // ⚠️ **口径散在四处、没有真源**，正是"待审批 194 vs 真值 115"能长期存在的原因。
 //    用它的地方：/api/leads 的 group=review、/api/leads/facets、/api/stats 的 reviewScored。
 const REVIEW_WHERE = "l.status IN ('analyzed','pending') AND a.match_score IS NOT NULL";
+/** 「待审批」的数 —— **唯一**一处 SQL（总工裁定 2026-09-03）：左栏 /api/stats、待办「已打分待批准」、自动化页「待审批 N 家」全走这里。
+ *  以前后两处按 status 数（analyzed+pending，把无官网 285 条也算成"已打分"），左栏按 REVIEW_WHERE，三处三个数。 */
+async function countReviewScored(env: Env): Promise<number> {
+  return (await env.DB.prepare(
+    `SELECT COUNT(*) AS n FROM leads l JOIN lead_analysis a ON a.lead_id=l.id WHERE ${REVIEW_WHERE}`
+  ).first<{ n: number }>())?.n || 0;
+}
 
 // ⚠️⚠️ C5-8：「这封回信还需要 Joe 出手吗」——**唯一口径**，两个消费方共用这一份。
 //   缺陷原文：/api/today 的 hotReplies **不看 handled_at** ⇒ Joe 在工作台点过「已处理」，
@@ -489,9 +496,7 @@ app.get("/api/stats", async (c) => {
   //   而"有没有分数"是 lead_analysis 上的维度，status 里没有这个信息。
   //   不给这两个数，左栏就会继续显示 194（含 79 条 AI 根本没判成的）—— **格子继续说谎**。
   //   这是"连根拔"的第三根：**后端 SQL 改了、列表对了，左栏还是错的**。
-  const reviewScored = (await c.env.DB.prepare(
-    `SELECT COUNT(*) AS n FROM leads l JOIN lead_analysis a ON a.lead_id=l.id WHERE ${REVIEW_WHERE}`
-  ).first<{ n: number }>())?.n || 0;
+  const reviewScored = await countReviewScored(c.env);   // 总工裁定：待审批的数只有这一处 SQL（countReviewScored），待办/自动化页同源
   // ⭐⭐ 批⑭②：左栏「待分析」真值。**前端算不出来** —— 它的 map 按 status 累加，只数到 status='new'，
   //   漏掉 analyzed-无分 的（"有没有分数"是 lead_analysis 维度，status 里没有）。
   //   不给这个数，左栏显示 1（只 new），而列表返回 6 —— 批⑬① 那次漏了这第三根，这次又踩一次，实测才露。
@@ -534,7 +539,7 @@ async function buildActionSuggestions(env: Env): Promise<{
   const highNoEmail = (await db.prepare(`SELECT COUNT(*) AS n FROM leads l JOIN lead_analysis a ON a.lead_id=l.id WHERE a.match_score>=${APPROVE_MIN_SCORE} AND (l.email IS NULL OR l.email='') AND l.status NOT IN ('blacklisted','unsubscribed','bounced')`).first<{ n: number }>())?.n || 0;
   const replied = F("replied"), bounced = F("bounced"), unsub = F("unsubscribed");
   const readyCount = F("approved") + F("queued");
-  const reviewCount = F("analyzed") + F("pending");
+  const reviewCount = await countReviewScored(env);   // 总工裁定：与左栏同一条 SQL（原 F('analyzed')+F('pending') 把无官网也算进"已打分待批准"）
   const rate = (x: number) => (sentLeads > 0 ? x / sentLeads : 0);
   // 累计漏斗（同 #43 口径）求最狠掉点
   const wonC = F("won"), replyC = F("replied") + wonC;

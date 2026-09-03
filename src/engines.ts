@@ -186,7 +186,9 @@ export async function engineStatuses(env: Env): Promise<EngineStatus[]> {
   const failStreak = Number(await getSetting(env, "reply_fail_streak", "0")) || 0;
   const failLast = (await getSetting(env, "reply_fail_last", "")).trim();
   const reply = imapKeyMissing ? { stopped: true, reason: "收信钥匙没配（LARK_IMAP_PASS）" }
-    : failStreak > 0 ? { stopped: true, reason: `连续 ${failStreak} 次收信失败${failLast ? `：${failLast.slice(0, 40)}` : ""}` }
+    // 总工裁定（2026-09-03）：阈值 ≥2 —— 与收信循环处「UI 横幅连败（≥2 才亮）」的注释一致，飞书告警仍 ≥3。
+    //   生产实证：Lark IMAP 单次瞬时 NO internal server error 让 streak=1，顶栏就报「收信已停」—— 正常运行时会亮的告警等于没有告警。
+    : failStreak >= 2 ? { stopped: true, reason: `连续 ${failStreak} 次收信失败${failLast ? `：${failLast.slice(0, 40)}` : ""}` }
     : { stopped: false, reason: null };
 
   return [
