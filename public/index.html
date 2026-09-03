@@ -4451,7 +4451,18 @@
       const setBar = p => bar.style.width = Math.min(100,Math.max(0,p)) + "%";
       const setLog = m => log.textContent = m;
       try {
-        await saveSearchCfg();
+        // 🔴🔴 C5-56：这里原来第一件事是 `await saveSearchCfg()` —— **一个动作按钮在写配置**。
+        //   Joe 的现场：自动化页把预算设成 5000 存好（库=5000）→ 回列表 → 点「开始搜索」
+        //   → `saveSearchCfg` 把 `#fc-serper-budget` **当时那个框里的旧值 2500** 写回去
+        //   ⇒ 他刷新看到 2500，设几遍被覆盖几遍。
+        //   ⚠️ 那个输入框住在**自动化页**的「找客户策略」卡里；在列表页开弹窗时，
+        //     它装的是**上一次渲染留下的副本** —— 拿过期副本覆盖，与今早 `search_countries`
+        //     "删掉又自己回来"是同一个机制（`saveSearchCfg` 也提交 countries）。
+        //   🔴 判据（Joe 定过的那条，这次适用于弹窗）：
+        //     **一个控件只能被它所在的那个界面保存。⛔ 不许"顺手把整个表单存一遍"。**
+        //     更根本地：**动作不该有持久化副作用。**
+        //   ✅ 删掉它是安全的：`/api/discover` 本来就收 `{keywords, perKeyword, countries}`
+        //     （`index.ts:2513`）—— 本轮参数**当入参传**即可，⛔ 不必写进 settings。
         const per = Number($("#dp-perkw").value)||8;
         // ① 搜索
         // ⭐ C5-26：原来这里写「约需 10-40 秒」—— **那是句谎话**。实测一轮 26 个关键词是分钟级
@@ -6101,10 +6112,16 @@ ${esc(d.ours.body||'')}</div></details>`
       //     而留白会让人以为漏了。**"这一环不用外部工具"本身就是答案。**
       //   ⭐ 它顺带永久回答了 Joe 专门问过的那个问题：**抓官网不是 Serper，是自研抓取。**
       //   ⚠️ 数据全部来自后端 `ign.pipeline`（engines.ts 的 `pipelineTools`），⛔ 前端不拼任何一行。
-      const shortModel = (m) => String(m || '').split('/').pop().replace(/-\d{4}$/, '').replace(/-/g, ' ');
+      // ⚠️ C5-55b（Joe：「不要总是写的很啰嗦」）：**友好名和技术名只留一个**。
+      //   原来是 `deepseek v4 flash  deepseek/deepseek-v4-flash-0731` —— 同一件事说了两遍。
+      //   ⇒ 只留模型 id，并去掉 `deepseek/` 这个供应商前缀（左边"AI 评分"已经说明是什么环节了）。
+      //   ⚠️ 值仍从 `scoreModel(env)/emailModel(env)` 真读，⛔ 这里只改**显示**不改来源。
+      const shortModel = (m) => String(m || '').split('/').pop();
       const toolCell = (t) => {
-        if (t.state === 'ok')      return `<b class="cap-ok">${esc(t.tool)}</b>`
-          + (t.note ? ` <span class="hint">${esc(shortModel(t.note))}</span>` : '');
+        // ⭐ 同一把尺子过全表：`note` 里若是模型 id 就**取代**服务名显示，⛔ 不并排写两个。
+        if (t.state === 'ok') return t.note && /\//.test(t.note)
+          ? `<b class="cap-ok">${esc(shortModel(t.note))}</b>`
+          : `<b class="cap-ok">${esc(t.tool)}</b>${t.note ? ` <span class="hint">${esc(t.note)}</span>` : ''}`;
         if (t.state === 'none')    return `<b class="cap-ok">${esc(t.tool)}</b> <span class="cap-free">零成本</span>`;
         if (t.state === 'idle')    return `<b>${esc(t.tool)}</b> <span class="hint">· ${esc(t.note)}</span>`;
         return `<span class="hint">未接 · </span><code>${esc(t.note)}</code>`;   // missing
