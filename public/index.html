@@ -951,6 +951,18 @@
     .cfg-form.preview .edit-only { display:none !important; }
     /* 勾选框在预览态锁住（.cfg-live 的除外）：只读要看得出来，所以顺带降透明度。 */
     .cfg-form.preview input[type=checkbox]:not(.cfg-live) { pointer-events:none; opacity:.55; }
+    /* ══🔴 C5-49（Joe：「没点编辑按钮之前，两个板块都是只读模式，国家和关键词这些都是不能选的」）══
+       上面那两条只认**原生控件**，而这一区有两类它们够不到的东西：
+         ① 51 个国家 chip 是 `<span>` —— CSS 选择器根本不匹配它 ⇒ 只读态下**它是能点的**，
+            实测：点一下界面从 51 变 50，**而后端一个字节没动** ⇒「点了看起来生效、其实没存」，
+            比点不动更坏。
+         ② 「全选／全不选／管理／载入默认」是 `<button>` —— 它们是**改配置的入口**，不是操作。
+       ⚠️ 为什么用 CSS 而不是只在 JS 里加属性：这一区的内容是**异步渲染**的，
+         `setOneFormMode` 那一趟属性早就跑完了 ⇒ 后到的元素永远锁不上（关键词勾选框实测就是这样）。
+         **CSS 对后渲染的元素自动生效**，这才是这一层该守的地方；JS 属性是第二层（挡键盘）。 */
+    .cfg-form.preview #fc-cc-block .chip,
+    .cfg-form.preview .subhead .toolbar button,
+    .cfg-form.preview #dp-kwlist .kwitem { pointer-events:none; opacity:.55; }
     .set-page .auto-box { border-radius:10px; padding:12px 14px; margin:0 0 4px; }
     .set-page .auto-row { padding:6px 0; }
     /* 动作条：保存是唯一实心；测试卡片是动作不是设置，降为描边次级 */
@@ -1168,7 +1180,7 @@
            状态卡 / 运行参数 / 找客户策略 / API 配置 / 产能与班次 = 五张卡，边界就是分区。
          ⚠️ 这句话原来写的是「…/ 平时不碰的 = 四张卡」—— 同一次改动里那一层已经拆成两张卡了，
            注释却停在旧结构上。**改结构要连着描述结构的注释一起改**，否则下一个人按它去找。 -->
-    <div class="cfg-form preview" style="max-width:820px">
+    <div class="cfg-form preview" data-cfg-group="params" style="max-width:820px">
       <!-- 🔴 加载失败横幅（2026-09-02 补回）：C5-42a 我写了"控制区读不到配置就出横幅"，
            **而这个元素在我重构板块二时被自己删掉了** —— `$("#mr-cfg-loaderr")` 拿不到，
            `if (eb)` 把它静默吞掉 ⇒ 配置读不到时是一片空框，Joe 会以为那就是他的设置。
@@ -1184,9 +1196,9 @@
         <div class="pr-head">
           <span class="sec-title" style="margin:0">运行参数</span>
           <span class="sec-tools" style="margin-left:auto">
-            <button class="mini" id="mr-cfg-edit" type="button">编辑</button>
-            <button class="mini" id="mr-cfg-cancel" type="button" style="display:none">取消</button>
-            <button class="primary mini" id="mr-save-cfg" type="button" style="display:none">保存</button>
+            <button class="mini js-cfg-edit" id="mr-cfg-edit" type="button">编辑</button>
+            <button class="mini js-cfg-cancel" id="mr-cfg-cancel" type="button" style="display:none">取消</button>
+            <button class="primary mini js-cfg-save" id="mr-save-cfg" type="button" style="display:none">保存</button>
           </span>
         </div>
         <!-- ⭐ C5-22（Joe 拍板）：两个勾选框（自动批准/自动发送）合成**一个总开关**。
@@ -1280,14 +1292,33 @@
             <span class="mr-live" id="mr-live-ntf" hidden></span></span>
           <span class="pr-k"></span><span id="notify-status" class="hint" style="margin:0"></span></div>
       </div>
+    </div>
 
+    <!-- 🔴 C5-49（Joe 拍板）：**每个板块只负责自己的编辑和保存，不要越权**。
+         ⇒ 两张卡各自是一个独立的 `.cfg-form`：
+           · 点谁的「编辑」，只有谁变可编辑、只有谁的卡头出现取消/保存
+           · 点谁的「保存」，只提交谁的字段
+         ⚠️ 拆开之前它们共用一个容器 + 一颗保存 ⇒ 点「运行参数」的编辑，这张卡也跟着解锁了
+           （Joe 截图里的现场），而那颗保存会把**两张卡的字段一起**提交。
+         🔴 后者才是真正危险的那一半：**A 卡的保存顺手把 B 卡的值按 DOM 里的旧内容写回去** ——
+           静默数据损坏，而且界面上什么都不会说。 -->
+    <div class="cfg-form preview" data-cfg-group="search" style="max-width:820px">
 <div class="set-card">
-        <!-- ⚠️ 稿子这张卡头上也画了一个「编辑」，我**没有照做**：
-             它切换的是整个 `.cfg-form` 的两态，而那个按钮已经在「运行参数」卡头上了。
-             再放一个 = 同一个控件的第二处入口 —— 正是这次重排要消灭的那种重复。
-             ⇒ 点「运行参数」的编辑，这张卡的字段一起进编辑态。已报总调度。 -->
+        <!-- 🔴 C5-49：这颗「编辑」是**补回来的，我上一版没加是错的**。
+             我当时的理由是"同一控件的第二处入口 = 重复"—— ⛔ 那个判断错在把**可发现性**当成了重复。
+             后果是真的：这张卡里的加词框、搜索预算、26 个关键词勾选框，在预览态**全部是死的**
+             （`.cfg-form.preview` 会把非 .cfg-live 的输入设 readOnly、勾选框设 disabled），
+             而唯一的开关远在上面那张卡的卡头 —— **Joe 一上手就用不了，还以为坏了。**
+             ⭐ 教训：**控件露出来了，就必须把打开它的那个开关一起露出来。**
+                两张卡各有一颗入口 ≠ 两套状态；它们切的是**同一个** `.cfg-form` 两态（见 setSettingsMode）。
+             ⚠️ 下面「① 我是谁·找什么客户」那行自带的「编辑」是**另一件事**（展开画像文本框），⛔ 别合并。 -->
         <div class="pr-head"><span class="sec-title" style="margin:0">找客户策略</span>
-          <span class="hint" style="margin:0">· 机器按什么找客户</span></div>
+          <span class="hint" style="margin:0">· 机器按什么找客户</span>
+          <span class="sec-tools" style="margin-left:auto">
+            <button class="mini js-cfg-edit" type="button">编辑</button>
+            <button class="mini js-cfg-cancel" type="button" style="display:none">取消</button>
+            <button class="primary mini js-cfg-save" type="button" style="display:none">保存</button>
+          </span></div>
         <div id="wheel-body">
           <!-- 加载失败横幅：没有它，一次登录过期就让这一块停在空壳态，看着像"配置全丢了" -->
           <div class="load-error" id="fc-loaderr" style="display:none;margin-bottom:12px"></div>
@@ -1363,9 +1394,13 @@
            ⚠️ **不写第二套 markup** —— 同一份字段两套 HTML 就是双真源（这一单本身在治这病）。
               改成"一份 markup 两种皮肤"：预览态用 CSS 把输入框渲染成纯文本 + JS 置 readonly。
            ⚠️ 加载失败时**禁用「编辑」**（防线前置，比拦保存更早，见 C5-30 第 3 条）。 -->
-      <button class="primary" id="cfg-edit" style="margin-left:auto">编辑</button>
-      <button class="primary" id="save-sendcfg" style="margin-left:auto;display:none">保存</button>
-      <button class="btn-ghost" id="cfg-cancel" style="display:none">取消</button>
+      <!-- 🔴 C5-49：这三颗改由 **class** 认领（`js-cfg-edit/cancel/save`），⛔ 不再按 id 逐个列举。
+           原因：`setSettingsMode` 里写的是 `'#cfg-edit,#mr-cfg-edit'` —— **每加一处按钮就要记得
+           去改三个选择器**，忘一个的症状是"那颗按钮点了没反应、且不报错"（C5-42b 已经栽过一次）。
+           id 保留，别处还在用。 -->
+      <button class="primary js-cfg-edit" id="cfg-edit" style="margin-left:auto">编辑</button>
+      <button class="primary js-cfg-save" id="save-sendcfg" style="margin-left:auto;display:none">保存</button>
+      <button class="btn-ghost js-cfg-cancel" id="cfg-cancel" style="display:none">取消</button>
       <span class="hint" id="sendcfg-result" style="margin:0 0 0 10px"></span>
     </div>
     <!-- 加载失败横幅：这一页原来**没有**（其余四页都有）。缺它的后果不是难看，是**页面静默空白**：
@@ -3900,12 +3935,31 @@
         + (_fcCcChecked.size === 0
             ? `<div class="warn">⚠ 一个国家都没选，机器不会再找新客户</div>`
             : '');
+      relockFormOf(box);   // C5-49：刚渲染出来的 chip 也要按当前模式锁一次
     }
+    // 🔴 C5-49 第二层：这一区的内容是**异步渲染**的，`setOneFormMode` 那一趟锁属性早就跑完了
+    //   ⇒ 后渲染出来的控件永远不会被加上 readOnly/disabled（关键词勾选框实测就是这样：
+    //     CSS 把它变灰了、`disabled` 却是 false，键盘 Tab 进去照样能改）。
+    //   ⇒ 每次重渲染完，**按当前模式重新锁一次自己所在的那个容器**。
+    //   ⚠️ 用 `_settingsMode || 'preview'` 兜底：读不到就按**更严**的那个走，⛔ 不默认放开。
+    function relockFormOf(el){
+      const f = el && el.closest && el.closest('.cfg-form');
+      if (f && typeof setSettingsMode === 'function') setSettingsMode(window._settingsMode || 'preview', f);
+    }
+    // 🔴 C5-49 第三层：**处理器自己也要拒**。
+    //   `pointer-events:none` 只挡真实指针命中 —— 它挡不住 `el.click()`、也挡不住任何脚本调用。
+    //   ⚠️ 我第一版只做了 CSS 那一层，测的时候用 `chip.click()` 一点，界面照样从 51 变 50。
+    //     那次读数**同时暴露了两件事**：我的尺子不对（`.click()` 不等于鼠标点），
+    //     以及闸确实只有一层。⇒ 尺子换成真实坐标点击，闸补成三层。
+    //   （本仓既有规矩：CSS 挡鼠标、属性挡键盘、处理器挡脚本 —— 闸不能只有一层。）
+    const inPreview = (sel) => { const f = document.querySelector(sel); return !!f && f.classList.contains('preview'); };
     window.fcCcToggle = (gl) => {
+      if (inPreview('[data-cfg-group="search"]')) return;   // 只读态：不改内存、不重渲染
       if (_fcCcChecked.has(gl)) _fcCcChecked.delete(gl); else _fcCcChecked.add(gl);
       renderCountries();
     };
     window.fcCcAll = (on) => {
+      if (inPreview('[data-cfg-group="search"]')) return;   // C5-49 第三层，同 fcCcToggle
       _fcCcChecked = on ? new Set(Object.keys(_fcAllCountries)) : new Set();
       renderCountries();
     };
@@ -3964,9 +4018,12 @@
           }).join("")
         : `<span class="muted">当前用内置默认 ${_fcKwEffCount} 个关键词。点右上「管理」→「载入默认」把它们变成可编辑、可勾选，或添加自定义词。</span>`;
       updateTransparency();
+      relockFormOf($("#dp-kwlist"));   // C5-49：刚渲染出来的勾选框也要按当前模式锁一次
     }
-    window.fcKwToggle = (input) => { const sp=input.closest('.kwitem'); const kw=sp&&sp.dataset.kw; if(!kw) return; if(input.checked) _fcKwChecked.add(kw); else _fcKwChecked.delete(kw); sp.classList.toggle('on',input.checked); updateTransparency(); };
-    window.fcKwAll = (on) => { if(on) _fcKwRows.forEach(k=>_fcKwChecked.add(k.keyword)); else _fcKwChecked.clear(); renderKwInline(); };
+    window.fcKwToggle = (input) => { if (inPreview('[data-cfg-group="search"]')) { input.checked = !input.checked; return; }   // C5-49 第三层：连勾选态一起回滚
+      const sp=input.closest('.kwitem'); const kw=sp&&sp.dataset.kw; if(!kw) return; if(input.checked) _fcKwChecked.add(kw); else _fcKwChecked.delete(kw); sp.classList.toggle('on',input.checked); updateTransparency(); };
+    window.fcKwAll = (on) => { if (inPreview('[data-cfg-group="search"]')) return;   // C5-49 第三层
+      if(on) _fcKwRows.forEach(k=>_fcKwChecked.add(k.keyword)); else _fcKwChecked.clear(); renderKwInline(); };
     // 批A#3 客户画像展开/收起（批⑳ 改：点标题切 caret + 收起时显摘要行，不再依赖 #fc-profile-toggle 按钮）
     window.toggleProfile = () => {
       const t=$("#fc-profile"); if(!t) return;
@@ -4531,9 +4588,21 @@
       //   `$()` 只取第一个 ⇒ 只写 '#cfg-edit' 会让机器房那颗永远不切换、点了没反应，**且不报错**。
       const show = (sel, on) => document.querySelectorAll(sel)
         .forEach(e => { e.style.display = on ? '' : 'none'; });
-      show('#cfg-edit,#mr-cfg-edit', !edit);
-      show('#save-sendcfg,#mr-save-cfg', edit);
-      show('#cfg-cancel,#mr-cfg-cancel', edit);
+      const show2 = (root, sel, on) => root.querySelectorAll(sel)
+        .forEach(e => { e.style.display = on ? '' : 'none'; });
+      // 🔴 C5-49（Joe：「每个板块只负责自己的编辑和保存，不要越权」）：
+      //   按钮的显隐**只作用在被切换的那几个容器内部**，⛔ 不是全局。
+      //   ⚠️ 这一步做错的症状很隐蔽：点 A 卡的编辑，B 卡的卡头也冒出「保存」——
+      //     那颗保存看起来属于 B，点下去写的却是 A 的路径。**越权先从按钮的归属开始。**
+      //   ⚠️ 设置页那一组按钮在 `.cfg-form` **外面**（页头），够不到 ⇒ 单独兜一次。
+      for (const sp of forms) {
+        show2(sp, '.js-cfg-edit', !edit);
+        show2(sp, '.js-cfg-save', edit);
+        show2(sp, '.js-cfg-cancel', edit);
+      }
+      if (!scope) {   // 全局切换（进页面时复位）才动页头那一组
+        show('#cfg-edit', !edit); show('#save-sendcfg', edit); show('#cfg-cancel', edit);
+      }
       window._settingsMode = mode;
     }
     function setOneFormMode(sp, edit){
@@ -4589,17 +4658,22 @@
           errBox.scrollIntoView({ block: "nearest" });   // 提示说"点上方重试"，那就得**真的把它带到眼前**
           const b = $("#cfg-retry"); if (b) b.onclick = () => openSettings(true);
         }
-        const sv = $("#save-sendcfg"); if (sv) { sv.disabled = true; sv.title = "配置没加载成功，保存已禁用（防止空值覆盖）"; }
+        // 🔴 C5-49：这两行原来是 `$("#save-sendcfg")` / `$("#cfg-edit")` —— **`$()` 只取第一个**，
+        //   于是加载失败时**只禁用了设置页那一颗**，机器房那两组照样亮着（和 4544 那段注释说的是同一个病）。
+        //   ⚠️ 数据没被写坏是因为保存路径里还有第二道 `_cfgLoaded` 闸 —— **闸有两层救了这一次**，
+        //     但界面上"一颗灰两颗亮"本身就是在骗人。⇒ 改成 class，全部一起禁。
+        document.querySelectorAll('.js-cfg-save').forEach(sv => { sv.disabled = true; sv.title = "配置没加载成功，保存已禁用（防止空值覆盖）"; });
         // C5-30 第 3 条：加载失败时**连「编辑」都禁用** —— 防线前置。
         //   拦保存是等他填完一屏才说不行；禁用编辑是一开始就不让他白填。
-        const eb2 = $("#cfg-edit"); if (eb2) { eb2.disabled = true; eb2.title = "配置没加载成功，先点上方「点此重试」"; }
+        document.querySelectorAll('.js-cfg-edit').forEach(eb2 => { eb2.disabled = true; eb2.title = "配置没加载成功，先点上方「点此重试」"; });
       }
     }
 
     /** 把读回来的配置填进控件。⚠️ 抽出来是为了让**填充失败也能走失败分支**（见上面的红字）。 */
     async function fillSettingsFields(c, fu){
-      { const sv = $("#save-sendcfg"); if (sv) { sv.disabled = false; sv.title = ""; } }
-      { const eb2 = $("#cfg-edit"); if (eb2) { eb2.disabled = false; eb2.title = ""; } }
+      // C5-49：解禁也要覆盖全部三组（与上面禁用那一处对称，⛔ 别一边用 class 一边用 id）
+      document.querySelectorAll('.js-cfg-save').forEach(sv => { sv.disabled = false; sv.title = ""; });
+      document.querySelectorAll('.js-cfg-edit').forEach(eb2 => { eb2.disabled = false; eb2.title = ""; });
       document.querySelectorAll('.cfg-form').forEach(sp => sp.classList.remove('cfg-unloaded'));
       $("#cfg-limit").value = c.daily_send_limit;
       $("#cfg-company").value = c.company_name || "";
@@ -4768,8 +4842,10 @@
     // ⚠️ 三个请求各自会失败。**每一段失败都必须说出来** —— 原来 followup 那发是 fire-and-forget
     //    （没读返回值），存失败了 Joe 也看不见，正是我们一路在修的那种静默病。
     // C5-30：进编辑态 / 取消（取消 = 丢弃改动、重新拉一次配置回预览态）
-    document.querySelectorAll('#cfg-edit,#mr-cfg-edit').forEach(eb => { eb.onclick = () => setSettingsMode("edit"); });
-    document.querySelectorAll('#cfg-cancel,#mr-cfg-cancel').forEach(cb => { cb.onclick = () => {
+    // 🔴 C5-49：`closest('.cfg-form')` = **只切自己那张卡**。设置页那一组在容器外面，
+    //   `closest` 返回 null ⇒ 落回"全部容器"，与它原来的语义一致（那一页只有一个表单）。
+    document.querySelectorAll('.js-cfg-edit').forEach(eb => { eb.onclick = () => setSettingsMode("edit", eb.closest('.cfg-form') || undefined); });
+    document.querySelectorAll('.js-cfg-cancel').forEach(cb => { cb.onclick = () => {
         // ⚠️ 「取消」必须**重新加载**，不能只切皮肤 —— 只切皮肤会把他改了一半的值留在框里，
         //   下次点编辑看到的是脏值，而他以为自己取消过了。
         // 🔴 C5-42b 收尾：控制区现在有两个家，**取消必须回到他所在的那一页**。
@@ -4778,8 +4854,18 @@
         //   共用行为可以，但"回到哪里"是**位置**，位置不能共用。
         if (cb.closest('#v-machine')) openMachineRoom(); else openSettings();
       }; });
-    // ⚠️ 保存**仍是一个 handler 存全部** —— 变的只是它有两个入口，⛔ 别为机器房另写一套。
-    document.querySelectorAll('#save-sendcfg,#mr-save-cfg').forEach(btn => { btn.onclick = async () => {
+    // 🔴 C5-49：保存**按卡拆开**（Joe：「每个板块只负责自己的编辑和保存，不要越权」）。
+    //   `data-cfg-group` 决定这颗保存提交哪一组：
+    //     · params → 发信 + 跟进 + 飞书（运行参数那 8 行）
+    //     · search → 画像 / 国家 / 关键词 / 搜索预算（找客户策略）
+    //     · 无（设置页页头那颗）→ 两组都提交，保持它原来的语义
+    //   ⚠️⚠️ 这不只是"少发几个请求"：拆之前，点「找客户策略」的保存会把**运行参数那 8 行
+    //     按 DOM 里当时的内容一起写回去**。如果那些框正显示着旧值或别处刚改过的值，
+    //     就是**一次静默的数据覆盖** —— 界面上什么都不会说。
+    document.querySelectorAll('.js-cfg-save').forEach(btn => { btn.onclick = async () => {
+      const grp = (btn.closest('.cfg-form') || {}).dataset?.cfgGroup;   // undefined = 页头那颗 = 全提交
+      const doParams = !grp || grp === 'params';
+      const doSearch = !grp || grp === 'search';
       // ⛔ 没成功加载过就不许保存 —— 空表单一存就是把公司名/地址/卖点抹成空串。
       //   （按钮已 disabled，这里是第二道：防止有人用键盘/脚本绕过 disabled。闸不能只有一层。）
       if (!_cfgLoaded) {
@@ -4791,7 +4877,8 @@
       }
       $("#sendcfg-result").textContent = "保存中…"; $("#ntf-result").textContent = "";
       const jf = (p) => p.then(r=>r.json()).catch(e=>({error:String(e)}));
-      const res = await jf(fetch("/api/settings/sending", { method:"POST", headers:{"content-type":"application/json"},
+      // ⚠️ 不提交的那一组用**空对象占位**，让下面的错误汇总/回读逻辑不用到处判 undefined。
+      const res = !doParams ? {} : await jf(fetch("/api/settings/sending", { method:"POST", headers:{"content-type":"application/json"},
         // ⚠️⚠️ 批㉒：**故意不带 auto_approve_enabled / auto_send_enabled**（后端只在字段存在时才写）。
         //   它俩原来跟公司名/地址/话术/卖点**捆在一起提交** —— 于是"改一句话术点保存"会顺手
         //   按复选框当时的状态重写两个**引擎开关**。这是批⑤ 那个陷阱的**反向版**，而且更危险：
@@ -4814,10 +4901,10 @@
           // C5-48 打分线：⚠️ 空框**不提交**（`!= null` 那道后端守卫只在字段存在时才写），
           //   ⛔ 别把空串变成 0 —— 那会把打分线设成 0，等于所有线索都自动批准。
           ...(($("#cfg-approve-min").value.trim() === "") ? {} : { auto_approve_min: Number($("#cfg-approve-min").value) }) }) }));
-      const fu = await jf(fetch("/api/settings/followup", { method:"POST", headers:{"content-type":"application/json"},
+      const fu = !doParams ? {} : await jf(fetch("/api/settings/followup", { method:"POST", headers:{"content-type":"application/json"},
         body:JSON.stringify({ enabled:$("#fu-enabled").checked, delay_days:Number($("#fu-delay").value), engaged_delay_days:Number($("#fu-engaged-delay").value), max_followups:Number($("#fu-max").value), no_reply_days:Number($("#fu-noreply").value) }) }));
-      const ntf = await saveNotifyCfg();
-      if (res.ok) _chatScript = $("#cfg-chatscript").value || DEFAULT_CHAT;
+      const ntf = !doParams ? {} : await saveNotifyCfg();
+      if (doParams && res.ok) _chatScript = $("#cfg-chatscript").value || DEFAULT_CHAT;
       const bad = [ res.error && `发信设置：${res.error}`, fu.error && `跟进设置：${fu.error}`, ntf.error && `飞书通知：${ntf.error}` ].filter(Boolean);
       // ⭐ **存进去的值和你输的不一样时，必须当场说出来**。
       //   老代码把 1000 静默截成 500 还回 ok:true —— "接受了请求、存了另一个数、什么都不说"
@@ -4825,16 +4912,20 @@
       const clampNote = res.daily_send_limit_clamped
         ? `<br><span style="color:var(--amber)">⚠️ 你输入的是 ${esc(String($("#cfg-limit").value))}，超过系统上限 ${res.daily_send_limit_max}，已按 <b>${res.daily_send_limit}</b> 存入。</span>`
         : "";
+      // ⚠️ 提示语要说**这一次真提交了什么**，⛔ 别在只存了找客户策略时说"已保存（发信+跟进+飞书通知）"。
+      const okMsg = doParams && doSearch ? "✅ 已保存（发信 + 跟进 + 飞书通知 + 找客户策略）"
+                  : doParams ? "✅ 已保存（运行参数：发信 + 跟进 + 飞书通知）"
+                  : "✅ 已保存（找客户策略：画像 + 国家 + 关键词 + 搜索预算）";
       $("#sendcfg-result").innerHTML = (bad.length
         ? `<span style="color:var(--danger,#c0392b)">⚠️ 有 ${bad.length} 段没存上：${esc(bad.join("；"))}</span>`
-        : "✅ 已保存（发信 + 跟进 + 飞书通知）") + clampNote;
-      if (!bad.length) renderAutomation(await fetch("/api/settings/sending").then(r=>r.json()).catch(()=>({})));   // 熔断/已发数回读，别让页面停在旧值
-      // C5-29④：方向盘（画像 / 关键词选择 / 搜索预算）也由这颗「保存」统一提交 ——
-      //   原来它们各有一颗自己的保存钮，Joe 得记住"改了哪块就点哪颗"。
-      try { await saveSearchCfg(); } catch (e) { console.error("save-wheel:", e); }
+        : okMsg) + clampNote;
+      if (doParams && !bad.length) renderAutomation(await fetch("/api/settings/sending").then(r=>r.json()).catch(()=>({})));   // 熔断/已发数回读，别让页面停在旧值
+      // 方向盘（画像 / 国家 / 关键词 / 搜索预算）—— C5-49 起**只有找客户策略那颗保存**会提交它。
+      if (doSearch) { try { await saveSearchCfg(); } catch (e) { console.error("save-wheel:", e); } }
       // C5-30②：保存成功才回预览态。⚠️ **有段没存上就留在编辑态** ——
       //   把他打回只读会让"没存上的那几个字"看起来像已经存好了。
-      if (!bad.length) setSettingsMode("preview");
+      //   🔴 C5-49：只把**自己这张卡**打回预览态，⛔ 别顺手把另一张卡也关掉（那也是越权）。
+      if (!bad.length) setSettingsMode("preview", btn.closest('.cfg-form') || undefined);
     }; });
 
     // 飞书通知设置
