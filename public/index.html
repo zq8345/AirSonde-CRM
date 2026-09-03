@@ -962,7 +962,14 @@
          **CSS 对后渲染的元素自动生效**，这才是这一层该守的地方；JS 属性是第二层（挡键盘）。 */
     .cfg-form.preview #fc-cc-block .chip,
     .cfg-form.preview .subhead .toolbar button,
-    .cfg-form.preview #dp-kwlist .kwitem { pointer-events:none; opacity:.55; }
+    .cfg-form.preview #dp-kwlist .kwitem,
+    .cfg-form.preview .js-danger { pointer-events:none; opacity:.55; }
+    /* ⭐⭐ C5-49b：`.cfg-live`（豁免）与 `.js-danger`（额外上锁）的**判据不是"它是不是操作"，
+         而是"它出错的代价有多大"**：
+         · 自动模式总开关 → 豁免。误点的代价是「晚停一分钟」，而紧急停机不该先点编辑。
+         · 按当前标准重刷全库 → 上锁。误点的代价是「773 条线索的分析结果和批准状态没了」。
+       同样都是"操作"，代价差三个数量级。
+       🔴 一句话判据：**同一张卡里两种危险度用同一种门槛时，门槛按更危险的那个定。** */
     .set-page .auto-box { border-radius:10px; padding:12px 14px; margin:0 0 4px; }
     .set-page .auto-row { padding:6px 0; }
     /* 动作条：保存是唯一实心；测试卡片是动作不是设置，降为描边次级 */
@@ -1336,7 +1343,7 @@
                  ⚠️ 后果那句里的条数是**后端真算**的（/api/today 的 rescoreScope），⛔ 不写死 ——
                    这是 Joe 按下去之前唯一能看到的代价，写错等于骗他点。 -->
             <div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-              <button class="btn-secondary mini" type="button" onclick="startRescan()">🔄 按当前标准重刷全库</button>
+              <button class="btn-secondary mini js-danger" type="button" onclick="startRescan()">🔄 按当前标准重刷全库</button>
               <span class="hint" id="fc-rescan-note" style="margin:0">改完上面这段之后用 · 正在算影响面…</span>
             </div>
           </div>
@@ -3625,6 +3632,11 @@
     //   进度靠后端从 DB 推导（analyzed_at < rescan_started_at），所以**天然可断点续跑**：
     //   浏览器关了/网断了/中途停，再点一次就从断点继续。
     window.startRescan = async () => {
+      // 🔴 C5-49b 第三层：只读态直接拒。CSS 的 pointer-events 只挡真实指针，⛔ 挡不住脚本调用。
+      //   ⚠️ 这一层在**破坏性动作**上比在别处更该有：误点一个国家 chip 顶多界面闪一下，
+      //     误触发这个是 773 条线索的分析结果和批准状态全没。
+      //   （判据见 .js-danger 那段注释：豁免与否看**出错的代价**，不看"它是不是操作"。）
+      if (inPreview('[data-cfg-group="search"]')) return;
       const st = await fetch("/api/rescan/status").then(r=>r.json()).catch(e=>({error:String(e)}));
       if (st.error){ toolMsg("读取重扫状态失败: "+esc(st.error)); return; }
       // 已 arm 且没扫完 → 直接续跑，不再重置一次（重置是破坏性的，只该发生一次）
