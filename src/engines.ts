@@ -102,9 +102,18 @@ export async function engineStatuses(env: Env): Promise<EngineStatus[]> {
   //     ⇒ 判断它时**绝不能**看 automation_enabled —— 那会让"关了自动模式"被报成"收信停了"，
   //       而那正是 Joe 最容易误解的地方。
   const imapKeyMissing = !env.LARK_IMAP_PASS;
-  const replyFail = (await getSetting(env, "reply_fail_last", "")).trim();
+  // 🔴 判据是 `reply_fail_streak`（**连败**），⛔ **不是 `reply_fail_last`**。
+  //   我第一版用了 `reply_fail_last` —— 它**成功之后不会被清掉，只作证据保留**
+  //   （`index.ts:4061` 原话：「成功后…才亮（reply_fail_last 保留为证据，横幅不再拿它当判据），
+  //   成功一次即清零」）。⇒ 拿它当判据的后果是：**一次失败之后永远显示"收信已停"**，
+  //   哪怕后面每一轮都成功。那正是我这一单要消灭的那种告警（正常运行时恒亮）。
+  //   ⚠️ 生产上当场撞到了：`reply_fail_last` 停留在 06:00 的一条旧记录，而收信其实是好的。
+  //   ⭐ 教训：**"最后一次失败"和"现在是不是坏的"是两个不同的量。** 同一个仓里已经有人
+  //     踩过并写下了正确判据（streak），我没先去看它就自己选了字段。
+  const failStreak = Number(await getSetting(env, "reply_fail_streak", "0")) || 0;
+  const failLast = (await getSetting(env, "reply_fail_last", "")).trim();
   const reply = imapKeyMissing ? { stopped: true, reason: "收信钥匙没配（LARK_IMAP_PASS）" }
-    : replyFail ? { stopped: true, reason: `上次收信失败：${replyFail.slice(0, 40)}` }
+    : failStreak > 0 ? { stopped: true, reason: `连续 ${failStreak} 次收信失败${failLast ? `：${failLast.slice(0, 40)}` : ""}` }
     : { stopped: false, reason: null };
 
   return [
