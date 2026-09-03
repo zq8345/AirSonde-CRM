@@ -1603,83 +1603,65 @@
       <!-- C5-2c：顶部那句通栏提示**拆开收进了各自的卡**（养域期→②机器开关，地址合规→①你是谁）。
            它原来把两件不相干的事说在一句里，而且离对应的输入框有半屏远 —— 说明贴着字段才有用。 -->
 <!-- 熔断横幅：只在熔断时出现，必须显眼 —— 自动发送停了而 Joe 不知道，比不停还糟 -->
-      <div id="brk-banner" class="brk-banner" style="display:none"></div>
+      <!-- v2：熔断横幅 #brk-banner 已删 —— 熔断此刻在自动化页「发信」卡的「退订就停」那一行说（含恢复按钮），同一个事实不摆两处（铁律五）。renderAutomation 里写它的那几行一并删。 -->
 
-      <!-- ══ C5-2 设置页（宪法 §2）：只留 Joe 会改的三组 ══
-           搬走的东西一律进机器房：产能算式 / 熔断样本 / 爬坡明细 / 发件域今日计数 / AI 用量。
-           它们不是没用，是**回答"机器怎么想的"** —— 那是机器房的职责，不是这一页的。
-           ⚠️ 禁词表对本页生效（熔断/爬坡/算式…），所以这里的措辞是"新域保护""自动停发"。 -->
+      <!-- ══ 设置页 v2（真源 airsonde-dispatch/settings-v2/settings-mockup.html，Joe「加，发件信息要可编辑」）══
+           三张卡：公司信息 / 发件身份（新）/ 账号。宪法 §2：这一页只留"你是谁"，机器旋钮全在自动化页。
+           ⚠️ 只读态零输入框（与自动化 v10.1 同一套 .cfg-form.preview 皮），常驻说明句全撤 → 标签旁 (?)。
+           ⚠️ 六个公司字段的 id 与保存路径**一个没改**（cfg-company/website/address/selling/chatscript/bcc）。
+           ⚠️ #brk-banner 熔断横幅已删：熔断在自动化页「发信」卡说，同一个事实不摆两处（铁律五）。 -->
 
-      <!-- ── ① 公司信息 —— 这些字会出现在每一封信里 ── -->
+      <!-- ── ① 公司信息（每一封信里都会出现的字）── -->
       <div class="set-card">
-        <div class="sec-title">公司信息</div>
-        <div class="set-grid">
-          <div class="k">公司名</div>
-          <div class="v"><input id="cfg-company" class="set-in"></div>
-
-          <div class="k">官网</div>
-          <div class="v"><input id="cfg-website" class="set-in" placeholder="https://airsonde.com"></div>
-
-          <div class="k">公司地址</div>
-          <div class="v"><textarea id="cfg-address" style="min-height:72px" placeholder="e.g. AirSonde, 123 Example St, City, Country"></textarea>
-</div>
-
-          <div class="k">卖点</div>
-          <!-- C6-B/P2-4：placeholder 里的 "flexible MOQs" 删掉 —— 它就在"只写站得住的事实"那句提示旁边，
-               却在**示范一句我们答不上来的商务承诺**（MOQ 是工厂问题清单三-9 未答项），
-               而这个框的内容会被 AI 直接引用进真发的开发信。Y2 清了 landing/卖点默认值，漏了这一处。 -->
-          <div class="v"><textarea id="cfg-selling" style="min-height:76px" placeholder="e.g. Factory-direct IAQ monitors (CO2/PM2.5/TVOC); OEM & private-label.（认证/产能/MOQ/案例未经工厂书面确认前不要写）"></textarea>
-</div>
-
-          <div class="k">开场白</div>
-          <div class="v"><textarea id="cfg-chatscript" style="min-height:96px" placeholder="Hi {company} team — AirSonde builds air quality monitors factory-direct…"></textarea>
-</div>
-
-          <div class="k">存档邮箱</div>
-          <div class="v"><input id="cfg-bcc" class="set-in" placeholder="留空 = 不存档">
-</div>
-        </div>
+        <div class="pr-head"><span class="sec-title" style="margin:0">公司信息</span></div>
+        <div class="pr-row"><span class="pr-k">公司名</span>
+          <span class="pr-v"><input id="cfg-company" class="set-in"></span></div>
+        <div class="pr-row"><span class="pr-k">官网</span>
+          <span class="pr-v"><input id="cfg-website" class="set-in"></span></div>
+        <div class="pr-row"><span class="pr-k">公司地址</span>
+          <span class="pr-v"><textarea id="cfg-address" style="min-height:60px"></textarea>
+            <span class="gj-help" data-help title="反垃圾邮件法（CAN-SPAM / GDPR）要求每封商业邮件带真实通信地址；它会出现在每封信的落款里。">(?)</span></span></div>
+        <div class="pr-row"><span class="pr-k">卖点</span>
+          <span class="pr-v"><textarea id="cfg-selling" style="min-height:64px"></textarea>
+            <span class="gj-help" data-help title="AI 写开发信时**直接引用**这几句 ⇒ 只写站得住的事实。认证 / 产能 / MOQ / 案例在工厂书面确认前不要写。">(?)</span></span></div>
+        <div class="pr-row"><span class="pr-k">开场白</span>
+          <span class="pr-v"><textarea id="cfg-chatscript" style="min-height:76px"></textarea>
+            <span class="gj-help" data-help title="手动触达（LinkedIn / WhatsApp）时一键复制的那段话；{company} 会替换成对方公司名。">(?)</span></span></div>
+        <div class="pr-row"><span class="pr-k">存档邮箱</span>
+          <span class="pr-v"><input id="cfg-bcc" class="set-in">
+            <span class="gj-help" data-help title="填了就给每一封外发信密送一份到这个邮箱（留空 = 不存档）。">(?)</span></span></div>
       </div>
 
-      <!-- ⚠️ C5-42b：原「⑤ 通知与账号」**拆成两半**，不是整卡搬 ——
-           「飞书通知」是机器的旋钮（跟着机器走），「当前账号」是"我以谁的身份在操作"（跟着人走）。
-           绑在一张卡里本来就是历史包袱。 -->
+      <!-- ── ② 发件身份（新卡）——「这封信看起来是谁发的」 ──
+           ⚠️ 发件邮箱**只读**：真源是 send.ts 的 pickSender（Resend 已验证的域），改它要改代码 + 验证域，
+             ⛔ 做成可填等于给一个填了不生效（甚至发不出去）的框。
+           ⚠️ 两个新键空 = 未设 = 与今天**逐字节相同**（后端 senderDisplayName / senderSignature 回落）。 -->
       <div class="set-card">
-        <div class="sec-title">账号</div>
-        <div class="k" style="color:var(--muted);font-size:13px;margin-bottom:6px">当前账号</div>
-        <div class="transparency" id="whoami" style="margin:0"></div>
+        <div class="pr-head"><span class="sec-title" style="margin:0">发件身份</span></div>
+        <div class="pr-row"><span class="pr-k">发件邮箱</span>
+          <span class="pr-v"><b id="cfg-sender-email">—</b>
+            <span class="u">Resend 已验证 · 只能改代码</span></span></div>
+        <div class="pr-row"><span class="pr-k">发件人名字</span>
+          <span class="pr-v"><input id="cfg-sender-name" class="set-in" style="max-width:220px" oninput="renderSenderPreview(_lastSendCfg)">
+            <span class="mr-live" id="cfg-sender-preview"></span>
+            <span class="gj-help" data-help title="收件人邮箱里显示的那个名字（From 的显示名）。留空 = 用默认 AirSonde。">(?)</span></span></div>
+        <div class="pr-row"><span class="pr-k">签名</span>
+          <span class="pr-v"><textarea id="cfg-sender-signature" style="min-height:64px"></textarea>
+            <span class="gj-help" data-help title="发送时自动加在正文末尾、公司地址与退订链接之前。AI 写信时不会自己写签名（提示词里已说明），就是留给这里。留空 = 不加。">(?)</span></span></div>
       </div>
 
-      <!-- ── ② 机器开关 —— 它替你做多少 ── -->
-      
-      <!-- 🔴 2026-09-02：`.set-page` 的闭合原来在这里 —— 于是 ③④⑤ 三张卡**在它外面**。
-           后果不只是左缘差 16px（那层灰底 panel 的 padding），更严重的是：
-           **预览/编辑两态的 CSS 全部写在 `.cfg-form.preview` 后代选择器上** ⇒
-           实测预览态下 ①② 的输入框是 border:none+透明（正确的只读样子），
-           而 ③④ 仍是 border:solid+白底（还长得像可编辑的表单框）。
-           ⇒ 两态只对 5 张卡里的 2 张生效。闭合下移到全部卡片之后。 -->
-
-      <!-- ── ③ 无回复自动跟进 ── -->
-      
-
-      <!-- ══ C5-3 ②「🧭 方向盘」——机器按什么找客户 ══
-           找客户页解散后，那些**持久配置**（不是单次动作）搬到这里。
-           ⚠️ 2026-09-02 Joe 指认：**取消折叠，与其他板块一样平铺常开。**
-              原因不只是版式不一致——折叠态还引发过"读不到配置"的显示混淆
-              （收起时看不见内容，加载失败和"还没展开"长得一模一样）。
-           ⚠️ 随之而来的口径变化（必须说出来）：原来"折叠收起时不计字数"，
-              现在整块都计入设置页 900 预算。改完已用闸实测，见交付说明。
-           ⚠️ 里面的 id / 勾选即存 / 二次确认 / 保存逻辑**全部原样迁移**，一行没改。 -->
-      
-
-      <!-- ── ④ 飞书通知 + 当前账号 ── -->
-      
-
-      <!-- ⚠️ 保存语义没改：**一个「保存」按钮存全部**（发信设置 + 跟进 + 飞书一起存）。
-           两个引擎开关是勾选即存（批㉒），上面卡片里已明说，这里不重复。
-           「发送测试卡片」是**动作**不是设置 → 降为描边次级钮，实心只留给保存。 -->
-      <!-- C5-4v①：底部动作条撤销 —— 保存已上移进吸顶页头；
-           「发送测试卡片」移进 ④通知与账号 卡（它测的就是那一块，语义归位）。 -->
+      <!-- ── ③ 账号（无编辑）── -->
+      <div class="set-card">
+        <div class="pr-head"><span class="sec-title" style="margin:0">账号</span></div>
+        <div class="pr-row"><span class="pr-k">当前账号</span>
+          <span class="pr-v"><b id="whoami">—</b>
+            <!-- ⚠️ 退出登录**必须是真 <a href>**：Access 的登出走它自己的 endpoint，⛔ 别改成 JS 点击 -->
+            <a class="mini" href="/cdn-cgi/access/logout" style="margin-left:auto;text-decoration:none">退出登录</a></span></div>
+        <div class="pr-row"><span class="pr-k">加同事</span>
+          <span class="pr-v"><span class="u">在 Cloudflare Access 里加邮箱，立刻生效</span>
+            <span class="gj-help" data-help title="能进 CRM = 能看全部线索、能发信；这里没有第二份名单，权限只由 Access 那一处决定。">(?)</span>
+            <a class="mini" href="https://one.dash.cloudflare.com/?to=/:account/access/apps" target="_blank" rel="noopener" style="margin-left:auto;text-decoration:none">去加人 ↗</a></span></div>
+      </div>
       </div><!-- /.set-page -->
     </div>
   </div>
@@ -5316,20 +5298,27 @@
       // 产能提示 / AI 用量 / 退订样本 —— **已随 C5-2 搬去机器房**（宪法 §2 + 铁律五：一个事实一个展示位）。
       _capacity = c.capacity || null;   // 仍读进来：机器房要用
       _sysEffective = _sysEff;
-      // 🔴 C5-2 事故：熔断**明细**搬去机器房时，把 `const b = c.breaker` 一起删了，
-      //    可这条**横幅**是要留在设置页的（它说的是"自动发送现在停着"= 开关旁边的状态，
-      //    不是机器内部）。结果整个 renderAutomation 抛 `b is not defined`，
-      //    后面的保存绑定全没挂上 —— 而页面**看上去是好的**（字段都填着）。
-      //    ⇒ 删展示位时必须回头看**同一函数里还有谁在用那个变量**，不能只看 DOM id。
-      const b = c.breaker || {};
-      const banner = $("#brk-banner");
-      if (b.trippedAt) {
-        banner.style.display = "";
-        banner.innerHTML = `<b>⚠️ 自动发送已被熔断，现在没有在自动发信</b><br>`
-          + `原因：${esc(b.tripReason || "退订率超阈值")}<br>`
-          + `停止时间：${esc(fmtAgo(b.trippedAt))}（${esc(fmtTime(b.trippedAt, true))}）<br>`
-          + `自动批准与手动发送不受影响。<b>不会自动恢复</b> —— 请先检查线索来源与开发信内容，确认后勾上「自动发送」再保存。`;
-      } else banner.style.display = "none";
+      // 设置页 v2：熔断横幅 `#brk-banner` **已删**（熔断此刻在自动化页「发信」卡的「退订就停」那一行说，
+      //   还带「恢复自动发信」按钮 —— 说明和能做的事在同一处，比横幅更有用；同一事实不摆两处）。
+      //   ⚠️ 连着把这里读 `c.breaker` 的那几行一起删 —— C5-2 那次事故正是**删了展示位留下变量引用**
+      //     （`b is not defined` 抛在函数中段，后面的保存绑定全没挂上，而页面看上去是好的）。
+      //   这次是反过来：把元素和用它的代码一起删，不留半边。
+      // ── 设置页 v2「发件身份」回填 ──
+      { const se = $("#cfg-sender-email"); if (se) se.textContent = c.sender_email || "sales@airsonde.net"; }
+      { const sn = $("#cfg-sender-name"); if (sn) sn.value = c.sender_name || ""; }
+      { const sg = $("#cfg-sender-signature"); if (sg) sg.value = c.sender_signature || ""; }
+      _lastSendCfg = c;   // 预览行 oninput 要用（⛔ 不为拼一行字再 fetch 一次配置）
+      renderSenderPreview(c);
+    }
+    let _lastSendCfg = null;
+    /** 「显示为 <名字> <发件邮箱>」——名字空时显示回落值并标「默认」。⛔ 不把回落值填进输入框（那会分不清设没设过）。 */
+    window.renderSenderPreview = function renderSenderPreview(c){
+      const el = $("#cfg-sender-preview"); if (!el) return;
+      const email = (c && c.sender_email) || "sales@airsonde.net";
+      const typed = ($("#cfg-sender-name")?.value || "").trim();
+      el.innerHTML = typed
+        ? `显示为 <b>${esc(typed)}</b> &lt;${esc(email)}&gt;`
+        : `显示为 <b>AirSonde</b> &lt;${esc(email)}&gt; <span class="u">（默认）</span>`;
     }
     // 批⑩A：整页唯一的「保存」—— 三块设置一起存（发信 + 跟进 + 飞书）。
     // ⚠️ 三个请求各自会失败。**每一段失败都必须说出来** —— 原来 followup 那发是 fire-and-forget
@@ -5395,7 +5384,10 @@
           // ── 公司信息：只有设置页那颗保存才提交（那五个输入框住在设置页）──
           ...(!doCompany ? {} : { company_name:$("#cfg-company").value, company_address:$("#cfg-address").value,
             company_website:$("#cfg-website").value, selling_points:$("#cfg-selling").value,
-            chat_script:$("#cfg-chatscript").value, bcc_archive:$("#cfg-bcc").value }),
+            chat_script:$("#cfg-chatscript").value, bcc_archive:$("#cfg-bcc").value,
+            // 设置页 v2「发件身份」：⚠️ 传**原始字符串**，空串交给后端删行（= 回落到默认），
+            //   ⛔ 别在这里替他判断"空就不提交"——那样他清空之后就永远清不掉了。
+            sender_name: $("#cfg-sender-name").value, sender_signature: $("#cfg-sender-signature").value }),
           // ── 发信卡那几行 ──
           ...(!doSend ? {} : { daily_send_limit:Number($("#cfg-limit").value), send_ramp_enabled:$("#cfg-ramp").checked,
             // ⚠️ 传的是**原始字符串**不是 Number()：空框 Number("") = 0，会把"我不想管这个"
@@ -6655,10 +6647,12 @@ ${esc(d.ours.body||'')}</div></details>`
     //    被删的那块带着一条保护：「取不到邮箱也要给一个可点的标签 —— 否则 Access 一抖，
     //    退出入口就整个消失，而那正是最需要它的时刻」。收敛成一处时**必须把这条保护搬过来**，
     //    否则"合并"就等于把那个保证弄丢了（原来 #whoami 是拿不到邮箱就什么都不渲染）。
+    // 设置页 v2：👤 emoji 删（Joe 口味）；「退出登录」现在是那一行右端的常驻 <a href>（写在 markup 里，
+    //   ⛔ 不再由这里拼——那样"退出永远在"就取决于这个 fetch 有没有成功回来）。这里只填账号本身。
+    //   ⚠️ 读不到就说读不到，⛔ 不留空白（空白会让人以为没登录）。
     const _renderWhoami = (email) => {
       const el = $("#whoami"); if (!el) return;
-      el.innerHTML = (email ? `👤 ${esc(email)}` : `👤 <span class="hint">账号读不到</span>`)
-        + ` · <a href="/cdn-cgi/access/logout">退出</a>`;   // 退出永远在，且是真 <a href>，不经 JS
+      el.innerHTML = email ? esc(email) : `<span class="u">账号读不到</span>`;
     };
     fetch("/api/me").then(r=>r.json())
       .then(m => _renderWhoami(m && m.email))

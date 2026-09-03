@@ -218,12 +218,17 @@ function hostOf(u: string): string {
   try { return new URL(u).host.replace(/^www\./, ""); } catch { return u.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, ""); }
 }
 
-function buildHtml(body: string, unsubUrl: string, company: string, address: string, website: string): string {
+// ⚠️ 签名参数默认空串：**空时这两个函数的输出与加签名之前逐字节相同**（回归判据，不是兜底）。
+function buildHtml(body: string, unsubUrl: string, company: string, address: string, website: string, signature = ""): string {
   const siteLine = website
     ? `Website: <a href="${esc(website)}" style="color:#6a6a6a">${esc(hostOf(website))}</a><br>`
     : "";
+  // 签名在正文之后、分隔线（地址/退订）之前；HTML 版换行 → <br>，与正文同一套转义
+  const sigBlock = signature
+    ? `\n<div style="margin:0 0 14px">${esc(signature).replace(/\n/g, "<br>")}</div>`
+    : "";
   return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#222;line-height:1.6;max-width:600px">
-${bodyToHtml(body)}
+${bodyToHtml(body)}${sigBlock}
 <hr style="border:none;border-top:1px solid #e2e2e2;margin:26px 0 12px">
 <div style="font-size:12px;color:#8a8a8a;line-height:1.5">
 ${esc(company)}${address ? " · " + esc(address) : ""}<br>
@@ -232,8 +237,8 @@ ${siteLine}If you'd prefer not to receive these emails, <a href="${unsubUrl}" st
 </div>`;
 }
 
-function buildText(body: string, unsubUrl: string, company: string, address: string, website: string): string {
-  return `${body}\n\n---\n${company}${address ? " · " + address : ""}${website ? "\nWebsite: " + website : ""}\nUnsubscribe: ${unsubUrl}`;
+function buildText(body: string, unsubUrl: string, company: string, address: string, website: string, signature = ""): string {
+  return `${body}${signature ? "\n\n" + signature : ""}\n\n---\n${company}${address ? " · " + address : ""}${website ? "\nWebsite: " + website : ""}\nUnsubscribe: ${unsubUrl}`;
 }
 
 // 今日已发送数量（UTC 日期）
@@ -406,6 +411,25 @@ export async function pickSender(_env: Env, _lead: any, _kind: string): Promise<
 export function senderBrand(env: Env, senderEmail: string): string {
   return senderEmail.includes("airsonde") ? "AirSonde" : (env.SENDER_NAME || "AirSonde");
 }
+/**
+ * From 的**显示名**（设置页 v2「发件身份」那一行）。
+ *
+ * ⚠️ 改在这一个函数里，⛔ 别在 deliverEmail 里再拼一份 —— 那正是"发件人显示名两处各拼各的"。
+ * ⚠️ **空 = 未设 = 与今天逐字节相同**（回落 senderBrand）：这是回归判据，不是善意兜底。
+ *   ⛔ 不 trim 成空串就写进设置（前端存空串时后端删行，见 index.ts）。
+ */
+export async function senderDisplayName(env: Env, senderEmail: string): Promise<string> {
+  const custom = (await getSetting(env, "sender_name", "")).trim();
+  return custom || senderBrand(env, senderEmail);
+}
+/**
+ * 签名（设置页 v2）。⚠️ 插在**正文之后、地址/退订之前**（buildText/buildHtml 各一处）。
+ *   openrouter 的提示词已写「Do NOT add a signature（appended at send）」—— 接的就是这里，⛔ 不改提示词。
+ *   空 = 不插 = 与今天逐字节相同。
+ */
+export async function senderSignature(env: Env): Promise<string> {
+  return (await getSetting(env, "sender_signature", "")).trim();
+}
 /** 某线索某类邮件的**正文品牌** = 它将用的发件人对应的短品牌（走 pickSender = 与 deliverEmail 同结果 → From/正文品牌一致，守"在途不换品牌"红线）。 */
 export async function brandForLead(env: Env, lead: any, kind: string): Promise<string> {
   return senderBrand(env, await pickSender(env, lead, kind));
@@ -536,7 +560,9 @@ export async function deliverEmail(env: Env, lead: any, subject: string, body: s
   // env.SENDER_EMAIL 不再直接当发件人;显示名沿用现有 SENDER_NAME 逻辑(规格点名)。
   const senderEmail = await pickSender(env, lead, kind);
   // ㉘b：显示名**随发件域**——防"正文品牌 A／发件人品牌 B"打架（上游真发生过，Joe 在 outbox 存档看到）。
-  const senderName = senderBrand(env, senderEmail);
+  //   设置页 v2：Joe 填了「发件人名字」就用它，空则回落上面那条（唯一真源 senderDisplayName）。
+  const senderName = await senderDisplayName(env, senderEmail);
+  const signature = await senderSignature(env);   // 空 = 不插 = 与今天逐字节相同
   // #53：新邮件退订链接优先用公开 API 正门（PUBLIC_API_URL）；未配则回退 APP_URL。
   //   ⚠️ AirSonde C1 两者都指不到公开面（无发信能力，无实害）；发信域单落地时必须给公开 host。
   const appUrl = (env.PUBLIC_API_URL || env.APP_URL || "http://localhost:8787").replace(/\/+$/, "");
@@ -570,8 +596,8 @@ export async function deliverEmail(env: Env, lead: any, subject: string, body: s
         to: [lead.email],
         ...(bccArchive ? { bcc: [bccArchive] } : {}),
         subject,
-        html: buildHtml(body, unsubUrl, company, address, website),
-        text: buildText(body, unsubUrl, company, address, website),
+        html: buildHtml(body, unsubUrl, company, address, website, signature),
+        text: buildText(body, unsubUrl, company, address, website, signature),
         reply_to: senderEmail,
         headers: {
           "List-Unsubscribe": `<${unsubUrl}>, <mailto:${senderEmail}?subject=unsubscribe>`,

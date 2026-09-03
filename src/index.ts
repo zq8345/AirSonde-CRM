@@ -2361,7 +2361,8 @@ app.get("/api/settings/sending", async (c) => {
   const KEYS = ["auto_send_trip_reason","auto_send_tripped_at","automation_changed_at","bcc_archive",
     "breaker_threshold","breaker_window","chat_script","company_address","company_name","company_website",
     "selling_points","send_interval_seconds","send_ramp_factor","send_ramp_floor",
-    "auto_send_enabled","auto_approve_enabled","automation_enabled","send_ramp_enabled","daily_send_limit"];
+    "auto_send_enabled","auto_approve_enabled","automation_enabled","send_ramp_enabled","daily_send_limit",
+    "sender_name","sender_signature"];   // 设置页 v2「发件身份」：空 = 未设 = 行为与今天逐字节相同
   const [br, sysLimit, coldToday, S] = await Promise.all([
     getBreakerStatus(c.env),
     systemDailySendLimit(c.env),
@@ -2429,6 +2430,11 @@ app.get("/api/settings/sending", async (c) => {
     // 系统闸只卡冷发(initial+followup)；事务信(确认/回真人)豁免但在用量里显示，见 send.ts coldSentToday
     cold_sent_today: coldToday,
     company_name: S("company_name", "AirSonde"),
+    // 设置页 v2「发件身份」：⚠️ 两个键**不给默认值**——空串就是"未设"，界面据此显示回落值（"显示为 AirSonde <…>"）。
+    //   ⛔ 别在这里回落成 senderBrand()：那样界面分不出"Joe 设成了 AirSonde"和"他没设过"。
+    sender_name: S("sender_name", ""),
+    sender_signature: S("sender_signature", ""),
+    sender_email: SENDER_PRIMARY,   // 只读展示（真源 send.ts pickSender），⛔ 不做成可填
     company_address: S("company_address", DEFAULT_COMPANY_ADDRESS),
     company_website: S("company_website", c.env.SITE_URL || "https://airsonde.com"),
     selling_points: S("selling_points", DEFAULT_SELLING_POINTS),
@@ -2593,6 +2599,14 @@ app.post("/api/settings/sending", async (c) => {
     const v = String(b.bcc_archive).trim();
     if (v && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return c.json({ error: "BCC 存档地址格式不对" }, 400);
     await setSetting(c.env, "bcc_archive", v);
+  }
+  // 设置页 v2「发件身份」。⚠️ **空串 = 删行 = 回落到今天的行为**（与 numKnob 同一条纪律：
+  //   "我不想管这个" ≠ "把它设成空"）。⛔ 别写空串进 settings —— 那会让 `S(k,"")` 与"未设"分不开。
+  for (const [key, val] of [["sender_name", (b as any).sender_name], ["sender_signature", (b as any).sender_signature]] as const) {
+    if (val == null) continue;
+    const v = String(val).trim().slice(0, key === "sender_name" ? 80 : 2000);
+    if (v === "") await c.env.DB.prepare("DELETE FROM settings WHERE key=?").bind(key).run();
+    else await setSetting(c.env, key, v);
   }
   if (b.company_name != null) await setSetting(c.env, "company_name", b.company_name.trim());
   if (b.company_address != null) await setSetting(c.env, "company_address", b.company_address.trim());
