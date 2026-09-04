@@ -2967,6 +2967,21 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
       const dupSentNote = (l) => (l && l.dup_sent_company && (l.status === 'analyzed' || l.status === 'pending'))
         ? `<div class="dup-note" title="这个邮箱地址已经被另一条线索发过开发信了，所以机器不会自动批准这条。如果确认是两家不同的公司，你可以手动批准。">同邮箱已发过信 · ${esc(l.dup_sent_company)}</div>`
         : '';
+      // 🔴 「已回复」这一格里、而我们**一封真信都没收到**的那几条 —— 它们是靠人工标记进来的。
+      //   ⚠️ 这不是错误：「已回复」是漏斗阶段，比「收到的回信」大是合法的（他在别的渠道被回了）。
+      //   但**差额必须逐条解释得出来** —— 一个说不出来路的差额，跟一个错的数一样坏。
+      //   ⇒ 这一行就是那个解释：谁在这一格里、凭什么在这儿。点进去时间线上有那条标记的原文。
+      //   ⚠️ 四类**与看板 `replies_scope.breakdown` 逐字同源**（后端 `reply_evidence`）——
+      //     ⛔ 别在这儿把 'manual' 和 'unknown' 合成一句话，那正是这一节要治的病。
+      const REPLY_EV = {
+        manual:  ['人工标记 · 没有收到信', '这条是手动标记的「他回了」—— 我们的邮箱里没有收到对应的信。它算「已回复」这一格，但不算「收到的回信」。点进去，时间线上有这条标记的原文。'],
+        unknown: ['来源没标 · 算不出哪一类', '这条回信入库时没有记下来源（真收到的 / 人工标记的），所以它既不算「收到的回信」也不算「人工标记」。回填之后才能归类。'],
+      };
+      const markedNote = (l) => {
+        if (!l || l.status !== 'replied') return '';
+        const e = REPLY_EV[l.reply_evidence];
+        return e ? `<div class="dup-note" title="${esc(e[1])}">${esc(e[0])}</div>` : '';
+      };
       const scPill = scPillOf, catPill = catPillOf, chSlots = chSlotsOf;
       // 时间列 = stage_at（后端按 status 取的"进入本格时间"），格式 2026-9-3：年-月-日不补零、不带时分
       const fmtDay = (s) => { if (!s) return "—"; const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/); if (!m) return "—";
@@ -3010,7 +3025,7 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
       const rowHtml = (l) => { return `
         <tr class="row" data-id="${l.id}">
           ${/* ① 公司：复选框（v8 补丁① 的 20×20 方框 + 撑满两行块的热区）+ 公司名 13 + 域名 12 --brand */''}
-          <td><div class="co-cell"><label class="chk-hit" onclick="event.stopPropagation()"><input type="checkbox" class="rowchk" ${selectedIds.has(String(l.id))?'checked':''} onchange="toggleSel(${l.id},this.checked)"><span class="chk-box"></span></label><div class="co-lines"><div class="co-name" title="${esc(l.company_name)||''}">${esc(l.company_name)||mu}</div>${(()=>{ if(!l.website) return ""; const w=safeHref(l.website); return w ? `<a class="dom" href="${esc(w)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(hostOf(l.website))}</a>` : `<span class="dom bad" title="链接协议不合法，已按纯文本显示">${esc(hostOf(l.website))}</span>`; })()}${dupSentNote(l)}</div></div></td>
+          <td><div class="co-cell"><label class="chk-hit" onclick="event.stopPropagation()"><input type="checkbox" class="rowchk" ${selectedIds.has(String(l.id))?'checked':''} onchange="toggleSel(${l.id},this.checked)"><span class="chk-box"></span></label><div class="co-lines"><div class="co-name" title="${esc(l.company_name)||''}">${esc(l.company_name)||mu}</div>${(()=>{ if(!l.website) return ""; const w=safeHref(l.website); return w ? `<a class="dom" href="${esc(w)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(hostOf(l.website))}</a>` : `<span class="dom bad" title="链接协议不合法，已按纯文本显示">${esc(hostOf(l.website))}</span>`; })()}${dupSentNote(l)}${markedNote(l)}</div></div></td>
           ${/* ② 阶段：灰 pill，文字 = 左栏格名逐字（无 emoji） */''}
           <td class="ac"><span class="pill stg">${esc(STAGE_LABEL[gridKeyOf(l)] || l.status)}</span></td>
           <td class="ac">${scPill(l.match_score)}</td>
@@ -6310,12 +6325,36 @@ ${esc(d.ours.body||'')}</div></details>`
             `<span>${esc(MIXLBL[m.k]||m.k)} ${m.n}</span>`).join(' · ') + `</div>`
         : `<div class="db-grow"><b>回信构成</b>：真人回信满 ${MIX_MIN_HUMAN} 封后开始显示构成` +
           `（当前 ${humanReplies}/${MIX_MIN_HUMAN}${mixTotal > humanReplies ? `，另有 ${mixTotal - humanReplies} 封自动回执不计入` : ''}）</div>`;
+      // 🔴 2026-09-04：**两个不同的量，各自叫各自的名字**（总工作废了"三处显示同一个数"那条判据）。
+      //   「收到的回信」= 我们真收到的信涉及几家；「已回复」= 处在这一格的线索数。
+      //   **后者比前者大是合法的**（他在 WhatsApp / 电话 / 展会上被回了，回来手动标一下）——
+      //   ⚠️ 但**差额必须解释得出来**：说清有几条、并把人指到能逐条看的地方。
+      //   ⛔ 一个说不出来路的差额，跟一个错的数一样坏。
+      const rs = d.replies_scope || null;
+      const scopeHtml = !rs ? '' : (() => {
+        const bd = rs.breakdown || {};
+        const lines = [`<div class="hint">收到的回信 <b>${rs.received||0}</b> 家 · 已回复（漏斗这一格）<b>${rs.stage||0}</b> 家`
+          + `<span class="gj-help" data-help title="两个数量的是两件事：「收到的回信」是我们邮箱里真收到的信；「已回复」是线索走到这一格——他在别的渠道回你、你回来手动标一下，也算走到了这一格。所以两个数不相等是正常的，⛔ 它们也不是包含关系（一条已成交的线索有真回信，它算在前者里、不算在后者里）。">(?)</span></div>`];
+        // 「已回复」这一格**内部**的划分，四类互斥。⚠️ 只说非零的那几类 —— 一行「0 家」是恒真的话。
+        const parts = [];
+        if (bd.with_real)     parts.push(`<b>${bd.with_real}</b> 家有真信`);
+        if (bd.manual_only)   parts.push(`<b>${bd.manual_only}</b> 家是人工标记、没收到信`);
+        if (bd.unknown_only)  parts.push(`<b>${bd.unknown_only}</b> 家来源没标`);
+        if (bd.no_reply_row)  parts.push(`<b>${bd.no_reply_row}</b> 家连回信记录都没有`);
+        // ⛔ 不留没有出口的数字：说了差额就要说得出去哪儿逐条看
+        if (parts.length) lines.push(`<div class="hint">这一格里：${parts.join(' · ')} —— ${act('逐条看', "gotoGroup('replied')")}</div>`);
+        // 🔴 划分加不起来 = 我漏了一种情况。⛔ 不许悄悄让它对不上：一个加不起来的分解看着像解释，比没有解释更坏。
+        if (rs.breakdown_ok === false) lines.push(`<div class="db-judge db-bad">⚠️ 这个分解加不回总数（${rs.stage}）—— 说明还有一类没被算进去，这一行本身就是待修的缺陷</div>`);
+        // ⚠️ 「口径未知」：>0 才显示（常驻一行「0」就又是一句恒真的话），但 API 恒算恒返回。
+        if ((rs.unknown_source_rows||0) > 0) lines.push(`<div class="hint">⚠️ 另有 <b>${rs.unknown_source_rows}</b> <b>条</b>回信<b>来源没标</b>（单位是行不是家），暂不计入任何一边 —— 回填之后才知道它们算哪一类</div>`);
+        return lines.join('');
+      })();
 
       $("#v-page").innerHTML = pageHeader('数据看板','')
         + card('本周发现', findHtml + growHtml)
         + `<div class="page-card db-block">${starLine}</div>`
         + card('生意在动吗？', b1)
-        + card('回信都是些什么信？', mixHtml)
+        + card('回信都是些什么信？', scopeHtml + mixHtml)
         + card('力气该花哪儿？', b2)
         + card('哪里在漏水？', b3);
     }

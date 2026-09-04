@@ -17,7 +17,7 @@ import { TIER1_COUNTRIES, runDiscovery, getKeywords, seedDefaultKeywords, getSea
 import { findLeadEmail, diagnoseSite, type PageProbe } from "./findemail";
 import { ingestReplies, matchReplyToLead } from "./replies";
 import { ensureReplyColumns, stripQuoted, previewOf, isNoiseReply, tabOf, type InboxTab } from "./reply-inbox";
-import { REAL_REPLY_SQL, realReplySql, UNKNOWN_SOURCE_SQL, NOT_TEST_SQL, notTestSql, LEADS_IS_TEST_DDL } from "./noise";
+import { REAL_REPLY_SQL, realReplySql, UNKNOWN_SOURCE_SQL, unknownSourceSql, NOT_TEST_SQL, notTestSql, LEADS_IS_TEST_DDL } from "./noise";
 import { installFetchMeter, meteredDB, mark as subMark, reset as subReset, summary as subSummary } from "./subreq";
 import { engineStatuses, pipelineTools } from "./engines";
 import { normalizeCustomerType, customerTypeLabel, categoryValuesFor, classifyKillReason, KILL_REASONS } from "./taxonomy";
@@ -64,6 +64,21 @@ const LEAD_ROW_COLS =
       WHERE lower(l2.email) = lower(l.email) AND e.kind='initial'
         AND e.status IN ('sent','queued') AND e.lead_id != l.id
       ORDER BY e.id ASC LIMIT 1) AS dup_sent_company, ` +
+  // 🔴 2026-09-04：这条线索处在「已回复」这一格，**但我们一封真信都没收到** ——
+  //   它是靠人工标记进来的（他在 WhatsApp / 电话 / 展会上被回了，回来打个卡）。
+  //   ⚠️ 这**不是错误**：「已回复」是漏斗阶段，它比「收到的回信」大是合法的。
+  //   但**差额必须解释得出来** —— 一个说不出来路的差额，跟一个错的数一样坏（总工 2026-09-04 定）。
+  //   ⇒ 这一位就是差额的**逐条解释**：谁在这一格里却没有对应的真信。
+  //   ⚠️ **四类要与看板那个划分逐字同源**（`replies_scope.breakdown`）。第一版我在这里只做了
+  //     "有回信行但没有真信 ⇒ 人工标记"这一个二分 ⇒ **把"来源没标"的也标成了「人工标记」**——
+  //     那正是这一整节要治的病（把两类不同的东西并成一个名字），我在治它的代码里又犯了一次。
+  //     渲染出来一看就露馅了：两条来源为 NULL 的行也挂上了「人工标记」。
+  `(CASE
+      WHEN EXISTS (SELECT 1 FROM replies r WHERE r.lead_id = l.id AND ${realReplySql("r")}) THEN 'real'
+      WHEN EXISTS (SELECT 1 FROM replies r WHERE r.lead_id = l.id AND r.source='manual')    THEN 'manual'
+      WHEN EXISTS (SELECT 1 FROM replies r WHERE r.lead_id = l.id AND ${unknownSourceSql("r")}) THEN 'unknown'
+      WHEN EXISTS (SELECT 1 FROM replies r WHERE r.lead_id = l.id)                          THEN 'other'
+      ELSE 'none' END) AS reply_evidence, ` +
   // 阶段派生：最新一条回复的类别，用于判「洽谈中/已婉拒」
   "(SELECT r.category FROM replies r WHERE r.lead_id = l.id ORDER BY r.id DESC LIMIT 1) AS latest_reply_cat, " +
   // 批③追加2：回复箱并入「已回复」页——每行一个线索 + 最新回复摘要/id（页面数据源仍是 /api/leads，不用 /api/replies）
@@ -1001,6 +1016,64 @@ app.get("/api/dashboard", async (c) => {
     emailsSent,
     sentLeads,
     counts: { replied, bounced, unsubscribed },
+    /**
+     * 🔴 **两个不同的量，各自命名，⛔ 不许再当成同一个数的两份拷贝**（总工 2026-09-04 作废了旧判据）：
+     *   · `stage`（=「**已回复**」）= 处在这一格的线索数（`leads.status='replied'`）—— **漏斗阶段**
+     *   · `received`（=「**收到的回信**」）= 我们真收到的信涉及多少家 —— **邮件事实**
+     * **`stage > received` 是合法的**：他在 WhatsApp / 电话 / 展会上被回了，回来手动标一下，
+     * 那条线索确实处在"已回复"阶段，而我们确实没收到那封信。
+     * ⚠️ 但**差额必须解释得出来**：`marked_not_received` 就是那几条，列表里每一条都带可见标注。
+     *   ⛔ 一个说不出来路的差额，跟一个错的数一样坏。
+     * ⚠️ `unknown_source`：来源没标的回信行。回填之后应当是 0，但**"它是 0"得有人看得见** ——
+     *   ⛔ 不许因为它是 0 就不算、不返回。
+     */
+    replies_scope: await (async () => {
+      // 🔴 差额必须**加得起来**。第一版我写了个 `marked_not_received`，实测它 = 3 而差额只有 1
+      //   ——**解释比被解释的东西还大**，那正是"说不出来路的差额"本身。两个病因：
+      //     ① 它把"来源未知"的行也算成了"人工标记"（那是两回事，⛔ 不许混）
+      //     ② `stage` 与 `received` **不是包含关系**（一条 status='won' 的线索有真回信，
+      //        它进 received 却不进 stage）⇒ 两个全局数相减，差额天然解释不了。
+      //   ⇒ 改成在**「已回复」这一格内部做一次划分**，四类互斥且必须刚好加回 stage。
+      const one = async (sql: string) => (await db.prepare(sql).first<{ n: number }>())?.n ?? 0;
+      const noReal = `NOT EXISTS (SELECT 1 FROM replies r WHERE r.lead_id=l.id AND ${realReplySql("r")})`;
+      // 🔴 **必须与 `stage` 同一个宇宙**：`replied` 来自 `F("replied")`，而那张表是
+      //   `WHERE ${NOT_TEST_SQL}` 查出来的 —— **它排掉了测试线索**。第一版我这四条没排，
+      //   于是分解出 5、总数是 2。⚠️ 这不是算错，是**两个数在数不同的集合** ——
+      //   而那正是这一整节要治的病，我差点在治它的代码里又犯一次。
+      //   （抓出来的正是下面那条 `breakdown_ok` 自检，它按设计报了红。）
+      const IN_STAGE = `l.status='replied' AND ${notTestSql("l")}`;
+      const stage = replied;
+      const withReal = await one(
+        `SELECT COUNT(*) AS n FROM leads l WHERE ${IN_STAGE}
+            AND EXISTS (SELECT 1 FROM replies r WHERE r.lead_id=l.id AND ${realReplySql("r")})`);
+      const manualOnly = await one(
+        `SELECT COUNT(*) AS n FROM leads l WHERE ${IN_STAGE} AND ${noReal}
+            AND EXISTS (SELECT 1 FROM replies r WHERE r.lead_id=l.id AND r.source='manual')`);
+      const unknownOnly = await one(
+        `SELECT COUNT(*) AS n FROM leads l WHERE ${IN_STAGE} AND ${noReal}
+            AND NOT EXISTS (SELECT 1 FROM replies r WHERE r.lead_id=l.id AND r.source='manual')
+            AND EXISTS (SELECT 1 FROM replies r WHERE r.lead_id=l.id AND ${unknownSourceSql("r")})`);
+      const noRow = await one(
+        `SELECT COUNT(*) AS n FROM leads l WHERE ${IN_STAGE}
+            AND NOT EXISTS (SELECT 1 FROM replies r WHERE r.lead_id=l.id)`);
+      return {
+        /** 「**已回复**」= 处在这一格的线索数（漏斗阶段）。 */
+        stage,
+        /** 「**收到的回信**」= 我们真收到的信涉及多少家（邮件事实，**全局**，⛔ 不是 stage 的子集）。 */
+        received: await one(
+          `SELECT COUNT(DISTINCT lead_id) AS n FROM replies WHERE lead_id IS NOT NULL AND ${REAL_REPLY_SQL}`),
+        /** 这一格内部的四类划分：**互斥且必须刚好加回 stage**。 */
+        breakdown: { with_real: withReal, manual_only: manualOnly, unknown_only: unknownOnly, no_reply_row: noRow },
+        /**
+         * 🔴 **自检**：四类之和 ≠ stage 就说明我这个划分漏了一种情况。
+         *   ⛔ 不许悄悄让它对不上 —— 前端会把它显示出来，因为一个加不起来的分解
+         *   比没有分解更坏（它看着像个解释）。
+         */
+        breakdown_ok: withReal + manualOnly + unknownOnly + noRow === stage,
+        /** 来源没标的回信**行数**（⚠️ 单位是行不是家，与上面几个不同 —— 名字里带 rows 提醒别混）。 */
+        unknown_source_rows: await one(`SELECT COUNT(*) AS n FROM replies WHERE ${UNKNOWN_SOURCE_SQL}`),
+      };
+    })(),
     // 🔴 `counts.bounced` / `counts.unsubscribed` 只有在这里说"在正常上报"时才是**读数**；
     //   否则它们是"没在量"。⛔ 前端不许在 state !== 'wired_with_events' 时把它们渲染成比率。
     deliverability: await deliverabilityState(c.env),
