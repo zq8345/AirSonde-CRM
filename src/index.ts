@@ -2167,14 +2167,25 @@ app.get("/api/today", async (c) => {
     //   （生产 8 条里 5 条 DMARC、2 条自动回执）。而 status 推进那一侧早已只认真人回信
     //   （auto-reply 不再推进 stage，见 replies.ts），所以 status 是已经去过噪的那个口径。
     //   ⛔ 别改成 `COUNT(*) FROM replies`，那会把 DMARC 报告当成"客户回信了"。
+    // 🔴🔴 2026-09-04：**「已回复」这个名字在库里有三个口径，它们是三件不同的事。**
+    //   ⛔ 一个名字底下不许有两个口径（总工定）⇒ 三个都各自带名字，⛔ 别再有人叫它们"已回复"：
+    //     ① `counts.replied` / `replies_scope.stage` = `status='replied'`
+    //        —— **此刻停在这一格的**（回信之后又成交，它就离开这一格了）
+    //     ② `replies_scope.received` = 真收到的信涉及几家
+    //        —— **邮件事实**。⚠️ 与 ① 不是包含关系：人工标记进得了 ①、进不了 ②。
+    //     ③ 这里的 `ever_replied` = `status IN ('replied','won')`
+    //        —— **回过信的（累计）**，成交的当初也回过 ⇒ 它是回信**率**的分子，
+    //           漏掉 won 会让这个率随着成交而下降（原注释已论证，口径不变）。
+    //   ⚠️ 此刻这个端点的返回**全仓零消费方**（grep 过）⇒ 现在改名零风险；
+    //     等有人接上去再改就晚了 —— 他会照着 `replied` 这个名字把它当成 ① 显示出来。
     replyFunnel: await (async () => {
       const r = await db.prepare(
         `SELECT
            SUM(CASE WHEN status IN ('sent','replied','won') THEN 1 ELSE 0 END) AS contacted,
-           SUM(CASE WHEN status IN ('replied','won')        THEN 1 ELSE 0 END) AS replied
+           SUM(CASE WHEN status IN ('replied','won')        THEN 1 ELSE 0 END) AS ever_replied
          FROM leads WHERE ${NOT_TEST_SQL}`
-      ).first<{ contacted: number; replied: number }>();
-      return { contacted: r?.contacted || 0, replied: r?.replied || 0 };
+      ).first<{ contacted: number; ever_replied: number }>();
+      return { contacted: r?.contacted || 0, ever_replied: r?.ever_replied || 0 };
     })(),
     // C5-48「按当前标准重刷全库」的**真实影响面**。⛔ 不许写死 ——
     //   这个数字是 Joe 按下那个按钮之前唯一能看到的后果，写错了等于骗他点。
