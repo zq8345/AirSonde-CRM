@@ -17,7 +17,7 @@ import { TIER1_COUNTRIES, runDiscovery, getKeywords, seedDefaultKeywords, getSea
 import { findLeadEmail, diagnoseSite, type PageProbe } from "./findemail";
 import { ingestReplies, matchReplyToLead } from "./replies";
 import { ensureReplyColumns, stripQuoted, previewOf, isNoiseReply, tabOf, type InboxTab } from "./reply-inbox";
-import { REAL_REPLY_SQL, realReplySql, UNKNOWN_SOURCE_SQL, unknownSourceSql, NOT_TEST_SQL, notTestSql, LEADS_IS_TEST_DDL } from "./noise";
+import { REAL_REPLY_SQL, realReplySql, replyNotTestSql, UNKNOWN_SOURCE_SQL, unknownSourceSql, NOT_TEST_SQL, notTestSql, LEADS_IS_TEST_DDL } from "./noise";
 import { installFetchMeter, meteredDB, mark as subMark, reset as subReset, summary as subSummary } from "./subreq";
 import { engineStatuses, pipelineTools } from "./engines";
 import { normalizeCustomerType, customerTypeLabel, categoryValuesFor, classifyKillReason, KILL_REASONS } from "./taxonomy";
@@ -748,10 +748,10 @@ app.get("/api/health/sending", async (c) => {
 
   // 回复：按**线索**算（一个线索回多封只算一次），并给出热回复数
   const r = await db.prepare(
-    `SELECT COUNT(DISTINCT lead_id) AS leads_replied FROM replies WHERE lead_id IS NOT NULL AND ${REAL_REPLY_SQL}`
+    `SELECT COUNT(DISTINCT lead_id) AS leads_replied FROM replies r WHERE r.lead_id IS NOT NULL AND ${realReplySql("r")} AND ${replyNotTestSql("r")}`
   ).first<{ leads_replied: number }>();
   const hot = await db.prepare(
-    `SELECT COUNT(*) AS n FROM replies WHERE category IN ('interested','inquiry') AND ${REAL_REPLY_SQL}`
+    `SELECT COUNT(*) AS n FROM replies r WHERE r.category IN ('interested','inquiry') AND ${realReplySql("r")} AND ${replyNotTestSql("r")}`
   ).first<{ n: number }>();
 
   const total = u?.total ?? 0, machine = u?.machine_like ?? 0;
@@ -900,7 +900,7 @@ app.get("/api/dashboard", async (c) => {
     "SELECT date(sent_at) AS d, COUNT(*) AS n FROM emails WHERE status='sent' AND sent_at IS NOT NULL AND date(sent_at) >= date('now','-13 days') GROUP BY date(sent_at)"
   ).all()).results as any[];
   const repliedDaily = (await db.prepare(
-    `SELECT date(received_at) AS d, COUNT(*) AS n FROM replies WHERE received_at IS NOT NULL AND ${REAL_REPLY_SQL} AND date(received_at) >= date('now','-13 days') GROUP BY date(received_at)`
+    `SELECT date(r.received_at) AS d, COUNT(*) AS n FROM replies r WHERE r.received_at IS NOT NULL AND ${realReplySql("r")} AND ${replyNotTestSql("r")} AND date(r.received_at) >= date('now','-13 days') GROUP BY date(r.received_at)`
   ).all()).results as any[];
   const newDaily = (await db.prepare(
     "SELECT date(created_at) AS d, COUNT(*) AS n FROM leads WHERE created_at IS NOT NULL AND date(created_at) >= date('now','-13 days') GROUP BY date(created_at)"
@@ -1061,7 +1061,7 @@ app.get("/api/dashboard", async (c) => {
         stage,
         /** 「**收到的回信**」= 我们真收到的信涉及多少家（邮件事实，**全局**，⛔ 不是 stage 的子集）。 */
         received: await one(
-          `SELECT COUNT(DISTINCT lead_id) AS n FROM replies WHERE lead_id IS NOT NULL AND ${REAL_REPLY_SQL}`),
+          `SELECT COUNT(DISTINCT r.lead_id) AS n FROM replies r WHERE r.lead_id IS NOT NULL AND ${realReplySql("r")} AND ${replyNotTestSql("r")}`),
         /** 这一格内部的四类划分：**互斥且必须刚好加回 stage**。 */
         breakdown: { with_real: withReal, manual_only: manualOnly, unknown_only: unknownOnly, no_reply_row: noRow },
         /**

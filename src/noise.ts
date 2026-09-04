@@ -44,6 +44,19 @@ export const UNKNOWN_SOURCE_SQL = "source IS NULL";
 export const unknownSourceSql = (alias: string) => `${alias}.source IS NULL`;
 
 /**
+ * 🔴 **直接在 `replies` 上数"真回信"时，必须再挂这一条**：那封信所属的线索**不是测试线索**。
+ *
+ * 事故（2026-09-04，回填之后当场现形）：`replies` #1 是 `joe@airsonde.com` 发给自己的点火测试，
+ * 它 `is_auto=0`；回填把它标成 `source='imap'` ⇒ 它**同时满足了 REAL_REPLY_SQL 的两个条件**，
+ * 于是「收到的回信」从**正确的 0 变成了错误的 1**。
+ * ⚠️ 本文件开头就写着"两族：自动回执 + 测试数据"，而那些**直接查 replies 表**的计数
+ *   只挂了第一族 —— 从 `leads` 出发的查询天然带 `NOT_TEST_SQL`，从 `replies` 出发的**没有人替它挂**。
+ * ⇒ 凡是 `FROM replies` 的战绩计数，一律再加这一条。⛔ 别指望调用处记得。
+ */
+export const replyNotTestSql = (alias: string) =>
+  `EXISTS (SELECT 1 FROM leads l_nt WHERE l_nt.id = ${alias}.lead_id AND ${notTestSql("l_nt")})`;
+
+/**
  * 非测试线索（排除我们自己造的数据）。用于**计数**，不用于展示。
  *
  * ⚠️ 定义本身**不在这里，而在 `leads.is_test` 这个生成列的 DDL 里**（见下方 LEADS_IS_TEST_DDL）。
