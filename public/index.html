@@ -62,6 +62,17 @@
     .qfoot .t { font-size:13px; color:var(--muted); flex:1; line-height:1.5; }
     .qfoot .t b { color:var(--text); }
     .qact { display:flex; align-items:center; gap:12px; margin-top:14px; }
+    /* v12③ 机会条：搬到国家表**上方**。⛔ 不用红色 —— **它是机会不是故障**（Joe 点名）。 */
+    .q-lead { display:flex; align-items:center; gap:14px; margin:0 0 16px; padding:12px 15px;
+              border-radius:10px; background:var(--brand-tint); border:1px solid var(--brand-tint); }
+    .q-lead .k { font-size:22px; font-weight:700; line-height:1; color:var(--brand-strong); flex:none; }
+    .q-lead .t { font-size:13px; color:var(--muted); flex:1; line-height:1.5; }
+    .q-lead .t b { color:var(--text); }
+    /* v12① 图上方那行：被折起来的「非目标 / 资料不足」—— **可点**，⛔ 不是死文字 */
+    .q-rest { margin:0 0 14px; }
+    .q-rest .rest-k { cursor:pointer; color:var(--brand-strong); }
+    .q-rest .rest-k:hover { text-decoration:underline; }
+    .q-rest .rest-k.on { font-weight:700; text-decoration:underline; }
     .db-sum { font-size:13px; margin:0 0 14px; }
     /* ① 国家 */
     .mtab { display:grid; grid-template-columns:76px 1fr 42px 42px 46px 46px 50px; gap:0 14px; align-items:center; font-size:13px; }
@@ -6084,7 +6095,7 @@ ${esc(d.ours.body||'')}</div></details>`
       const ccs = V.countries;
       const maxN60 = ccs.length ? ccs[0].n60 : 0;
       const HILITE = 12;   // 前 12 高亮、其余淡显（真源 v11.html）
-      const ccRows = ccs.map((r, i) => {
+      const ccRowsAll = ccs.map((r, i) => {
         const dim = i >= HILITE ? ' d' : '';
         const wA = maxN60 ? Math.max(2, Math.round(r.n60 / maxN60 * 100)) : 0;
         const wB = maxN60 ? Math.round(r.n80 / maxN60 * 100) : 0;
@@ -6093,26 +6104,52 @@ ${esc(d.ours.body||'')}</div></details>`
           + `<span class="n${dim ? '' : ' big'}">${r.n60}</span><span class="n">${r.n80}</span>`
           + `<span class="n">${r.withEmail}</span><span class="n">${r.sent}</span>`
           + `<span class="n gap${r.unreachable ? '' : ' z'}">${r.unreachable}</span>`;
-      }).join('');
+      });
       const unreachTotal = ccs.reduce((a, b) => a + b.unreachable, 0);
       const unreachTop = ccs.filter(r => r.unreachable > 0).sort((a, b) => b.unreachable - a.unreachable)
         .slice(0, 3).map(r => `${countryName(r.cc) || r.cc} ${r.unreachable}`).join(' · ');
+      // 🔴 v12②：49 行里**前 12 行是信息，往下 37 行全是 1~2 家**、条形几乎看不见，却占了这张卡约
+      //   七成高度。⇒ 默认只渲染 12 行，其余收进「展开其余 N 个国家」（N 现算，⛔ 不写死 37）。
+      //   ⚠️ 收起态**不许留空白占位** —— 那些行根本不进 DOM，⛔ 不是 display:none。
+      window._v11Cc = { rows: ccs, open: false };
+      window.v11CcToggle = () => {
+        const s = window._v11Cc; s.open = !s.open;
+        const box = document.getElementById('v11-cc-more'); if (box) box.innerHTML = s.open ? ccRowsAll.slice(HILITE).join('') : '';
+        const btn = document.getElementById('v11-cc-btn');
+        if (btn) btn.textContent = s.open ? '收起' : `展开其余 ${Math.max(0, ccs.length - HILITE)} 个国家`;
+      };
+      // 🔴 v12③：这是全屏**唯一一条现在就能干的事**，原来却是最小的字、埋在脚注里 ⇒ 搬到表格上方。
+      //   ⚠️ ⛔ 不做成红色告警 —— **它是机会不是故障**（这一条是 Joe 点名的）。
+      const q1lead = unreachTotal > 0
+        ? `<div class="q-lead"><span class="k">${unreachTotal}</span>`
+          + `<span class="t"><b>个合格客户没有邮箱</b>${unreachTop ? ` —— ${esc(unreachTop)}` : ''}。已确认合格，只差一个邮箱。</span>`
+          + `${act2('补邮箱', "gotoGroup('ready')")}</div>`
+        : '';
       const q1body = ccs.length
-        ? `<div class="mtab">
+        ? q1lead
+          + `<div class="mtab">
              <span class="hd">国家</span><span class="hd">60 分以上　<span style="color:var(--brand)">■</span> 80 分以上</span>
              <span class="hd r">60+</span><span class="hd r">80+</span><span class="hd r">有邮箱</span><span class="hd r">已发</span><span class="hd r">够不着</span>
-             ${ccRows}
+             ${ccRowsAll.slice(0, HILITE).join('')}<span id="v11-cc-more" style="display:contents"></span>
            </div>
+           ${ccs.length > HILITE ? `<p style="margin:10px 0 0"><button class="db-act" id="v11-cc-btn" onclick="v11CcToggle()">展开其余 ${ccs.length - HILITE} 个国家</button></p>` : ''}
            <p class="hint">够不着 = 60 分以上但没邮箱。⛔ 不按命中率排 —— 市场越小命中率越高，那不代表市场更好。</p>`
         : `<div class="hint">还没有 60 分以上的线索 —— 这张表要等第一批打完分才有内容。</div>`;
-      const q1foot = unreachTotal > 0
-        ? `<div class="qfoot"><span class="k r">${unreachTotal}</span><span class="t"><b>个合格客户没有邮箱</b>${unreachTop ? ` —— ${esc(unreachTop)}` : ''}。已确认合格，只差一个邮箱。</span>${act2('先挖这些', "gotoGroup('ready')")}</div>`
-        : '';
+      const q1foot = '';
 
       // ── ② 客户类型（大甜甜圈，点一片右侧整块换）────────────────────────
       //   ⚠️ 七片合计 = 全部入池 ⇒ 未分类的归 unclear（服务端 LEFT JOIN 保证），⛔ 前端不补齐。
-      const types = V.types.filter(t => t.n > 0);
-      const typeTotal = types.reduce((a, b) => a + b.n, 0);
+      // 🔴 v12①：**这张图原来回答错了问题。** Joe 问的是「哪类客户是重点」，而它画的是「池子里都是些什么」
+      //   —— 最大的两块是「非目标」和「资料不足」，**两个都不是客户类型**，真客户五类反而挤成细条。
+      //   ⇒ 甜甜圈**只画真客户那五类**，中心数字 = 真客户数（现算）。
+      //   ⚠️ 剩下那一大堆**不许消失得无影无踪**：降成图上方一行**可点**的字，点开仍看得到它们的详情
+      //     （那块详情做得好，⛔ 别删）。⇒ 隐藏 ≠ 删除，⛔ 别把"不重点"做成"查不到"。
+      const allTypes = V.types.filter(t => t.n > 0);
+      const types = allTypes.filter(t => t.isReal);        // 画在图上的
+      const restTypes = allTypes.filter(t => !t.isReal);   // 折进上方那行字的
+      const typeTotal = types.reduce((a, b) => a + b.n, 0);        // = 真客户数，⛔ 不是全部入池
+      const restTotal = restTypes.reduce((a, b) => a + b.n, 0);
+      const poolTotal = typeTotal + restTotal;
       const PIE = ['#0c7a6b', '#2f8f80', '#63aa9e', '#8ec4bb', '#bcd6d1', '#dccdb0', '#c0392b'];
       const R = 138, CX = 168, CY = 168;
       const arc = (a0, a1, push) => {
@@ -6123,8 +6160,19 @@ ${esc(d.ours.body||'')}</div></details>`
         return `M${CX + dx},${CY + dy} L${x0},${y0} A${R},${R} 0 ${large} 1 ${x1},${y1} Z`;
       };
       window._v11Types = types;
+      window._v11Rest = restTypes;
+      // 上方那行字里的「非目标 / 资料不足」也用**同一个详情组件**渲染到**同一块右侧面板**。
+      // ⛔ 不为它们另做一套 —— 那就是第二处口径。
+      window.v11PickRest = (i) => {
+        const t = (window._v11Rest || [])[i]; if (!t) return;
+        document.querySelectorAll('#v11-pie path.slice').forEach(p => { p.setAttribute('d', p.dataset.flat); p.classList.remove('sel'); });
+        document.querySelectorAll('.plg span').forEach(s => s.classList.remove('on'));
+        document.querySelectorAll('.q-rest .rest-k').forEach((s, k) => s.classList.toggle('on', k === i));
+        const det = document.getElementById('v11-det'); if (det) det.innerHTML = v11DetHtml(t);
+      };
       window.v11Pick = (i) => {
         const t = (window._v11Types || [])[i]; if (!t) return;
+        document.querySelectorAll('.q-rest .rest-k').forEach(s => s.classList.remove('on'));
         document.querySelectorAll('#v11-pie path.slice').forEach((p, k) => {
           p.setAttribute('d', p.dataset[k === i ? 'push' : 'flat']);
           p.classList.toggle('sel', k === i);
@@ -6133,13 +6181,20 @@ ${esc(d.ours.body||'')}</div></details>`
         const det = document.getElementById('v11-det'); if (det) det.innerHTML = v11DetHtml(t);
       };
       window.v11DetHtml = (t) => {
-        const pct1 = typeTotal ? (t.n / typeTotal * 100).toFixed(1) : '0.0';
+        // 🔴 v12 抓到的：饼改成只画真客户之后，`typeTotal` 的含义从"全部入池"变成了"真客户"
+        //   ⇒ 用它给「资料不足」算占比 = **拿错分母**（实测 15/89=16.9%，而它真正的占比是 15/144）。
+        //   ⚠️ 这正是今天反复出现的那一族：**一个量换了含义，而下游还按旧含义在用它。**
+        //   ⇒ 不只是换分母，**把分母写在字面上** —— 「占真客户 X%」/「占入池 X%」，
+        //     ⛔ 不留一个光秃秃的百分号让人自己猜它除的是谁。
+        const denom = t.isReal ? typeTotal : poolTotal;
+        const denomLbl = t.isReal ? '占真客户' : '占入池';
+        const pct1 = denom ? (t.n / denom * 100).toFixed(1) : '0.0';
         const emailPct = t.n ? Math.round(t.withEmail / t.n * 100) : 0;
         const cell = (v, lbl, red) => `<div class="dc"><em${red ? ' style="color:var(--red)"' : ''}>${v}</em><span>${esc(lbl)}</span></div>`;
         const chips = (arr, fmt) => arr.length
           ? arr.map(x => `<span class="chip">${esc(fmt(x))}</span>`).join('')
           : `<span class="hint">还没有</span>`;
-        return `<div class="dh"><h4>${esc(t.label || t.cat)}</h4><span class="pc">${t.n} 家 · ${pct1}%</span></div>
+        return `<div class="dh"><h4>${esc(t.label || t.cat)}</h4><span class="pc">${t.n} 家 · ${denomLbl} ${pct1}%</span></div>
           <div class="dg">
             ${cell(t.withEmail, `有邮箱 ${emailPct}%`)}
             ${cell(t.n60, '60 分以上')}
@@ -6163,12 +6218,18 @@ ${esc(d.ours.body||'')}</div></details>`
             }).join('');
             const legend = types.map((t, i) =>
               `<span class="${i === 0 ? 'on' : ''}" onclick="v11Pick(${i})"><i style="background:${PIE[i % PIE.length]}"></i>${esc(t.label || t.cat)}</span>`).join('');
-            return `<div class="pw">
+            // 上方那行字：把"不是客户/看不出来"如实说出来，**并且可点** ⇒ 它们没被藏起来，只是不占图。
+            const rest = restTypes.length
+              ? `<p class="q-rest hint"><b>${poolTotal}</b> 家入池，<b>${restTotal}</b> 家不是客户或看不出来 ——`
+                + restTypes.map((t, i) => ` <span class="rest-k" onclick="v11PickRest(${i})">${esc(t.label || t.cat)} ${t.n}</span>`).join('·')
+                + `</p>`
+              : '';
+            return rest + `<div class="pw">
               <div class="pbox">
                 <svg id="v11-pie" viewBox="0 0 336 336" style="width:336px;height:336px;display:block">
                   ${paths}
                   <circle cx="168" cy="168" r="82" fill="var(--bg)"></circle>
-                  <text x="168" y="154" text-anchor="middle" font-size="12" fill="var(--muted)">全部入池</text>
+                  <text x="168" y="154" text-anchor="middle" font-size="12" fill="var(--muted)">真客户</text>
                   <text x="168" y="190" text-anchor="middle" font-size="22" font-weight="700" fill="var(--text)">${typeTotal}</text>
                   <text x="168" y="210" text-anchor="middle" font-size="12" fill="var(--muted)">家</text>
                 </svg>
@@ -6179,9 +6240,10 @@ ${esc(d.ours.body||'')}</div></details>`
             </div>`;
           })()
         : `<div class="hint">还没有分类数据 —— 等 AI 打完第一批分。</div>`;
-      const realN = types.filter(t => t.isReal).reduce((a, b) => a + b.n, 0);
+      // ⚠️ 这句 Joe 点名要留（「画像错，越高效越是找错人」），⛔ 一个字不动。
+      //   📌 队列里记着一条：它指出画像可能错，**却不给看画像的入口** —— 要么给入口，要么这句话只是让他不安。
       const q2foot = types.length
-        ? `<div class="qfoot"><span class="k g">${realN}</span><span class="t">家是真客户。<b>这个分类由一份你没看过、也改不了的画像决定 —— 画像错，越高效越是找错人。</b></span></div>`
+        ? `<div class="qfoot"><span class="k g">${typeTotal}</span><span class="t">家是真客户。<b>这个分类由一份你没看过、也改不了的画像决定 —— 画像错，越高效越是找错人。</b></span></div>`
         : '';
 
       // ── ③ 关键词搜索 ─────────────────────────────────────────────────
