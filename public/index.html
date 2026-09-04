@@ -575,11 +575,23 @@
     /* 左：看勾选的 5 个固定槽 */
     .tb .zB { display:flex; gap:7px; flex-shrink:0; }
     /* toolbar-v9：.zB.off 的整片 opacity 调暗已删 —— 半透明的绿实心看着像能点；禁用态统一走上面那条灰样式 */
-    .tb .s1 { width:86px; } .tb .s2 { width:80px; } .tb .s4 { width:88px; } .tb .s5 { width:52px; } .tb .s6 { width:74px; }
+    /* 🔴 2026-09-04：与 `.ttl`/`.sel` **同一个病、同一个改法** —— 槽宽是 v8 钉死的，而 v9 给按钮
+       加了 `(N)`，勾选数越大文字越长（`(186)` 比 `(1)` 宽 17px）⇒ 文字画到隔壁槽上。
+       生产实测：待联系整页勾选时「退回待审批 (186)」把「忽略」压住了 —— **Joe 报的"字叠字"就是这个，
+       只是右移了一格 ⇒ 他那个 bug 还没修完。**
+       ⇒ 定宽改 `min-width`：槽永远包得住自己的按钮。⛔ 不发明第二种改法。
+       ⚠️ 代价与上次一致（且已被接受）：文字长的那几页，它后面的槽整体右移。 */
+    .tb .s1 { min-width:86px; } .tb .s2 { min-width:80px; } .tb .s4 { min-width:88px; } .tb .s5 { min-width:52px; } .tb .s6 { min-width:74px; }
     .tb .s1, .tb .s2, .tb .s4, .tb .s5, .tb .s6 { flex-shrink:0; display:inline-block; }
     /* 右：不看勾选的全量动作 + 筛选；重置筛选永远最右 */
     .tb .zR { display:flex; align-items:center; gap:8px; margin-left:auto; flex-shrink:0; }
     .tb button { font-size:13px; line-height:1; border-radius:7px; padding:7px 6px; white-space:nowrap; cursor:pointer; width:100%; }
+    /* ⚠️ **只对固定槽里的按钮**放宽成"内容宽、至少占满槽"。
+       ⛔ 别写成全局 `.tb button { min-width:100% }` —— 我试过，右边 `.zR` 是 flex 容器，
+         那条会让**每个**右侧按钮至少和整个 `.zR` 一样宽，且因为 min-width 压着**缩不回去**
+         ⇒ 待联系页实测 `zR: 1451/355`，等于把一处溢出换成一处更大的溢出。
+       （又一次：改法对，作用域错。判据把它当场量出来了。） */
+    .tb .s1 button, .tb .s2 button, .tb .s4 button, .tb .s5 button, .tb .s6 button { width:auto; min-width:100%; }
     .tb .b-pri { background:var(--brand); border:1px solid var(--brand); color:#fff; font-weight:600; }
     .tb .b-sec { background:var(--bg); border:1px solid var(--border-strong); color:var(--text); }
     .tb .b-dan { background:var(--bg); border:1px solid var(--border); color:var(--red); }
