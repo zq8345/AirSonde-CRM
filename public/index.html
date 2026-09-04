@@ -3664,9 +3664,9 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
           : `<span title="数据不规范，点不开">${esc(shown)}</span>`;
         return `<div class="ch-row"><span class="ch-k">${esc(meta.label)}</span><span class="ch-v">${val}</span></div>`;
       });
-      // 没有渠道时用这张卡自己的写法（邮箱/官网行空着就是 `—`），⛔ 不为它另造一句文案。
+      // 一个渠道都没有时明写一句 —— 一个 `—` 分不出"没抓到"和"这一块坏了"。
       return `<div class="cl ch-block"><span class="k">渠道</span><span class="v" style="overflow:visible">`
-        + (rows.length ? rows.join("") : `<span class="mu">—</span>`)
+        + (rows.length ? rows.join("") : `<span class="mu">没有抓到任何联系方式</span>`)
         + `</span></div>`;
     }
     function dvNotesCard(lead){
