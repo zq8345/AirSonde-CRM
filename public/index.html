@@ -985,6 +985,12 @@
     .dv .cl { display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px; }
     .dv .cl:last-child { border-bottom:0; padding-bottom:0; }
     .dv .cl .k { width:34px; color:var(--hint); font-size:12px; flex-shrink:0; }
+    /* 详情页「渠道」：一行一个，**类型 + 具体值**（⛔ 不是图标 —— 列表页才是图标）。
+       ⚠️ 这一块是多行的 ⇒ 顶部对齐，⛔ 别继承 .cl 的 center（那会让第一行的标签飘到中间）。 */
+    .dv .cl.ch-block { align-items:flex-start; }
+    .dv .ch-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:3px 0; }
+    .dv .ch-row .ch-k { color:var(--hint); font-size:12px; min-width:56px; }
+    .dv .ch-row .ch-v { font-size:13px; word-break:break-all; }
     .dv .cl .v { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .dv .cl .v.mu { color:var(--hint); }
     .dv .cl a { color:var(--brand); text-decoration:none; }
@@ -3630,7 +3636,38 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
       return `<div class="card${dis ? " dis" : ""}"><div class="ct"><b>联系方式</b>${dis ? '<span class="r">不再联系</span>' : ""}</div>
         <div class="cl"><span class="k">邮箱</span>${emailCtl}</div>
         <div class="cl"><span class="k">官网</span><span class="v${lead.website ? "" : " mu"}">${site ? `<a href="${esc(site)}" target="_blank" rel="noopener">${esc(hostOf(lead.website))}</a>` : (lead.website ? esc(hostOf(lead.website)) : "—")}</span></div>
-        <div class="cl"><span class="k">渠道</span><span class="v" style="overflow:visible">${chSlotsOf(lead)}</span></div></div>`;
+        ${dvChannelsBlock(lead)}</div>`;
+    }
+    /**
+     * 详情页「渠道」：**把图标换成具体信息**。电话显示电话号码，社媒显示地址。完。
+     *
+     * ⚠️ 列表页**不动**（Joe：列表显示图标可以）—— `chSlotsOf` 一个字没改。
+     *
+     * 🔴 2026-09-04 返工记录，写在这里免得下一个人重蹈：
+     *   我第一版在这块上加了**复制按钮 + 复制反馈 + 三级退让 + WhatsApp 尝试入口 + 空渠道文案规范**。
+     *   Joe：「我只是让你把公司详情页的联系方式从图标改成信息，你搞这些干什么？总是自作聪明」。
+     *   **他是对的。** 他提"很多 WhatsApp 账号用的就是电话号码"，是在**解释他为什么要看到号码**，
+     *   ⛔ 不是在要一个 WhatsApp 功能。
+     *   ⇒ **把需求的"理由"当成需求，是加戏最常见的入口。** 判据：他要的那句话本身能不能独立成立 ——
+     *     「把图标改成信息」独立成立，⛔ 后面那半句是论据不是订单。
+     */
+    function dvChannelsBlock(lead){
+      const ch = chanOf(lead);
+      const ORDER = ["phone", "whatsapp", "linkedin", "facebook", "instagram", "telegram", "youtube"];
+      const rows = ORDER.filter(k => ch[k]).map(k => {
+        const meta = CHANNEL_META[k] || { label: k };
+        const link = channelLink(k, ch[k], lead.company_name);
+        const shown = link.label || String(ch[k]);
+        const safe = link.clickable ? safeHref(link.href) : "";
+        const val = safe
+          ? `<a href="${esc(safe)}" target="_blank" rel="noopener">${esc(shown)}</a>`
+          : `<span title="数据不规范，点不开">${esc(shown)}</span>`;
+        return `<div class="ch-row"><span class="ch-k">${esc(meta.label)}</span><span class="ch-v">${val}</span></div>`;
+      });
+      // 没有渠道时用这张卡自己的写法（邮箱/官网行空着就是 `—`），⛔ 不为它另造一句文案。
+      return `<div class="cl ch-block"><span class="k">渠道</span><span class="v" style="overflow:visible">`
+        + (rows.length ? rows.join("") : `<span class="mu">—</span>`)
+        + `</span></div>`;
     }
     function dvNotesCard(lead){
       return `<div class="card"><div class="ct"><b>备注</b><span class="r"><span id="dv-notes-msg">只有你看得到</span></span></div>
