@@ -389,12 +389,9 @@ async function getBacklog(env: Env): Promise<{ unscored: number; noscore: number
     noscore: await q(`SELECT COUNT(*) AS n FROM leads l JOIN lead_analysis a ON a.lead_id=l.id WHERE ${NO_SCORE_WHERE}`),
     // 缺邮箱：打了分但没邮箱 → 发不出去，卡在待审批
     noEmail: await q("SELECT COUNT(*) AS n FROM leads l JOIN lead_analysis a ON a.lead_id=l.id WHERE (l.email IS NULL OR l.email='') AND l.status IN ('analyzed','pending','approved','queued')"),
-    // 能发没发：真能发出去却还躺着（与待办事项 sendable 同一口径）
+    // 能发没发：真能发出去却还躺着（与待办事项 sendable 同一口径 —— 现在是同一个常量，不再是抄的）
     sendable: await q(
-      `SELECT COUNT(*) AS n FROM leads l JOIN lead_analysis a ON a.lead_id=l.id
-        WHERE l.status='approved' AND a.match_score >= ${APPROVE_MIN_SCORE}
-          AND l.email IS NOT NULL AND l.email!=''
-          AND lower(l.email) NOT IN (SELECT email FROM suppressed_emails)`),
+      `SELECT COUNT(*) AS n FROM leads l JOIN lead_analysis a ON a.lead_id=l.id WHERE ${SENDABLE_WHERE}`),
   };
 }
 
@@ -410,6 +407,23 @@ const APPROVE_MIN_SCORE = 60;
 if (APPROVE_MIN_SCORE !== APPROVE_MIN_SCORE_SVC) {
   console.error(`⚠️ 分数线不一致：index.ts=${APPROVE_MIN_SCORE} 而 service.ts=${APPROVE_MIN_SCORE_SVC} —— 两处必须同值`);
 }
+/**
+ * 「可发」的**单一真源**（`l` = leads，`a` = lead_analysis）。
+ *
+ * ⚠️ 这段谓词原来**逐字抄了两份**（待办事项一份、积压条一份）。抄两份的代价今天现形了：
+ *   2026-09-03 有 4 条 approved 与已发过的线索**共用同一个邮箱地址**（同一家被重复录入），
+ *   `deliverEmail` 里的 `dupAddr` 会在真发的那一刻按地址拦下它们 ⇒ **它们其实一封也发不出去**，
+ *   但两处 sendable 都把它们数了进来 —— 屏幕上的「X 家能发」是个**发不出去的数**。
+ * ⇒ 判重条件与 `deliverEmail` 的 `dupAddr` **逐字同形**（按地址、跨 lead_id、只认 initial 且已发/在队），
+ *   并且收敛成这一个常量：⛔ 别再复制第三份。
+ */
+const SENDABLE_WHERE = `l.status='approved' AND a.match_score >= ${APPROVE_MIN_SCORE}
+        AND l.email IS NOT NULL AND l.email!=''
+        AND lower(l.email) NOT IN (SELECT email FROM suppressed_emails)
+        AND NOT EXISTS (
+          SELECT 1 FROM emails e JOIN leads l2 ON l2.id = e.lead_id
+           WHERE lower(l2.email) = lower(l.email) AND e.kind='initial'
+             AND e.status IN ('sent','queued') AND e.lead_id != l.id)`;
 // ⭐ 两档制（Joe 拍板）：**60 是全系统唯一的决策线**。
 //   ≥60 有邮箱 → 机器自动发；<60 → 进「翻牌堆」由 Joe 复核。60-69 的人工拍板区**已取消**。
 //   道理：机器误发一封信成本低、可见、有熔断器兜底；机器误杀一个真客户损失一单、不可见、无兜底
@@ -1404,7 +1418,15 @@ app.get("/api/activity", async (c) => {
         ).first<{ t: string | null }>();
         // 字符串比较即可：两者都是 `YYYY-MM-DD HH:MM:SS` 同一口径（同一张表、同一写入路径）。
         const stillFailing = !!f?.error && (!lastOk?.t || String(f.created_at) > String(lastOk.t));
-        if (stillFailing) blocked = errHuman(f!.error);
+        if (stillFailing) {
+          const eh = errHuman(f!.error);
+          // 🔴 `content` 类（validation_error）说的是**这一封信自己不合规**被通道当场退回，
+          //   通道、钥匙、额度全是好的 ⇒ 它不是"系统受阻"，不该点亮全局橙灯。
+          //   ⚠️ 这个错判在 content 类存在之前就有（那时它归 unknown，照样点灯）——
+          //     不是新分类带来的回归，是新分类**让它第一次说得清**。
+          //   下一封正常的信照发；这一封要人去看的话，线索详情页的时间线里有原话。
+          if (eh.kind !== "content") blocked = eh;
+        }
       }
     }
   }
@@ -1907,10 +1929,7 @@ app.get("/api/today", async (c) => {
   // ⭐「X 家能发」必须是真能发的口径 = approved 且 有邮箱 且 ≥60分（与 sendApprovedBatch 的取批条件一致）。
   //    旧版直接拿 approved 总数当"待发送"→ 显示 322 而真值 41，是用户最恼火的那个谎。
   const sendable = (await db.prepare(
-    `SELECT COUNT(*) AS n FROM leads l JOIN lead_analysis a ON a.lead_id = l.id
-      WHERE l.status='approved' AND a.match_score >= ${APPROVE_MIN_SCORE}
-        AND l.email IS NOT NULL AND l.email != ''
-        AND lower(l.email) NOT IN (SELECT email FROM suppressed_emails)`
+    `SELECT COUNT(*) AS n FROM leads l JOIN lead_analysis a ON a.lead_id = l.id WHERE ${SENDABLE_WHERE}`
   ).first<{ n: number }>())?.n || 0;
   const serper = await getSerperUsage(c.env);
   // ⭐ 批⑪B：系统警报补两条 —— **它们今天都真发生过，而待办里根本没有它们**。

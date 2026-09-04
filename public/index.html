@@ -663,10 +663,15 @@
        ⚠️ 判据是**行几何**（104px 标签列 / 11px 行距 / 1px 细线），不是"看着像"。 */
     .pr-head { display:flex; align-items:center; gap:8px; margin:0 0 4px;
                padding-bottom:12px; border-bottom:1px solid var(--border); }
-    .pr-row { display:grid; grid-template-columns:104px 1fr; gap:12px; align-items:center;
+    /* 🔴 2026-09-03 Joe 截图指认：「我是谁 · 找什么客户」断行断在"客/户"中间。
+         真因是标签列钉死 104px，而这条标签实测要 114px（其余最长的也就 78px 上下）。
+       ⚠️ 列宽必须**所有行同一个数**：`.pr-row` 是一行一个 grid，改成 max-content 会让每行
+         各自算宽 ⇒ 标签竖着对不齐。⇒ 加宽到 120 并且 nowrap（宁可将来溢出被一眼看见，
+         也不要再悄悄折行）。 */
+    .pr-row { display:grid; grid-template-columns:120px 1fr; gap:12px; align-items:center;
               padding:11px 0; border-bottom:1px solid var(--border); }
     .pr-row:last-child { border-bottom:none; }
-    .pr-k { font-size:13px; color:var(--muted); }
+    .pr-k { font-size:13px; color:var(--muted); white-space:nowrap; }
     .pr-v { display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:14px; }
     .pr-v .hint { margin:0; }
     .pr-v .set-num { width:74px; }
@@ -1754,7 +1759,7 @@
               <b id="rs-per">5</b>
               <button type="button" onclick="rsPer(1)" aria-label="增加">+</button>
             </span><span class="u">条</span>
-            <span class="gj-help" data-help title="搜索服务单页封顶约 10 条，再调高也不会更多（2026-09-03 实测：num=100 与 num=10 返回完全相同的结果）。">(?)</span></span></div>
+            <span class="gj-help" data-help title="Serper 单页封顶约 10 条，再调高也不会更多（2026-09-03 实测：num=100 与 num=10 返回完全相同的结果）。">(?)</span></span></div>
         <div class="rs-row"><span class="rs-k">预计</span>
           <span class="rs-v"><span id="rs-est" class="u">—</span></span></div>
 
@@ -4383,7 +4388,7 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
 
     function renderKwInline(){
       $("#dp-kwlist").innerHTML = _fcKwRows.length
-        ? _fcKwRows.map(k=>{
+        ? `<div class="chips">` + _fcKwRows.map(k=>{
             const on = _fcKwChecked.has(k.keyword);
             // ⚠️ 2026-09-02 Joe：0 回信阶段这些战绩全是「发N·回0·0%」，**没有信息量**，
             //   26 个 chip 每个挂一串 0 就是满屏噪音。⇒ **有真回信才显示**。
@@ -4391,14 +4396,29 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
             const stat = (k.reply_count > 0)
               ? ` <span style="color:var(--muted);font-size:12px">发${k.sent_count}·回${k.reply_count}·${Math.round((k.reply_rate||0)*100)}%</span>`
               : ``;
-            return `<span class="kwitem ${on?'on':''}" data-kw="${esc(k.keyword)}" title="权重 ${k.weight!=null?k.weight:1}（按回复率自动加权）"><label><input type="checkbox" ${on?'checked':''} onchange="fcKwToggle(this)"> ${esc(k.keyword)}</label>${stat}${_fcKwManage?`<i onclick="delKeyword(${k.id})" title="删除">×</i>`:''}</span>`;
-          }).join("")
+            // 🔴 2026-09-03 Joe 截图指认：关键词全显示成"没勾"，而国家全是绿勾 —— DOM 里其实
+            //   33/33 都 checked（实测）。真因是**两处 chip 走了两套皮**：国家自绘一个实心 ✓ 方块，
+            //   关键词用**原生 checkbox**；只读态两边都被 `opacity:.55` 压暗，自绘的那个压暗后照样
+            //   看得出是勾上的，原生那个的对勾直接洗成浅灰空框 ⇒ **界面在说"没选"，而机器正按它搜**。
+            //   ⚠️ CSS 第 89 行的注释原本就写着「国家 + 关键词共用一套」—— 皮早就是一套，
+            //     漂的是这个渲染函数。⇒ 改成和国家逐字同一套 chip 标记，⛔ 不新造第二套看起来像的。
+            //   ⚠️ 删除叉在 chip 内部，必须 stopPropagation，否则点 × 会连带把这个词的勾选也翻掉。
+            return `<span class="chip kwitem${on?'':' off'}" data-kw="${esc(k.keyword)}" title="权重 ${k.weight!=null?k.weight:1}（按回复率自动加权）" onclick="fcKwToggle(this)">`
+                 + `<span class="cbx">${on?'✓':''}</span>${esc(k.keyword)}${stat}`
+                 + `${_fcKwManage?`<i onclick="event.stopPropagation();delKeyword(${k.id})" title="删除">×</i>`:''}</span>`;
+          }).join("") + `</div>`
         : `<span class="muted">当前用内置默认 ${_fcKwEffCount} 个关键词。点右上「管理」→「载入默认」把它们变成可编辑、可勾选，或添加自定义词。</span>`;
       rsPaint();
       relockFormOf($("#dp-kwlist"));   // C5-49：刚渲染出来的勾选框也要按当前模式锁一次
     }
-    window.fcKwToggle = (input) => { if (inPreview('[data-cfg-group="search"]')) { input.checked = !input.checked; return; }   // C5-49 第三层：连勾选态一起回滚
-      const sp=input.closest('.kwitem'); const kw=sp&&sp.dataset.kw; if(!kw) return; if(input.checked) _fcKwChecked.add(kw); else _fcKwChecked.delete(kw); sp.classList.toggle('on',input.checked); rsPaint(); };
+    // 与 fcCcToggle 逐字同形：只读态**直接 return**（不改内存、不重渲染）——
+    // 原来那版接的是原生 input，只读态要先把 `input.checked` 掰回去；chip 没有原生态可掰，这一层自然消失。
+    window.fcKwToggle = (el) => {
+      if (inPreview('[data-cfg-group="search"]')) return;   // C5-49 第三层
+      const kw = el && el.dataset ? el.dataset.kw : null; if (!kw) return;
+      if (_fcKwChecked.has(kw)) _fcKwChecked.delete(kw); else _fcKwChecked.add(kw);
+      renderKwInline();
+    };
     window.fcKwAll = (on) => { if (inPreview('[data-cfg-group="search"]')) return;   // C5-49 第三层
       if(on) _fcKwRows.forEach(k=>_fcKwChecked.add(k.keyword)); else _fcKwChecked.clear(); renderKwInline(); };
     // 批A#3 客户画像展开/收起（批⑳ 改：点标题切 caret + 收起时显摘要行，不再依赖 #fc-profile-toggle 按钮）
