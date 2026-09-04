@@ -20,7 +20,7 @@ import { ensureReplyColumns, stripQuoted, previewOf, isNoiseReply, tabOf, type I
 import { REAL_REPLY_SQL, realReplySql, replyNotTestSql, UNKNOWN_SOURCE_SQL, unknownSourceSql, NOT_TEST_SQL, notTestSql, LEADS_IS_TEST_DDL } from "./noise";
 import { installFetchMeter, meteredDB, mark as subMark, reset as subReset, summary as subSummary } from "./subreq";
 import { engineStatuses, pipelineTools } from "./engines";
-import { normalizeCustomerType, customerTypeLabel, categoryValuesFor, classifyKillReason, KILL_REASONS } from "./taxonomy";
+import { normalizeCustomerType, customerTypeLabel, isTargetType, categoryValuesFor, classifyKillReason, KILL_REASONS } from "./taxonomy";
 import { normalizePhone, formatPhoneDisplay, decodeEntities } from "./scrape";   // C5-31：号码清洗与展示切分，单源；v8 补丁⑨：实体解码同源
 import { errHuman } from "./errhuman";   // C5-24 第 5 条：机器错误串 → 人话（服务端唯一一份）
 import { currentActivity, setActivity, clearActivity, readActivity, type ActivityKind } from "./activity";   // C5-28：机器活动真源
@@ -1158,7 +1158,8 @@ app.get("/api/dashboard", async (c) => {
           // ⚠️ 标签与"算不算真客户"都在**服务端**拼：taxonomy 住在服务端，
           //   前端再抄一份就是两处口径 —— 而这一族单子本身就是在治口径分两处写的病。
           label: customerTypeLabel(r.cat),
-          isReal: REAL_CATS.includes(`'${r.cat}'`),
+          // ⚠️ 真源是 taxonomy 的 target 字段，⛔ 不是命中率那份五类名单（那次抄错让 end-buyer 掉了出去）。
+          isReal: isTargetType(r.cat),
           n: Number(r.n) || 0, withEmail: Number(r.withEmail) || 0, n60: Number(r.n60) || 0,
           avgScore: r.avgScore == null ? null : Math.round(Number(r.avgScore)),
           sent: Number(r.sent) || 0, mailNotSent: Number(r.mailNotSent) || 0, replied: Number(r.replied) || 0,

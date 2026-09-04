@@ -81,6 +81,21 @@ const LEGACY_CATEGORY_MAP: Record<string, CustomerTypeSlug> = {
  * 归一到新 slug。**优先认 AI 直接给的 slug**（新链路），认不出再走旧中文桶（存量），
  * 都不认就 unclear —— 不猜。
  */
+/**
+ * 这一类**算不算目标客户** —— 真源就是上面那张表的 `target` 字段。
+ *
+ * 🔴 2026-09-04 事故：看板 v12 的甜甜圈原来写死了五类
+ *   （`distributor / integrator / monitoring-service / brand / manufacturer-2nd-source`），
+ *   而那份名单其实是**给"关键词命中率"用的**，被顺手当成了"真客户"的定义 ⇒ **`end-buyer` 被漏在外面**，
+ *   图上方那行会把「终端大客户」称作"不是客户"。
+ *   ⚠️ 它当时**一条都没有**，所以完全看不出来 —— **不发作的错，发作那天没人会想到是这里。**
+ * ⇒ 一律读这一个函数，⛔ 别在任何地方再写第二份名单、⛔ 也别写死片数。将来加一类，它自然就进来了。
+ */
+export function isTargetType(slug?: string | null): boolean {
+  const t = CUSTOMER_TYPES.find((x) => x.slug === String(slug || "").trim());
+  return !!t && t.target;
+}
+
 export function normalizeCustomerType(raw?: string | null): CustomerTypeSlug {
   const s = String(raw || "").trim();
   if (!s) return "unclear";

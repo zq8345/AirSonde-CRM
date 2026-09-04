@@ -6220,7 +6220,9 @@ ${esc(d.ours.body||'')}</div></details>`
               `<span class="${i === 0 ? 'on' : ''}" onclick="v11Pick(${i})"><i style="background:${PIE[i % PIE.length]}"></i>${esc(t.label || t.cat)}</span>`).join('');
             // 上方那行字：把"不是客户/看不出来"如实说出来，**并且可点** ⇒ 它们没被藏起来，只是不占图。
             const rest = restTypes.length
-              ? `<p class="q-rest hint"><b>${poolTotal}</b> 家入池，<b>${restTotal}</b> 家不是客户或看不出来 ——`
+              // ⚠️ 措辞：「**不是目标客户**或看不出来」 —— ⛔ 不能写"不是客户"：`end-buyer` 现在已经在饼里了，
+              //   而这一行装的是 `target:false`（非目标）与判不出来的那些。说"不是客户"会冤枉一整类。
+              ? `<p class="q-rest hint"><b>${poolTotal}</b> 家入池，<b>${restTotal}</b> 家不是目标客户或看不出来 ——`
                 + restTypes.map((t, i) => ` <span class="rest-k" onclick="v11PickRest(${i})">${esc(t.label || t.cat)} ${t.n}</span>`).join('·')
                 + `</p>`
               : '';
