@@ -586,6 +586,51 @@ async function buildActionSuggestions(env: Env): Promise<{
   return { actions, highNoEmail, readyCount, reviewCount };
 }
 
+/**
+ * 🔴 **送达可观测性**：区分「没有数据」与「数据为 0」。
+ *
+ * 2026-09-04 实证，看板上那句「退信 0.0% —— 在正常范围」是**四重结构性保证**的 0，
+ * 不可能是别的数字：
+ *   ① Resend 账号里唯一注册的 webhook 指向 `wanew-crm.zq8345.workers.dev`（**别的项目的 worker**），
+ *      AirSonde 根本没有端点注册 ⇒ 事件从来没往我们这儿打过；
+ *   ② 本 worker 的 secret 清单里没有 `RESEND_WEBHOOK_SECRET`，而 `webhook.ts` 是 fail-closed
+ *      ⇒ 就算打过来也会被当场拒掉；
+ *   ③ `email.delivered` 既没订阅也没有处理分支 ⇒ "送达"这个事实本来就进不了库；
+ *   ④ `airsonde.net` 在 Resend 的 Open/Click Tracking 是关的 ⇒ 打开/点击两个 0 是"没在量"。
+ * 同期 Resend 真源：sent 240 · delivered 235 · bounced 5 · **delivery_rate 97.92%**。
+ * ⇒ **一个 0 在这里的含义是"我们瞎着"，而界面把它读成了"很健康"** —— 那是最贵的一类假绿灯。
+ *
+ * ⚠️ 判据只认**能证伪的事实**，不认"我记得配过"：
+ *   · secret 在不在 → `!!env.RESEND_WEBHOOK_SECRET`（这是 fail-closed 的那个真源）
+ *   · 有没有真收到过事件 → 库里有没有**只有 webhook 才写得出**的痕迹
+ * ⚠️ 手工补的压制行**不算事件**：它们的 reason 前缀是 `hard-bounce (Resend)`，
+ *   而 webhook 写的是逐字 `bounced` / `complaint` —— 这个区分是故意的，⛔ 别把它们合并成一种写法，
+ *   否则"人补的"会伪装成"机器收到的"，这道判据当场失效。
+ */
+type DeliverabilityState = "not_wired" | "wired_no_events" | "wired_with_events";
+async function deliverabilityState(env: Env): Promise<{
+  state: DeliverabilityState; secret_configured: boolean; events_ever: number; human: string;
+}> {
+  const secret = !!(env.RESEND_WEBHOOK_SECRET || "").trim();
+  const ev = await env.DB.prepare(
+    `SELECT (SELECT COUNT(*) FROM emails
+              WHERE delivered_at IS NOT NULL OR opened_at IS NOT NULL
+                 OR clicked_at IS NOT NULL OR status='bounced')
+          + (SELECT COUNT(*) FROM suppressed_emails WHERE reason IN ('bounced','complaint')) AS n`
+  ).first<{ n: number }>().catch(() => null);
+  const events = ev?.n ?? 0;
+  const state: DeliverabilityState = !secret ? "not_wired" : (events > 0 ? "wired_with_events" : "wired_no_events");
+  return {
+    state, secret_configured: secret, events_ever: events,
+    human:
+      state === "not_wired"
+        ? "退信/送达还没接上——这些数字现在是「没在量」，不是「没发生」"
+        : state === "wired_no_events"
+          ? "退信/送达已接上，但一次事件都还没收到（可能是真的没发生，也可能是发信方那边没注册端点）"
+          : "退信/送达在正常上报",
+  };
+}
+
 // ---- 发信健康度（只读）----
 //
 // 为什么单开：退订率/退信率/回复率这些数以前只活在**分析报告里**，Joe 在后台一个都看不到。
@@ -664,7 +709,8 @@ app.get("/api/health/sending", async (c) => {
       after_initial: u?.after_initial ?? 0, after_followup: u?.after_followup ?? 0,
       pct_total: pct(total), pct_human: pct(Math.max(0, total - machine)),
     },
-    bounced: { n: b?.n ?? 0, pct: pct(b?.n ?? 0) },
+    // ⚠️ 退信数必须和「这个数可不可信」一起出门 —— 数字单独出门就会被按对方的定义读。
+    bounced: { n: b?.n ?? 0, pct: pct(b?.n ?? 0), observability: await deliverabilityState(c.env) },
     replied: { leads: r?.leads_replied ?? 0, pct: pct(r?.leads_replied ?? 0), hot: hot?.n ?? 0 },
     // ⭐ `sent` / `failed`：看板上"今天到底发出去了什么"必须**由这两个数派生**。
     //   起因（2026-08-01）：那段横幅写死了一句"今天发出的是「无回复自动跟进」"，
@@ -901,6 +947,9 @@ app.get("/api/dashboard", async (c) => {
     emailsSent,
     sentLeads,
     counts: { replied, bounced, unsubscribed },
+    // 🔴 `counts.bounced` / `counts.unsubscribed` 只有在这里说"在正常上报"时才是**读数**；
+    //   否则它们是"没在量"。⛔ 前端不许在 state !== 'wired_with_events' 时把它们渲染成比率。
+    deliverability: await deliverabilityState(c.env),
     // 🔴 让归零自己解释自己（2026-09-02）：两个谓词各吃掉一封回信后，Joe 的回信数从 1 变 0。
     //   数字自己不会说"我为什么变小了"，而人对**变小的数字**的第一反应是"数据丢了"。
     //   ⚠️ 只在**真有排除**时才在界面上出现（前端判 >0）—— 摆一行"已排除 0"是纯噪音，
@@ -2976,6 +3025,10 @@ const SELF_HEAL_COLUMNS: { table: string; column: string; ddl: string }[] = [
   // 测试数据判定（生成列）。⚠️ DDL **引用 noise.ts 的常量，不在这儿抄第二份** ——
   //   抄一份就意味着"测试数据的定义"有两个家，迟早一处改了另一处没改。
   { table: "leads", column: "is_test", ddl: LEADS_IS_TEST_DDL },
+  // 送达时刻（Resend `email.delivered`）。它同时是「送达可观测性」三态里
+  // "已接入且有事件"的证据之一 —— 见 deliverabilityState()。
+  { table: "emails", column: "delivered_at",
+    ddl: "ALTER TABLE emails ADD COLUMN delivered_at TEXT" },
 ];
 async function ensureKeywordArchivedColumn(env: Env): Promise<void> {
   for (const m of SELF_HEAL_COLUMNS) {

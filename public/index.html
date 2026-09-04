@@ -5944,6 +5944,14 @@ ${esc(d.ours.body||'')}</div></details>`
       //   上提而不是在引擎里另算一遍 —— 算两遍就是两个真源，迟早一处改了另一处没改。
       //   （这个 bug 是灌了丰满数据才炸出来的：空库时那条分支根本走不到 ⇒ 只验空态会漏。）
       const ur = denom ? (c.unsubscribed||0)/denom : 0, brr = denom ? (c.bounced||0)/denom : 0;
+      // 🔴 2026-09-04：退信/退订这两个数**只有在事件通道真的接通时才是读数**，否则是"没在量"。
+      //   实证：那句「退信 0.0% —— 在正常范围」当时是四重结构性保证的 0（端点没注册 → secret 缺失
+      //   fail-closed → delivered 没订也没处理 → 追踪没开），而同期 Resend 真源是 delivered 235 / bounced 5。
+      //   ⇒ **⛔ 不许再让一个"没在量"的 0 冒充"正常"**；口径真源在后端 deliverabilityState()，前端只读它。
+      const dlv = d.deliverability || null;
+      const bounceObservable = !!(dlv && dlv.state === 'wired_with_events');
+      // 没接通时把它按"没有这个数"处理：⛔ 不是按 0 处理 —— 那正是要治的病。
+      const brrKnown = bounceObservable ? brr : null;
       // ⚠️ 原来是 `o.sent > 0` —— 1 封发出去 1 封回信就报"回信率 100%"。
       //   null 的含义统一为"这个比率现在不该被相信"，调用方本来就已经在处理 null。
       const rateOf = (o) => (o && o.sent >= DB_RATE_MIN_N) ? (o.replied||0)/o.sent : null;
@@ -6130,7 +6138,11 @@ ${esc(d.ours.body||'')}</div></details>`
         const bandNote = `<div class="hint">回信那一环按行业参考 1-5% 着色；其余各环的基准还在积累中（用我们自己的历史中位数，不外借）</div>`;
         // ⚠️ ur/brr 已上提到 denom 旁边（发现卡引擎要先用它们）。这里不再重复定义 —— 定义两次就是两个真源。
         const bad = enoughN && (ur>=DB_UNSUB_WARN || brr>=DB_BOUNCE_WARN);
-        const health = !enoughN
+        // 🔴 通道没接通时**这一整行都不算数** —— 它以前会输出「退订 0.0% · 退信 0.0% —— 都在正常范围」，
+        //   而那两个 0 的真实含义是"我们收不到这类事件"。⛔ 一个"没在量"的 0 不许穿"正常"这件衣服。
+        const health = !bounceObservable
+          ? `<div class="db-judge">退订与退信<b>还没在量</b> —— ${esc((dlv && dlv.human) || '事件通道未接通')}<br><span class="u">已发 ${denom} 家；接通之前这两个比率不显示。</span></div>`
+          : !enoughN
           ? `<div class="hint">退订 ${c.unsubscribed||0} · 退信 ${c.bounced||0} —— 再发 ${DB_N_MIN-denom} 家后开始算比率</div>`
           : bad
             ? `<div class="db-judge db-bad">⚠️ 退订 ${pct(ur)}${ur>=DB_UNSUB_WARN?`（超 ${pct(DB_UNSUB_WARN)}）`:''} · 退信 ${pct(brr)}${brr>=DB_BOUNCE_WARN?`（超 ${pct(DB_BOUNCE_WARN)}）`:''} —— 先停下看信的内容和名单来源</div>`
@@ -6214,7 +6226,13 @@ ${esc(d.ours.body||'')}</div></details>`
         }
       }
       // (c) 退信率超线 或 退订连续两周上行 → 红卡
-      if (enoughN && brr > DB_BOUNCE_WARN) {
+      // ⚠️ 通道没接通时**这张卡不该出现**（无论红卡还是"正常"）—— 它依赖的那个数此刻不是读数。
+      //   改用一张说真话的卡：告诉他我们瞎着，以及瞎在哪一层。
+      if (!bounceObservable) {
+        findings.push({ sev: 'amber', t: '退信/送达还没接上 —— 这里的 0 是「没在量」，不是「没发生」',
+          e: (dlv && dlv.human) ? dlv.human : '事件通道未接通，退信率与退订率现在都不可信',
+          cta: act('看怎么接', "openMachineRoom()") });
+      } else if (enoughN && brrKnown !== null && brrKnown > DB_BOUNCE_WARN) {
         findings.push({ sev: 'red', t: `退信率 ${pct(brr)}，超过 ${pct(DB_BOUNCE_WARN)} 的警戒线`,
           e: `${c.bounced||0} 封退回 / 共发 ${denom} 家 —— 退信率高会拖垮域名信誉`,
           cta: act('去看邮箱来源', "gotoGroup('ready')") });

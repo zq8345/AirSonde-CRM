@@ -104,6 +104,19 @@ export async function handleResendEvent(env: Env, event: any): Promise<{ ok: boo
   }
   const suppressTarget = leadEmail || (typeof to === "string" ? to : null);
 
+  // 🔴 2026-09-04 补：**「送达」以前根本没有处理分支**（只订了 bounced/complained/opened/clicked）
+  //   ⇒ 就算 webhook 全接通，"这封到底进没进对方服务器"这个事实**仍然进不了库**，
+  //     而看板照旧只能拿一个 0 去猜。这一条是「没有数据 ≠ 数据为 0」那道判据的地基：
+  //     有 delivered 才谈得上"已接入且有事件"。
+  //   ⚠️ delivered = **对方邮件服务器收下了**，它区分不了收件箱与垃圾箱 —— 文案别写成"已进收件箱"。
+  //   ⚠️ 只认第一次（COALESCE），重复投递不刷新时间戳。
+  if (type === "email.delivered") {
+    if (emailId) await env.DB.prepare(
+      "UPDATE emails SET delivered_at = COALESCE(delivered_at, datetime('now')) WHERE provider_id = ?"
+    ).bind(emailId).run();
+    return { ok: true, action: "delivered", lead: leadId };
+  }
+
   if (type === "email.bounced") {
     if (emailId) await env.DB.prepare("UPDATE emails SET status='bounced' WHERE provider_id=?").bind(emailId).run();
     if (leadId) await env.DB.prepare("UPDATE leads SET status='bounced', updated_at=datetime('now') WHERE id=?").bind(leadId).run();

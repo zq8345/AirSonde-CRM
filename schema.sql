@@ -95,7 +95,11 @@ CREATE TABLE IF NOT EXISTS emails (
   --   `/api/leads/:id/comm` 读它），但本文件从来没声明过 ⇒ **新库一起就少这一列**，
   --   一调详情页的 comm 接口直接 500（审计窗今天被它拦过一次）。
   --   ⚠️ 这类漂移的判据是「生产有没有」，不是「我记不记得加过」—— 用 pragma_table_info 对账出来的。
-  error             TEXT
+  error             TEXT,
+  -- 🔴 2026-09-04 补：Resend `email.delivered` 的送达时刻。以前**这个事件既没订也没处理**，
+  --   于是"到底进没进对方服务器"在库里没有任何痕迹，看板只能拿一个 0 去猜。
+  --   ⚠️ delivered = 对方**邮件服务器**收下了，区分不了收件箱与垃圾箱。
+  delivered_at      TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_emails_lead        ON emails(lead_id);
 CREATE INDEX IF NOT EXISTS idx_emails_status      ON emails(status);
