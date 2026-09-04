@@ -1074,6 +1074,104 @@ app.get("/api/dashboard", async (c) => {
         unknown_source_rows: await one(`SELECT COUNT(*) AS n FROM replies WHERE ${UNKNOWN_SOURCE_SQL}`),
       };
     })(),
+    /**
+     * ⭐⭐ 数据看板 v11（真源 `airsonde-dispatch/crm-pages-v6/v11.html`，Joe 已批）：**三块，⛔ 没有第四块**。
+     * ⛔ **一个数都不许写死** —— mockup 里的 1658 / 111 / 203 全是当天快照，Joe 一直在加线索。
+     */
+    v11: await (async () => {
+      // ── ① 国家：按「60 分以上客户数」排，⛔ 不按命中率 ──────────────────────
+      //   Joe 原话：「市场越小的地方竞争越小，命中率越高…卡塔尔和希腊是市场比德国好吗？」
+      //   `够不着` = 60 分以上但**没有邮箱** —— 已确认合格，只差一个联系方式。
+      const countries = (await db.prepare(
+        `SELECT UPPER(l.country) AS cc,
+                COUNT(*) AS n60,
+                SUM(CASE WHEN a.match_score >= 80 THEN 1 ELSE 0 END) AS n80,
+                SUM(CASE WHEN l.email IS NOT NULL AND l.email != '' THEN 1 ELSE 0 END) AS withEmail,
+                SUM(CASE WHEN EXISTS (SELECT 1 FROM emails e WHERE e.lead_id=l.id AND e.status='sent') THEN 1 ELSE 0 END) AS sent,
+                SUM(CASE WHEN l.email IS NULL OR l.email = '' THEN 1 ELSE 0 END) AS unreachable
+           FROM leads l JOIN lead_analysis a ON a.lead_id = l.id
+          WHERE ${notTestSql("l")} AND a.match_score >= ${APPROVE_MIN_SCORE}
+            AND l.country IS NOT NULL AND l.country != ''
+          GROUP BY UPPER(l.country) ORDER BY n60 DESC, n80 DESC`
+      ).all()).results as any[];
+
+      // ── ② 客户类型：七片合计 = 全部入池 ─────────────────────────────────
+      //   ⚠️ 分母是**全部入池**（含没打分的）⇒ 用 LEFT JOIN，未分类的归 `unclear`，
+      //     ⛔ 不能 INNER JOIN —— 那会让"合计 = 全部入池"这条验收永远对不上。
+      const CAT = "COALESCE(NULLIF(a.customer_category,''),'unclear')";
+      const types = (await db.prepare(
+        `SELECT ${CAT} AS cat, COUNT(*) AS n,
+                SUM(CASE WHEN l.email IS NOT NULL AND l.email != '' THEN 1 ELSE 0 END) AS withEmail,
+                SUM(CASE WHEN a.match_score >= ${APPROVE_MIN_SCORE} THEN 1 ELSE 0 END) AS n60,
+                AVG(a.match_score) AS avgScore,
+                SUM(CASE WHEN EXISTS (SELECT 1 FROM emails e WHERE e.lead_id=l.id AND e.status='sent') THEN 1 ELSE 0 END) AS sent,
+                SUM(CASE WHEN (l.email IS NOT NULL AND l.email != '')
+                          AND NOT EXISTS (SELECT 1 FROM emails e WHERE e.lead_id=l.id AND e.status='sent') THEN 1 ELSE 0 END) AS mailNotSent,
+                SUM(CASE WHEN EXISTS (SELECT 1 FROM replies r WHERE r.lead_id=l.id AND ${realReplySql("r")}) THEN 1 ELSE 0 END) AS replied
+           FROM leads l LEFT JOIN lead_analysis a ON a.lead_id = l.id
+          WHERE ${notTestSql("l")}
+          GROUP BY ${CAT} ORDER BY n DESC`
+      ).all()).results as any[];
+      const typeCc = (await db.prepare(
+        `SELECT ${CAT} AS cat, UPPER(l.country) AS cc, COUNT(*) AS n
+           FROM leads l LEFT JOIN lead_analysis a ON a.lead_id = l.id
+          WHERE ${notTestSql("l")} AND l.country IS NOT NULL AND l.country != ''
+          GROUP BY ${CAT}, UPPER(l.country) ORDER BY n DESC`
+      ).all()).results as any[];
+      const typeKw = (await db.prepare(
+        `SELECT ${CAT} AS cat, l.keyword AS kw, COUNT(*) AS n
+           FROM leads l LEFT JOIN lead_analysis a ON a.lead_id = l.id
+          WHERE ${notTestSql("l")} AND l.keyword IS NOT NULL AND l.keyword != ''
+          GROUP BY ${CAT}, l.keyword ORDER BY n DESC`
+      ).all()).results as any[];
+      const typeEg = (await db.prepare(
+        `SELECT cat, group_concat(company_name, ' · ') AS eg FROM (
+           SELECT ${CAT} AS cat, l.company_name,
+                  ROW_NUMBER() OVER (PARTITION BY ${CAT} ORDER BY COALESCE(a.match_score,0) DESC, l.id) AS rn
+             FROM leads l LEFT JOIN lead_analysis a ON a.lead_id = l.id
+            WHERE ${notTestSql("l")} AND l.company_name IS NOT NULL AND l.company_name != ''
+         ) WHERE rn <= 2 GROUP BY cat`
+      ).all()).results as any[];
+
+      // ── ③ 关键词：命中率 = 该词入库的公司里**真客户**的占比 ──────────────────
+      //   ⚠️ 真客户的五类由派单点名（⛔ 不含 end-buyer）；⛔ 别在这儿另立一套。
+      const REAL_CATS = "('distributor','integrator','monitoring-service','brand','manufacturer-2nd-source')";
+      const keywords = (await db.prepare(
+        `SELECT l.keyword AS kw, COUNT(*) AS n,
+                SUM(CASE WHEN a.customer_category IN ${REAL_CATS} THEN 1 ELSE 0 END) AS hit,
+                MAX(CASE WHEN k.archived = 1 THEN 1 ELSE 0 END) AS archived
+           FROM leads l LEFT JOIN lead_analysis a ON a.lead_id = l.id
+                        LEFT JOIN keywords k ON k.keyword = l.keyword
+          WHERE ${notTestSql("l")} AND l.keyword IS NOT NULL AND l.keyword != ''
+          GROUP BY l.keyword ORDER BY n DESC`
+      ).all()).results as any[];
+
+      const top = (rows: any[], cat: string, key: string, k: number) =>
+        rows.filter((r) => r.cat === cat).slice(0, k).map((r) => ({ v: r[key], n: Number(r.n) || 0 }));
+      return {
+        countries: countries.map((r) => ({
+          cc: r.cc, n60: Number(r.n60) || 0, n80: Number(r.n80) || 0,
+          withEmail: Number(r.withEmail) || 0, sent: Number(r.sent) || 0, unreachable: Number(r.unreachable) || 0,
+        })),
+        types: types.map((r) => ({
+          cat: r.cat,
+          // ⚠️ 标签与"算不算真客户"都在**服务端**拼：taxonomy 住在服务端，
+          //   前端再抄一份就是两处口径 —— 而这一族单子本身就是在治口径分两处写的病。
+          label: customerTypeLabel(r.cat),
+          isReal: REAL_CATS.includes(`'${r.cat}'`),
+          n: Number(r.n) || 0, withEmail: Number(r.withEmail) || 0, n60: Number(r.n60) || 0,
+          avgScore: r.avgScore == null ? null : Math.round(Number(r.avgScore)),
+          sent: Number(r.sent) || 0, mailNotSent: Number(r.mailNotSent) || 0, replied: Number(r.replied) || 0,
+          topCc: top(typeCc, r.cat, "cc", 5), topKw: top(typeKw, r.cat, "kw", 3),
+          eg: (typeEg.find((e) => e.cat === r.cat) || {}).eg || "",
+        })),
+        keywords: keywords.map((r) => ({
+          kw: r.kw, n: Number(r.n) || 0, hit: Number(r.hit) || 0, archived: Number(r.archived) === 1,
+        })),
+        /** ⚠️ 「样本不足」的门槛在服务端定，⛔ 前端别自己再写一个数。 */
+        minSample: 15,
+      };
+    })(),
     // 🔴 `counts.bounced` / `counts.unsubscribed` 只有在这里说"在正常上报"时才是**读数**；
     //   否则它们是"没在量"。⛔ 前端不许在 state !== 'wired_with_events' 时把它们渲染成比率。
     deliverability: await deliverabilityState(c.env),
