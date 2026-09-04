@@ -2,7 +2,7 @@
 // 该端点必须公开（Resend 调用），用 Svix 签名校验来源。
 import type { Env } from "./index";
 import { larkConfigured, larkSend, clickCard } from "./notify";
-import { addSuppressedEmail } from "./send";
+import { addSuppressedEmail, ensureEmailColumns } from "./send";
 
 function base64ToBytes(b64: string): Uint8Array {
   const bin = atob(b64);
@@ -80,6 +80,12 @@ async function classifyClick(env: Env, emailId: string | null, link: string): Pr
 }
 
 export async function handleResendEvent(env: Env, event: any): Promise<{ ok: boolean; action: string; lead?: number | null }> {
+  // 🔴 **第一个读 `delivered_at` 的人就是这里** —— 所以补列必须挂在这条路径上，
+  //   而不是只挂在整点班或发信路径。2026-09-04 就是这么漏的：列进了 index.ts 的
+  //   `SELF_HEAL_COLUMNS`（只在整点 cron 与三个关键词端点跑），部署 07:49、补列要等 08:00，
+  //   而 webhook 那会儿已经上线接事件了 ⇒ `no such column: delivered_at`。
+  //   ⚠️ 每 isolate 只真跑一次（`emailColsEnsured` 门），⛔ 不是每个事件都 ALTER。
+  await ensureEmailColumns(env);
   const type = String(event?.type || "");
   const data = event?.data || {};
   const emailId = data.email_id || data.id || null;

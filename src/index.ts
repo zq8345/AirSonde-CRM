@@ -621,6 +621,9 @@ async function deliverabilityState(env: Env): Promise<{
   const events = ev?.n ?? 0;
   const state: DeliverabilityState = !secret ? "not_wired" : (events > 0 ? "wired_with_events" : "wired_no_events");
   return {
+    // ⚠️ `secret_configured` 是**布尔**，只说"配没配"，⛔ 绝不含密钥本身。
+    //   浏览器自动化工具看到字段名带 "secret" 会把值也打码（宁可误伤）——
+    //   ⛔ 别为了绕过打码去改名，要看值就从服务端读。
     state, secret_configured: secret, events_ever: events,
     human:
       state === "not_wired"

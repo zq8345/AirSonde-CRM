@@ -27,6 +27,13 @@ let emailColsEnsured = false;
 export async function ensureEmailColumns(env: Env): Promise<void> {
   if (emailColsEnsured) return;
   try { await env.DB.prepare("ALTER TABLE emails ADD COLUMN error TEXT").run(); } catch { /* 已存在=正常 */ }
+  // 🔴 2026-09-04 事故：`delivered_at` 我只加进了 index.ts 的 `SELF_HEAL_COLUMNS`，
+  //   而那份清单**只在整点 cron 和三个关键词端点上跑** ⇒ 07:49 部署、08:00 才补列，
+  //   中间这段时间里 webhook 的 `email.delivered` 一进来，那条 UPDATE 直接 `no such column`。
+  //   ⚠️ 判据从来不是"我把它加进清单了"，是 **"第一个读它的人来时，列在不在"** ——
+  //     而这一列的第一个读者是 **webhook**，不是发信路径，也不是整点班。
+  //   ⇒ 除了放进这里，`handleResendEvent` 开头也调一次本函数（那才是第一读者所在）。
+  try { await env.DB.prepare("ALTER TABLE emails ADD COLUMN delivered_at TEXT").run(); } catch { /* 已存在=正常 */ }
   emailColsEnsured = true;
 }
 
