@@ -17,7 +17,7 @@ import { TIER1_COUNTRIES, runDiscovery, getKeywords, seedDefaultKeywords, getSea
 import { findLeadEmail, diagnoseSite, type PageProbe } from "./findemail";
 import { ingestReplies, matchReplyToLead } from "./replies";
 import { ensureReplyColumns, stripQuoted, previewOf, isNoiseReply, tabOf, type InboxTab } from "./reply-inbox";
-import { REAL_REPLY_SQL, realReplySql, NOT_TEST_SQL, notTestSql, LEADS_IS_TEST_DDL } from "./noise";
+import { REAL_REPLY_SQL, realReplySql, UNKNOWN_SOURCE_SQL, NOT_TEST_SQL, notTestSql, LEADS_IS_TEST_DDL } from "./noise";
 import { installFetchMeter, meteredDB, mark as subMark, reset as subReset, summary as subSummary } from "./subreq";
 import { engineStatuses, pipelineTools } from "./engines";
 import { normalizeCustomerType, customerTypeLabel, categoryValuesFor, classifyKillReason, KILL_REASONS } from "./taxonomy";
@@ -683,6 +683,9 @@ async function deliverabilityState(env: Env): Promise<{
 //   · **开信率不给**：Apple 隐私预取/安全网关会伪造开信，55-70% 的冷发开信率不是真的。
 //     宁可不显示，也不给一个会让人做错决定的数。
 app.get("/api/health/sending", async (c) => {
+  // ⚠️ **第一个读 `replies.source` 的人就在这个函数里**（REAL_REPLY_SQL 现在带上了它）⇒ 补列必须
+  //   挂在这条路径上。今天刚栽过一次同形状的：列只加进 SELF_HEAL_COLUMNS，而那张清单只在整点班跑。
+  await ensureReplyColumns(c.env);
   const db = c.env.DB;
   const sys = await systemDailySendLimit(c.env);
   const auto = await autoSendDailyLimit(c.env, sys.effective);
@@ -747,7 +750,14 @@ app.get("/api/health/sending", async (c) => {
     },
     // ⚠️ 退信数必须和「这个数可不可信」一起出门 —— 数字单独出门就会被按对方的定义读。
     bounced: { n: b?.n ?? 0, pct: pct(b?.n ?? 0), observability: await deliverabilityState(c.env) },
-    replied: { leads: r?.leads_replied ?? 0, pct: pct(r?.leads_replied ?? 0), hot: hot?.n ?? 0 },
+    replied: {
+      leads: r?.leads_replied ?? 0, pct: pct(r?.leads_replied ?? 0), hot: hot?.n ?? 0,
+      // 🔴 **恒返回**：回填之后它应当是 0，而"它是 0"这件事本身得有人看得见 ——
+      //   它是 0 才有资格不显示，⛔ 不是"因为它是 0 所以不用算"。
+      unknown_source: (await db.prepare(
+        `SELECT COUNT(*) AS n FROM replies WHERE ${UNKNOWN_SOURCE_SQL}`
+      ).first<{ n: number }>())?.n ?? 0,
+    },
     // ⭐ `sent` / `failed`：看板上"今天到底发出去了什么"必须**由这两个数派生**。
     //   起因（2026-08-01）：那段横幅写死了一句"今天发出的是「无回复自动跟进」"，
     //   而实测跟进已经连续 4 天一封没发出去 —— **界面在报告一件没有发生的事**。
@@ -793,6 +803,8 @@ app.get("/api/health/sending", async (c) => {
 // ---- 数据看板：获客漏斗 + 关键指标聚合（走鉴权，非公开）----
 // 全部为静态 SQL（无用户输入），天然无注入风险；日期用 SQLite date() 以 UTC 对齐前端。
 app.get("/api/dashboard", async (c) => {
+  // ⚠️ 同上：本端点的周趋势用 REAL_REPLY_SQL，而它现在读 `replies.source` ⇒ 补列挂在第一读者路径上。
+  await ensureReplyColumns(c.env);
   const db = c.env.DB;
 
   // 1) 漏斗各状态计数
@@ -1848,8 +1860,10 @@ app.post("/api/leads/:id/channel-reply", async (c) => {
   // 且收件箱/已回复页的口径能认出它 —— **渠道回复跟邮件回复一样是"有人回你了"**。
   // ⚠️ 列名是 content 不是 body（schema.sql 里 replies 的真实定义，上批踩过）。
   await c.env.DB.prepare(
-    `INSERT INTO replies (lead_id, from_email, subject, content, category, summary, received_at)
-     VALUES (?, ?, ?, ?, 'interested', ?, datetime('now'))`
+    // ⚠️ `source='manual'` **必须显式给**（⛔ 不靠默认值兜底）：这一行是**人回来打的卡**，
+    //   不是收进来的一封信。少了它，它就会重新变回"与真回信完全同形"的那种行。
+    `INSERT INTO replies (lead_id, from_email, subject, content, category, summary, received_at, source)
+     VALUES (?, ?, ?, ?, 'interested', ?, datetime('now'), 'manual')`
   ).bind(id, `(${label})`, `${label}回复`, note || `（在 ${label} 上回复了，由人工标记）`,
          note ? `${label}：${note.slice(0, 60)}` : `${label}上回复了`).run();
   // ⚠️ **不写 bench_channel / bench_contacted_at**（第一版我写了，实测证明是错的）：
@@ -3071,6 +3085,11 @@ const SELF_HEAL_COLUMNS: { table: string; column: string; ddl: string }[] = [
   // "已接入且有事件"的证据之一 —— 见 deliverabilityState()。
   { table: "emails", column: "delivered_at",
     ddl: "ALTER TABLE emails ADD COLUMN delivered_at TEXT" },
+  // 回信来源（'imap' 真收到 / 'manual' 人工打卡）。⚠️ 真正保证它存在的是
+  // `ensureReplyColumns`（它挂在 9 个含读路径的调用点上）；列在这里是为了**声明**，
+  // ⛔ 别指望这张清单来兜底 —— 它只在整点班和三个关键词端点跑。
+  { table: "replies", column: "source",
+    ddl: "ALTER TABLE replies ADD COLUMN source TEXT" },
 ];
 async function ensureKeywordArchivedColumn(env: Env): Promise<void> {
   for (const m of SELF_HEAL_COLUMNS) {

@@ -226,7 +226,10 @@ async function ingestAccount(env: Env, acct: ImapAccount, opts: { timeoutMs?: nu
         // ⚠️ 这里算一次、下面 stage 判定复用同一个值，**不要算两次** —— 算两次就有两个真源。
         const isAuto = isNoiseReply({ raw_headers: rawHeaders, content: body, from_email: fromEmail, subject });   // v8 补丁③：subject 参与（DMARC 报告靠主题识别）
         const insRes = await env.DB.prepare(
-          "INSERT INTO replies (lead_id, from_email, subject, content, summary, category, message_id, raw_headers, received_at, is_auto) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)"
+          // ⚠️ `source='imap'` **必须显式给**（⛔ 不靠默认值兜底）：这一行是**真从邮箱收进来的**。
+          //   计数口径 REAL_REPLY_SQL 认的就是它 —— 漏给值这封信就会被算成"口径未知"，而不是被误算成回信。
+          //   （两种错的代价不对称，所以宁可漏进"未知"栏，也不许默默算成真回信。）
+          "INSERT INTO replies (lead_id, from_email, subject, content, summary, category, message_id, raw_headers, received_at, is_auto, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, 'imap')"
         ).bind(lead?.id ?? null, fromEmail, subject, body.slice(0, 4000), summary, category, messageId, rawHeaders, isAuto ? 1 : 0).run();
         // L2：拿回本条 reply 的行 id——回复工作台卡的回调要靠它取 from_email/subject
         const replyRowId = Number(insRes.meta?.last_row_id) || 0;

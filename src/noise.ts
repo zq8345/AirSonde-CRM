@@ -16,10 +16,32 @@
 //   自动回执。当时我已经修了 stage 推进和飞书推卡，**但按表聚合的口径一处都没改** ——
 //   因为那时判定只活在 JS 里，SQL 够不着它。教训：**一个判断只要要参与计数，就必须能被 SQL 表达。**
 
-/** 真回信（排除自动回执）。用于**计数**，不用于展示。 */
-export const REAL_REPLY_SQL = "COALESCE(is_auto,0)=0";
+/**
+ * 真回信 = **排除自动回执** ∧ **确实是收进来的一封信**（`source='imap'`）。用于**计数**，不用于展示。
+ *
+ * 🔴 2026-09-04 加第二个条件的来历：库里 16 行 replies，看板顶上写「15 本周回信」，
+ *   而**真人写来的信是 0 封**。混在里面的有一行是 Joe 在界面上打的「他回了」标记 ——
+ *   它 `is_auto=0`、`category='interested'`，**在所有参与计数的列上与真回信完全同形**。
+ *   ⇒ 左栏「已回复」那个 1 就是它：**一个人工标记正被当成一封收到的信在数**。
+ *
+ * ⚠️ 判据是**声明**（写入方显式给 `source`），⛔ 不是推断（比如"`from_email` 里有没有 `@`"）——
+ *   推断型判据坏掉时没有人会发现，它只会安静地把某一类算错。
+ * ⚠️ **`source IS NULL` 不算真回信，但也⛔ 不许默默扔掉** —— 见 UNKNOWN_SOURCE_SQL：
+ *   多算一封的代价是 Joe 以为有客户在回他（据此做错决定），少算一封的代价是他晚看到一封信。
+ *   两种错的代价不对称 ⇒ 不确定的一律**单独显示**，不并进任何一边。
+ */
+export const REAL_REPLY_SQL = "COALESCE(is_auto,0)=0 AND source='imap'";
 /** 带表别名的版本（`FROM replies r` 这种）。 */
-export const realReplySql = (alias: string) => `COALESCE(${alias}.is_auto,0)=0`;
+export const realReplySql = (alias: string) =>
+  `COALESCE(${alias}.is_auto,0)=0 AND ${alias}.source='imap'`;
+
+/**
+ * **口径未知**的回信行：`source` 没值（回填之前的历史行，或某个写入方漏给了值）。
+ * ⚠️ 回填之后这个数应当恰好是 **0**；🔴 **但"它是 0"这件事得有人看得见** ——
+ *   它是 0 才有资格不显示，⛔ 不是"因为它是 0 所以不用算"。所以 API **恒返回**这个数。
+ */
+export const UNKNOWN_SOURCE_SQL = "source IS NULL";
+export const unknownSourceSql = (alias: string) => `${alias}.source IS NULL`;
 
 /**
  * 非测试线索（排除我们自己造的数据）。用于**计数**，不用于展示。

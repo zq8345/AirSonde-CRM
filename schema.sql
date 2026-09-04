@@ -128,7 +128,13 @@ CREATE TABLE IF NOT EXISTS replies (
   --   成立；而这个判断现在要参与 **SQL 聚合**（关键词战绩 / 看板北极星 / 周报 / 待办），SQL 调不了 JS
   --   ⇒ 2026-09-02 起它**已经落库**（SELF_HEAL_COLUMNS 里有它，生产实测存在）。
   --   本文件却仍停在旧结论上 ⇒ 新库缺列。**真源判定仍是 reply-inbox.ts 的 isNoiseReply，这列是它的缓存。**
-  is_auto      INTEGER NOT NULL DEFAULT 0
+  is_auto      INTEGER NOT NULL DEFAULT 0,
+  -- 🔴 2026-09-04 补：`source` = **这一行是怎么来的**。'imap' = 真从邮箱收进来的；
+  --   'manual' = Joe 在界面上打的「他回了」标记（人回来打卡，不是收到的信）。
+  --   来历：那条人工标记 `is_auto=0`、`category='interested'`，**在所有参与计数的列上与真回信同形**
+  --   ⇒ 左栏「已回复」那个 1 就是它。⚠️ 两个写入方都**显式给值**，⛔ 不设默认值兜底：
+  --   漏给值 ⇒ 落进「口径未知」单独显示，⛔ 绝不默默算成真回信（两种错的代价不对称）。
+  source       TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_replies_lead         ON replies(lead_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_replies_msgid ON replies(message_id);

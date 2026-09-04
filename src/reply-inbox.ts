@@ -169,6 +169,13 @@ export async function ensureReplyColumns(env: Env): Promise<void> {
   for (const sql of [
     "ALTER TABLE replies ADD COLUMN handled_at TEXT",
     "ALTER TABLE replies ADD COLUMN draft TEXT",
+    // 🔴 2026-09-04：`source` = **这一行是怎么来的**（'imap' 真收到的 / 'manual' 人回来打的卡）。
+    //   来历：库里 15 行 replies，看板顶上写「15 本周回信」，而**真人写来的信是 0 封** ——
+    //   其中一行是 Joe 自己在界面上打的标记，它 `is_auto=0`、`category='interested'`，
+    //   **在所有参与计数的列上与真回信完全同形** ⇒ 谁也分不出来，于是它被当成一封回信在数。
+    //   ⚠️ 这一列是**声明**不是推断：⛔ 别改回用 `from_email` 里有没有 `@` 去猜 ——
+    //     那种判据坏掉的时候没有人会发现，它只会安静地把某一类算错。
+    "ALTER TABLE replies ADD COLUMN source TEXT",
   ]) {
     try { await env.DB.prepare(sql).run(); } catch { /* 列已存在 = 正常，不是错误 */ }
   }
