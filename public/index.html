@@ -734,6 +734,8 @@
     /* 公司格：名字 13 + 域名 12 --brand，两行块；复选框 20×20 居中、热区 32 宽撑满（v8 补丁① 已上线） */
     #v-list .co-lines { line-height:1.3; }
     #v-list .dom { display:block; font-size:12px; color:var(--brand); line-height:1.3; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-decoration:none; }
+    /* 「同邮箱已发过信 · X」：说清这条为什么停在待审批。⚠️ 12 是字号闭集里的最小档。 */
+    #v-list .dup-note { display:block; font-size:12px; color:var(--amber, #9a6b00); line-height:1.3; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     #v-list .dom.bad { color:var(--muted); }
     /* 工具栏筛选 chip：放「重置筛选」左边，点 × 单个去掉 */
     .tb .chip { display:inline-flex; align-items:center; gap:5px; font-size:12px; color:var(--brand-strong); background:var(--brand-tint); border-radius:7px; padding:5px 8px; white-space:nowrap; }
@@ -1122,12 +1124,12 @@
     .fc-badge-cost { background:var(--tint-amber); color:var(--amber); border:1px solid #e6d3a3; }
     .fc-subhead { font-size:12px; font-weight:700; color:var(--muted); text-transform:none; letter-spacing:.3px; margin:2px 0 6px; padding-bottom:4px; border-bottom:1px solid var(--border); }
     .fc-add-sel { min-width:200px; max-width:260px; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:6px 10px; border-radius:6px; font-size:13px; cursor:pointer; }  /* #45 添加国家选择器：够宽、不再被 .fld 的 80px 压成 glitch */
-    .ccitem, .kwitem { display:inline-flex; align-items:center; gap:6px; background:var(--bg); border:1px solid var(--border); border-radius:14px; padding:4px 11px; margin:5px 7px 0 0; font-size:13px; }  /* #45 chip 间距加大 */
-    .ccitem label, .kwitem label { display:inline-flex; align-items:center; gap:5px; cursor:pointer; margin:0; white-space:nowrap; }  /* 批A#2 国家名不折行 */
-    .ccitem input, .kwitem input { margin:0; }
-    .ccitem.on, .kwitem.on { background:var(--tint-blue); border-color:var(--blue); }
-    .ccitem i, .kwitem i { cursor:pointer; color:var(--muted); font-style:normal; font-size:15px; line-height:1; margin-left:2px; }
-    .ccitem i:hover, .kwitem i:hover { color:var(--red); }
+    /* 🔴 2026-09-04 清死 CSS：`.ccitem` 整族**已无任何标记在用** —— 国家早就走 `.chip`，
+       关键词也在同日改成了同一套 `.chip` 皮。留下的只有 `.kwitem` 上还挂着的两条：
+       删除叉的样式，和 `.cfg-form.preview #dp-kwlist .kwitem` 那条只读锁（在别处）。
+       ⛔ 别把 `.kwitem` 一起删：那两条还在生效。 */
+    .kwitem i { cursor:pointer; color:var(--muted); font-style:normal; font-size:15px; line-height:1; margin-left:2px; }
+    .kwitem i:hover { color:var(--red); }
     .transparency { background:var(--brand-tint); border:1px solid var(--brand-tint); border-radius:6px; padding:9px 11px; font-size:13px; margin:12px 0; }
     .prog { margin-top:14px; display:none; }
     .prog-track { height:8px; background:var(--bg); border-radius:5px; overflow:hidden; border:1px solid var(--border); }
@@ -1287,7 +1289,7 @@
     .side-nav.active:hover { background:var(--tint-blue); }
     /* #41 全站 hover 交互统一：可点元素加平滑过渡 + 细腻反馈（贴合 CDS 深色后台，不浮夸） */
     button, .tab, tr.row, .side-nav, .td-act, .fc-chip, label.cc,
-    .gear-btn, .tb-more, .dd-item, .dd-menu .dd-item, .btn-ghost, th.filt .fcaret, .hdr-left img, .kwchip i, .ccitem, .kwitem, .ccitem i, .kwitem i {
+    .gear-btn, .tb-more, .dd-item, .dd-menu .dd-item, .btn-ghost, th.filt .fcaret, .hdr-left img, .kwchip i, .kwitem, .kwitem i {
       transition: background-color .15s ease, border-color .15s ease, color .15s ease, opacity .15s ease; }
     .hdr-left img { cursor:pointer; }
     .hdr-left img:hover { opacity:.72; }
@@ -2957,6 +2959,14 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
       //   原公司名旁的 🔔/🔥/👀、公司名下的抓取失败红标、已回复第三行摘要，全部搬进第 8 列（原位置删）。
       const mu = `<span class="mu">—</span>`;
       // 评分 pill / 分类 pill / 渠道 5 小格：与详情页共用同一份（scPillOf / catPillOf / chSlotsOf，定义在 readyGroupOf 旁）
+      // 🔴 2026-09-04：**这条为什么一直停在待审批** —— 同邮箱已被别的线索发过初次开发信，
+      //   机器不会自动批准它（后端 autoApproveRound 的同一个谓词）。⛔ 没有这句话，它就是一条
+      //   "没有理由的滞留"，比拦错还难查。⚠️ 带上那家公司的名字：Joe 要判的是"是不是同一家"，
+      //   光给邮箱他判不了（agisupplyonline ↔ hamidsafety 是两家独立公司共用一个 inquiry 邮箱）。
+      //   ⚠️ `dup_sent_company` 只在**待审批那一格**有意义：已发/已回复的行本来就该有同邮箱记录。
+      const dupSentNote = (l) => (l && l.dup_sent_company && (l.status === 'analyzed' || l.status === 'pending'))
+        ? `<div class="dup-note" title="这个邮箱地址已经被另一条线索发过开发信了，所以机器不会自动批准这条。如果确认是两家不同的公司，你可以手动批准。">同邮箱已发过信 · ${esc(l.dup_sent_company)}</div>`
+        : '';
       const scPill = scPillOf, catPill = catPillOf, chSlots = chSlotsOf;
       // 时间列 = stage_at（后端按 status 取的"进入本格时间"），格式 2026-9-3：年-月-日不补零、不带时分
       const fmtDay = (s) => { if (!s) return "—"; const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/); if (!m) return "—";
@@ -3000,7 +3010,7 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
       const rowHtml = (l) => { return `
         <tr class="row" data-id="${l.id}">
           ${/* ① 公司：复选框（v8 补丁① 的 20×20 方框 + 撑满两行块的热区）+ 公司名 13 + 域名 12 --brand */''}
-          <td><div class="co-cell"><label class="chk-hit" onclick="event.stopPropagation()"><input type="checkbox" class="rowchk" ${selectedIds.has(String(l.id))?'checked':''} onchange="toggleSel(${l.id},this.checked)"><span class="chk-box"></span></label><div class="co-lines"><div class="co-name" title="${esc(l.company_name)||''}">${esc(l.company_name)||mu}</div>${(()=>{ if(!l.website) return ""; const w=safeHref(l.website); return w ? `<a class="dom" href="${esc(w)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(hostOf(l.website))}</a>` : `<span class="dom bad" title="链接协议不合法，已按纯文本显示">${esc(hostOf(l.website))}</span>`; })()}</div></div></td>
+          <td><div class="co-cell"><label class="chk-hit" onclick="event.stopPropagation()"><input type="checkbox" class="rowchk" ${selectedIds.has(String(l.id))?'checked':''} onchange="toggleSel(${l.id},this.checked)"><span class="chk-box"></span></label><div class="co-lines"><div class="co-name" title="${esc(l.company_name)||''}">${esc(l.company_name)||mu}</div>${(()=>{ if(!l.website) return ""; const w=safeHref(l.website); return w ? `<a class="dom" href="${esc(w)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(hostOf(l.website))}</a>` : `<span class="dom bad" title="链接协议不合法，已按纯文本显示">${esc(hostOf(l.website))}</span>`; })()}${dupSentNote(l)}</div></div></td>
           ${/* ② 阶段：灰 pill，文字 = 左栏格名逐字（无 emoji） */''}
           <td class="ac"><span class="pill stg">${esc(STAGE_LABEL[gridKeyOf(l)] || l.status)}</span></td>
           <td class="ac">${scPill(l.match_score)}</td>

@@ -56,6 +56,14 @@ const LEAD_ROW_COLS =
   // 参与度（冲刺1a）：是否有邮件被打开/点击
   "EXISTS (SELECT 1 FROM emails e WHERE e.lead_id = l.id AND e.opened_at IS NOT NULL) AS has_open, " +
   "EXISTS (SELECT 1 FROM emails e WHERE e.lead_id = l.id AND e.clicked_at IS NOT NULL) AS has_click, " +
+  // 🔴 2026-09-04：同邮箱已被**别的线索**发过初次开发信 ⇒ 这条自动批准不了（见 autoApproveRound）。
+  //   界面要说得出**为什么它一直停在待审批**，否则那是一条"没有理由的滞留"——比拦错还难查。
+  //   ⚠️ 一并带上那家公司的名字：Joe 要判的是"这两家到底是不是同一家"，光给邮箱他判不了。
+  //   ⛔ 不落库成字段：它是**派生事实**，那边一改状态这边就该跟着变；存下来就会漂。
+  `(SELECT l2.company_name FROM emails e JOIN leads l2 ON l2.id = e.lead_id
+      WHERE lower(l2.email) = lower(l.email) AND e.kind='initial'
+        AND e.status IN ('sent','queued') AND e.lead_id != l.id
+      ORDER BY e.id ASC LIMIT 1) AS dup_sent_company, ` +
   // 阶段派生：最新一条回复的类别，用于判「洽谈中/已婉拒」
   "(SELECT r.category FROM replies r WHERE r.lead_id = l.id ORDER BY r.id DESC LIMIT 1) AS latest_reply_cat, " +
   // 批③追加2：回复箱并入「已回复」页——每行一个线索 + 最新回复摘要/id（页面数据源仍是 /api/leads，不用 /api/replies）
@@ -408,22 +416,47 @@ if (APPROVE_MIN_SCORE !== APPROVE_MIN_SCORE_SVC) {
   console.error(`⚠️ 分数线不一致：index.ts=${APPROVE_MIN_SCORE} 而 service.ts=${APPROVE_MIN_SCORE_SVC} —— 两处必须同值`);
 }
 /**
- * 「可发」的**单一真源**（`l` = leads，`a` = lead_analysis）。
+ * 「这个邮箱地址已经被**别的线索**发过初次开发信了吗」——
+ * 与 `deliverEmail` 里的 `dupAddr` **逐字同形**（按地址、跨 lead_id、只认 initial 且已发/在队）。
+ * ⚠️ 抽成函数是因为它有三个消费方（可发口径 / 自动批准闸 / 界面上那句可见理由），
+ *   ⛔ 谁都别再手抄第四份 —— 抄一份就是又一个会各自漂开的真源。
+ */
+const dupAddrSql = (alias: string) => `EXISTS (
+          SELECT 1 FROM emails e JOIN leads l2 ON l2.id = e.lead_id
+           WHERE lower(l2.email) = lower(${alias}.email) AND e.kind='initial'
+             AND e.status IN ('sent','queued') AND e.lead_id != ${alias}.id)`;
+
+/**
+ * ⭐⭐ 「可发」这个词的判据（总工 2026-09-04 裁定）：
+ *   **「这条如果现在真去发，会不会被某道闸拒？」** 而闸分**两类**：
+ *     · **恒定不可发**：判重 / 压制名单 / 退订 / 黑名单 —— 拒了就**永远**拒，等到明天也不会好。
+ *     · **今日性**：额度 / 间隔 / 爬坡 —— **只拒到今晚**。
+ *   ⇒ **「池子」只减第一类；「今天能发」两类都减。**
  *
- * ⚠️ 这段谓词原来**逐字抄了两份**（待办事项一份、积压条一份）。抄两份的代价今天现形了：
- *   2026-09-03 有 4 条 approved 与已发过的线索**共用同一个邮箱地址**（同一家被重复录入），
- *   `deliverEmail` 里的 `dupAddr` 会在真发的那一刻按地址拦下它们 ⇒ **它们其实一封也发不出去**，
- *   但两处 sendable 都把它们数了进来 —— 屏幕上的「X 家能发」是个**发不出去的数**。
- * ⇒ 判重条件与 `deliverEmail` 的 `dupAddr` **逐字同形**（按地址、跨 lead_id、只认 initial 且已发/在队），
- *   并且收敛成这一个常量：⛔ 别再复制第三份。
+ * ⛔ 别把两类塞进同一个常量再靠注释区分 —— **注释会漂，名字不会**。
+ *   分成两个名字之后，下一个人要加第三个条件，**必须先回答"它属于哪一类"才写得下去**。
+ */
+/** 恒定不可发（`l` = leads）：判重 + 压制名单。⚠️ 退订/黑名单本来就落在 `suppressed_emails` 里，不另列。 */
+const NEVER_SENDABLE_EXCLUSIONS = `l.email IS NOT NULL AND l.email!=''
+        AND lower(l.email) NOT IN (SELECT email FROM suppressed_emails)
+        AND NOT ${dupAddrSql("l")}`;
+/**
+ * 今日性条件。**此刻在 SQL 里没有成员** —— 额度/间隔/爬坡是发送循环里由
+ * `systemDailySendLimit` / `coldSentToday` 逐封判的，不在这条 WHERE 上。
+ * ⚠️ 留着这个空常量不是占位癖，它是那条规则的**落脚点**：将来真要往 SQL 里加"今天发不了"的条件，
+ *   加在这里，⛔ 不是加进 `NEVER_SENDABLE_EXCLUSIONS` —— 加错地方会让「池子」凭空缩水。
+ */
+const TODAY_ONLY_EXCLUSIONS = "";
+
+/**
+ * 「今天能发」（`l` = leads，`a` = lead_analysis）= 已批准 + 够分 + 两类闸都过。
+ *
+ * ⚠️ 这段谓词原来**逐字抄了两份**（待办事项一份、积压条一份），代价 2026-09-03 现形：
+ *   4 条 approved 与已发过的线索共用邮箱 ⇒ `deliverEmail` 的 `dupAddr` 会在真发那一刻拦下它们，
+ *   **一封也发不出去**，而两处 sendable 都把它们数了进来 —— 屏幕上的「X 家能发」是个发不出去的数。
  */
 const SENDABLE_WHERE = `l.status='approved' AND a.match_score >= ${APPROVE_MIN_SCORE}
-        AND l.email IS NOT NULL AND l.email!=''
-        AND lower(l.email) NOT IN (SELECT email FROM suppressed_emails)
-        AND NOT EXISTS (
-          SELECT 1 FROM emails e JOIN leads l2 ON l2.id = e.lead_id
-           WHERE lower(l2.email) = lower(l.email) AND e.kind='initial'
-             AND e.status IN ('sent','queued') AND e.lead_id != l.id)`;
+        AND ${NEVER_SENDABLE_EXCLUSIONS}${TODAY_ONLY_EXCLUSIONS}`;
 // ⭐ 两档制（Joe 拍板）：**60 是全系统唯一的决策线**。
 //   ≥60 有邮箱 → 机器自动发；<60 → 进「翻牌堆」由 Joe 复核。60-69 的人工拍板区**已取消**。
 //   道理：机器误发一封信成本低、可见、有熔断器兜底；机器误杀一个真客户损失一单、不可见、无兜底
@@ -736,8 +769,14 @@ app.get("/api/health/sending", async (c) => {
     //   把 stuck（已批准但没邮箱）并排显示，否则"可发 25"看着像池子小，
     //   而真相是"有 119 家在门口卡着，只差一个邮箱地址"。
     pool: {
+      // 🔴 2026-09-04 并口径：这里原来是**第三套、而且更松**的写法（只看 status + 有邮箱，
+      //   不看压制名单、不判重）⇒ 与另外两处「可发」各说各话。
+      //   按总工那条两层规则并进来：**池子只减「恒定不可发」**（判重/压制/退订/黑名单），
+      //   ⛔ 不减今日性条件（额度/间隔/爬坡）—— 那些明天就好了，减掉会让池子凭空缩水。
+      //   ⚠️ 所以这里用 `NEVER_SENDABLE_EXCLUSIONS` 而**不是** `SENDABLE_WHERE`：
+      //     后者还带 status/分数线，那是「今天能发」的口径，不是「池子」的。
       sendable: (await c.env.DB.prepare(
-        "SELECT COUNT(*) AS n FROM leads WHERE status='approved' AND email IS NOT NULL AND email<>''"
+        `SELECT COUNT(*) AS n FROM leads l WHERE l.status='approved' AND ${NEVER_SENDABLE_EXCLUSIONS}`
       ).first<{ n: number }>())?.n ?? 0,
       stuck_no_email: (await c.env.DB.prepare(
         "SELECT COUNT(*) AS n FROM leads WHERE status='approved' AND (email IS NULL OR email='')"
@@ -4615,7 +4654,9 @@ async function autoApproveRound(env: Env): Promise<number> {
         //   （生产实测 96 家，其中 65 家有社媒能碰）现在也进 approved=「待联系」，等 Joe 手动碰。
         //   不放它们进来，批⑨ 整个白做：它的全部意义就是"96 家有社媒的公司要有家"。
         //   发邮件的闸在 sendApprovedBatch（同批加的 email 过滤），它们进不了邮件发送池。
-        `SELECT l.id, l.email, a.match_score FROM leads l JOIN lead_analysis a ON a.lead_id=l.id
+        // ⭐ `dup_sent` 与「可发」口径、与 deliverEmail 的 dupAddr 是**同一个谓词函数**（dupAddrSql）。
+        `SELECT l.id, l.email, a.match_score, ${dupAddrSql("l")} AS dup_sent
+           FROM leads l JOIN lead_analysis a ON a.lead_id=l.id
           WHERE l.status='analyzed' AND a.match_score >= ?
           ORDER BY a.match_score DESC, l.id ASC LIMIT 50`
       ).bind(autoMin).all()).results as any[];
@@ -4624,6 +4665,19 @@ async function autoApproveRound(env: Env): Promise<number> {
         // 批⑨①：缺邮箱**不再是**不批准的理由 —— 它只决定能不能走邮件那条路，不决定值不值得碰。
         const why = approveGateReason(c.email, c.match_score ?? null);
         if (why) { console.log(`auto-approve skip #${c.id}: ${why}`); continue; }
+        // 🔴 2026-09-04：同邮箱已经被别的线索发过初次开发信 ⇒ **机器不自动批准它**。
+        //
+        //   来历（活观测，不是设想）：1063 / 1129 / 1132 三条一直在
+        //   `approved → queued →（deliverEmail 的 dupAddr 按地址拦下，0 个 email 行产生）→ approved`
+        //   之间循环，**每一轮白占一个发送槽位**。闸在最后一米拦得住，但拦不住这个循环 ——
+        //   因为把它们推进来的正是这里，而这里当时不看地址。
+        //
+        //   ⚠️ 更根本的一条：09-03 曾把它们手工退回 `analyzed`，**25 分钟后就被这个函数刷回 approved**。
+        //     ⇒ **派生状态改回去是白改**，要治只能改判据 —— 也就是改这一行。
+        //
+        //   ⛔ **只拦"自动"批准，不拦 Joe 手动批准**：agisupplyonline ↔ hamidsafety 是两家**独立公司**
+        //     共用一个 inquiry 邮箱，机器判不了这个，也不该替他判。它们留在待审批带可见理由，他自己定。
+        if (c.dup_sent) { console.log(`auto-approve skip #${c.id}: 同邮箱已发过初次开发信（${c.email}）`); continue; }
         const r = await env.DB.prepare(
           "UPDATE leads SET status='approved', updated_at=datetime('now') WHERE id=? AND status='analyzed'"
         ).bind(c.id).run();
