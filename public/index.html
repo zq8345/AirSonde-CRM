@@ -3651,13 +3651,29 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
      *   ⇒ **把需求的"理由"当成需求，是加戏最常见的入口。** 判据：他要的那句话本身能不能独立成立 ——
      *     「把图标改成信息」独立成立，⛔ 后面那半句是论据不是订单。
      */
+    /**
+     * 🔴 「说不出是谁」的展示值判据 —— **写死在这里，可复验**，⛔ 不用"看起来像"。
+     *
+     * 来历（生产全量实测，⛔ 不是看了一家）：待联系 268 家共 **527 个社媒值**，其中 **31 个（5.9%）**
+     *   被 `channelAccount()` 抽成了 `22132` / `pages` / `profile.php` —— **它们和图标一样什么都没说**，
+     *   而这次交付要的正是"把图标改成信息"。⇒ 修它属于**不修这次交付就是错的**，⛔ 不是加戏。
+     * ⚠️ 命中两类之一才算"说不出是谁"：
+     *   ① 纯数字（`linkedin.com/company/22132` 这种内部 id）
+     *   ② 结构性路径段（不是账号名，是平台的目录名）
+     * ⚠️ ⛔ 只在命中时回落，另外 496 个**一个字不变** —— 这条有反向验。
+     */
+    const CH_MEANINGLESS = new Set(["pages", "profile.php", "people", "p", "pg", "company", "in", "groups", "share"]);
+    const chLooksMeaningless = (s) => { const v = String(s || "").trim().toLowerCase(); return !v || /^\d+$/.test(v) || CH_MEANINGLESS.has(v); };
     function dvChannelsBlock(lead){
       const ch = chanOf(lead);
       const ORDER = ["phone", "whatsapp", "linkedin", "facebook", "instagram", "telegram", "youtube"];
       const rows = ORDER.filter(k => ch[k]).map(k => {
         const meta = CHANNEL_META[k] || { label: k };
         const link = channelLink(k, ch[k], lead.company_name);
-        const shown = link.label || String(ch[k]);
+        // ⚠️ 回落只做在**详情页这一处** —— `channelAccount()` 也被列表的 title 用着，
+        //   改它就等于动了列表页。⛔ 列表一个字不许变。
+        let shown = link.label || String(ch[k]);
+        if (k !== "phone" && chLooksMeaningless(shown)) shown = chHostPath(String(ch[k]));
         const safe = link.clickable ? safeHref(link.href) : "";
         const val = safe
           ? `<a href="${esc(safe)}" target="_blank" rel="noopener">${esc(shown)}</a>`
