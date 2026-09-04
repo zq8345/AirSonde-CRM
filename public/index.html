@@ -484,12 +484,23 @@
        字号只用 12/13/15（附录 C.1 闭集）。绿色只留给「已选」和主按钮。 */
     .tb { display:flex; align-items:center; gap:8px; background:var(--bg); border:1px solid var(--border);
           border-radius:10px; padding:8px 14px; min-height:46px; overflow:hidden; margin-bottom:12px; }
-    .tb .ttl { font-size:15px; font-weight:700; white-space:nowrap; width:118px; flex-shrink:0; }
+    /* 🔴 2026-09-04 Joe 指认「已选 N」压住标题、字叠字。**真因不是两个盒子重叠** ——
+       实测 `.ttl` 盒子 x227 宽 118 右边 345，`.sel` 盒子 x353，**两个矩形根本不相交**；
+       而 `.ttl` 的 `scrollWidth = 172` ⇒ 它的**文字画到了 399**，从 353 起压在 `.sel` 上。
+       病根：v8 把 `.ttl` 钉死 118px，v9 又往里塞了副标（「· 其中 ≥60 分 N 家」）——
+       **固定宽 + nowrap + 内容变长 = 文字画到盒子外面**，而盒子本身看着一切正常。
+       ⚠️⚠️ 所以"断言两个 rect 不相交"这条判据**在这里会假绿**：它此刻就是不相交的。
+         真判据是 **`scrollWidth <= clientWidth`（文字装得下自己的盒子）**。
+       ⇒ 改成 `min-width` + 内容宽：盒子永远包得住自己的字 ⇒ **结构上不可能再压到邻居**。
+       ⚠️ 代价（已量、已报）：副标长的那两页（待审批/待联系）后面的槽会整体右移，
+         「同一动作永远同一列」在**这两页与其它页之间**不再成立（页内仍然成立）。 */
+    .tb .ttl { font-size:15px; font-weight:700; white-space:nowrap; min-width:118px; flex-shrink:0; }
     .tb .cnt { font-size:13px; font-weight:400; color:var(--muted); margin-left:5px; }
     .tb button .cnt { color:inherit; opacity:.8; margin-left:4px; }   /* 按钮里的 (N)：同款括号计数，随按钮字色、略淡 */
     .tb .sel .lnk-selall { color:var(--blue); cursor:pointer; margin-left:6px; }   /* toolbar-v9：「选中全部 N」链接 */
     .tb .sel .lnk-selall:hover { text-decoration:underline; }
-    .tb .sel { font-size:13px; color:var(--brand-strong); font-weight:600; width:52px; flex-shrink:0; }
+    /* 同上：「已选 300（本页）选中全部 836」远超 52px ⇒ 它自己也会画到右邻居上。 */
+    .tb .sel { font-size:13px; color:var(--brand-strong); font-weight:600; min-width:52px; flex-shrink:0; white-space:nowrap; }
     .tb .sel.none { color:var(--hint); font-weight:400; }
     .tb .div { width:1px; height:18px; background:var(--border-strong); opacity:.5; flex-shrink:0; }
     /* 左：看勾选的 5 个固定槽 */
@@ -717,6 +728,11 @@
     #v-list .pill.cat { background:var(--brand-tint); color:var(--brand-strong); }
     #v-list .pill.cat.x { background:var(--panel); color:var(--muted); }
     #v-list .pill.stg { background:var(--panel); color:var(--muted); }
+    /* 阶段格里的小角标（判重 / 人工标记 / 来源未知）。⚠️ 设计约束：**同格内、⛔ 不换行、⛔ 不撑行高**
+       —— 用 `vertical-align:middle` + 与 pill 同高的 line-height，行高由那颗 pill 决定，这个角标不参与。
+       12px 是字号闭集里的最小档。 */
+    #v-list .stg-mark { display:inline-block; margin-left:4px; font-size:12px; line-height:1;
+                        color:var(--amber, #9a6b00); cursor:help; vertical-align:middle; }
     #v-list .pill.fail { background:var(--tint-red); color:var(--red); }
     #v-list .pill.retry { background:var(--panel); color:var(--muted); }
     #v-list .mu { color:var(--hint); }
@@ -734,8 +750,6 @@
     /* 公司格：名字 13 + 域名 12 --brand，两行块；复选框 20×20 居中、热区 32 宽撑满（v8 补丁① 已上线） */
     #v-list .co-lines { line-height:1.3; }
     #v-list .dom { display:block; font-size:12px; color:var(--brand); line-height:1.3; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-decoration:none; }
-    /* 「同邮箱已发过信 · X」：说清这条为什么停在待审批。⚠️ 12 是字号闭集里的最小档。 */
-    #v-list .dup-note { display:block; font-size:12px; color:var(--amber, #9a6b00); line-height:1.3; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     #v-list .dom.bad { color:var(--muted); }
     /* 工具栏筛选 chip：放「重置筛选」左边，点 × 单个去掉 */
     .tb .chip { display:inline-flex; align-items:center; gap:5px; font-size:12px; color:var(--brand-strong); background:var(--brand-tint); border-radius:7px; padding:5px 8px; white-space:nowrap; }
@@ -2964,24 +2978,26 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
       //   "没有理由的滞留"，比拦错还难查。⚠️ 带上那家公司的名字：Joe 要判的是"是不是同一家"，
       //   光给邮箱他判不了（agisupplyonline ↔ hamidsafety 是两家独立公司共用一个 inquiry 邮箱）。
       //   ⚠️ `dup_sent_company` 只在**待审批那一格**有意义：已发/已回复的行本来就该有同邮箱记录。
-      const dupSentNote = (l) => (l && l.dup_sent_company && (l.status === 'analyzed' || l.status === 'pending'))
-        ? `<div class="dup-note" title="这个邮箱地址已经被另一条线索发过开发信了，所以机器不会自动批准这条。如果确认是两家不同的公司，你可以手动批准。">同邮箱已发过信 · ${esc(l.dup_sent_company)}</div>`
-        : '';
-      // 🔴 「已回复」这一格里、而我们**一封真信都没收到**的那几条 —— 它们是靠人工标记进来的。
-      //   ⚠️ 这不是错误：「已回复」是漏斗阶段，比「收到的回信」大是合法的（他在别的渠道被回了）。
-      //   但**差额必须逐条解释得出来** —— 一个说不出来路的差额，跟一个错的数一样坏。
-      //   ⇒ 这一行就是那个解释：谁在这一格里、凭什么在这儿。点进去时间线上有那条标记的原文。
-      //   ⚠️ 四类**与看板 `replies_scope.breakdown` 逐字同源**（后端 `reply_evidence`）——
-      //     ⛔ 别在这儿把 'manual' 和 'unknown' 合成一句话，那正是这一节要治的病。
-      const REPLY_EV = {
-        manual:  ['人工标记 · 没有收到信', '这条是手动标记的「他回了」—— 我们的邮箱里没有收到对应的信。它算「已回复」这一格，但不算「收到的回信」。点进去，时间线上有这条标记的原文。'],
-        unknown: ['来源没标 · 算不出哪一类', '这条回信入库时没有记下来源（真收到的 / 人工标记的），所以它既不算「收到的回信」也不算「人工标记」。回填之后才能归类。'],
+      // 🔴 2026-09-04 返工：这两条原来各自在公司格下面**多加一行**（`.dup-note`）⇒ 破坏了定稿的两行模板。
+      //   ⇒ 改成**阶段格里的小角标**：同一格内、⛔ 不多一行、⛔ 不撑行高。完整原文在详情页。
+      //   ⚠️ 角标只用一两个字 + title —— 这里**故意允许靠 title 兜底**，因为要判的只有 3 行，点进去足够；
+      //     ⛔ 与"列表要扫一眼就判"的场景不同，别把这条经验套到 836 行都要看的字段上。
+      const STAGE_MARK = {
+        dup:    ['重', '这个邮箱地址已经被另一条线索发过开发信了，所以机器不会自动批准这条。点进详情页看是哪一家；如果确认是两家不同的公司，你可以手动批准。'],
+        manual: ['标', '这条是手动标记的「他回了」—— 我们的邮箱里没有收到对应的信。它算「已回复」这一格，但不算「收到的回信」。'],
+        unk:    ['?',  '这条回信入库时没有记下来源，所以既不算「收到的回信」也不算「人工标记」。'],
       };
-      const markedNote = (l) => {
-        if (!l || l.status !== 'replied') return '';
-        const e = REPLY_EV[l.reply_evidence];
-        return e ? `<div class="dup-note" title="${esc(e[1])}">${esc(e[0])}</div>` : '';
+      const stageMark = (l) => {
+        if (!l) return '';
+        let k = null;
+        if (l.dup_sent_company && (l.status === 'analyzed' || l.status === 'pending')) k = 'dup';
+        else if (l.status === 'replied' && l.reply_evidence === 'manual') k = 'manual';
+        else if (l.status === 'replied' && l.reply_evidence === 'unknown') k = 'unk';
+        if (!k) return '';
+        const [t, tip] = STAGE_MARK[k];
+        return `<span class="stg-mark" title="${esc(tip)}">${esc(t)}</span>`;
       };
+
       const scPill = scPillOf, catPill = catPillOf, chSlots = chSlotsOf;
       // 时间列 = stage_at（后端按 status 取的"进入本格时间"），格式 2026-9-3：年-月-日不补零、不带时分
       const fmtDay = (s) => { if (!s) return "—"; const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/); if (!m) return "—";
@@ -3025,9 +3041,14 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
       const rowHtml = (l) => { return `
         <tr class="row" data-id="${l.id}">
           ${/* ① 公司：复选框（v8 补丁① 的 20×20 方框 + 撑满两行块的热区）+ 公司名 13 + 域名 12 --brand */''}
-          <td><div class="co-cell"><label class="chk-hit" onclick="event.stopPropagation()"><input type="checkbox" class="rowchk" ${selectedIds.has(String(l.id))?'checked':''} onchange="toggleSel(${l.id},this.checked)"><span class="chk-box"></span></label><div class="co-lines"><div class="co-name" title="${esc(l.company_name)||''}">${esc(l.company_name)||mu}</div>${(()=>{ if(!l.website) return ""; const w=safeHref(l.website); return w ? `<a class="dom" href="${esc(w)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(hostOf(l.website))}</a>` : `<span class="dom bad" title="链接协议不合法，已按纯文本显示">${esc(hostOf(l.website))}</span>`; })()}${dupSentNote(l)}${markedNote(l)}</div></div></td>
+          <td><div class="co-cell"><label class="chk-hit" onclick="event.stopPropagation()"><input type="checkbox" class="rowchk" ${selectedIds.has(String(l.id))?'checked':''} onchange="toggleSel(${l.id},this.checked)"><span class="chk-box"></span></label><div class="co-lines"><div class="co-name" title="${esc(l.company_name)||''}">${esc(l.company_name)||mu}</div>${(()=>{ if(!l.website) return ""; const w=safeHref(l.website); return w ? `<a class="dom" href="${esc(w)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(hostOf(l.website))}</a>` : `<span class="dom bad" title="链接协议不合法，已按纯文本显示">${esc(hostOf(l.website))}</span>`; })()}</div></div></td>
           ${/* ② 阶段：灰 pill，文字 = 左栏格名逐字（无 emoji） */''}
-          <td class="ac"><span class="pill stg">${esc(STAGE_LABEL[gridKeyOf(l)] || l.status)}</span></td>
+          ${/* 🔴 2026-09-04 返工：判重理由原本加在公司格下面**多出一行** ⇒ Joe：「随意破坏设计好的模板吗？」
+                 —— 那 3 条（836 里的 3 条）不值得改掉 836 行的骨架。⇒ 改成**同一格内的小角标**，
+                 ⛔ 不多一行、⛔ 不撑行高；完整的「同邮箱已发过 · <公司名>」放详情页。
+               ⭐ 规矩（这次学到的）：往定稿模板里加东西前先问**它会不会改骨架**（行高/列数/对齐）——
+                 不改骨架的角标/颜色/图标可以加；**改骨架的一律先问 Joe，哪怕那条信息再重要**。 */''}
+          <td class="ac"><span class="pill stg">${esc(STAGE_LABEL[gridKeyOf(l)] || l.status)}</span>${stageMark(l)}</td>
           <td class="ac">${scPill(l.match_score)}</td>
           <td>${catPill(l)}</td>
           <td class="ac"${l.country ? ` data-cc="${esc(l.country)}"` : ""}>${l.country ? esc(countryName(l.country)) : mu}</td>
