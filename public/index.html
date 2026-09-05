@@ -1012,12 +1012,22 @@
     .dv .cl { display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px; }
     .dv .cl:last-child { border-bottom:0; padding-bottom:0; }
     .dv .cl .k { width:34px; color:var(--hint); font-size:12px; flex-shrink:0; }
-    /* 详情页「渠道」：一行一个，**类型 + 具体值**（⛔ 不是图标 —— 列表页才是图标）。
-       ⚠️ 这一块是多行的 ⇒ 顶部对齐，⛔ 别继承 .cl 的 center（那会让第一行的标签飘到中间）。 */
-    .dv .cl.ch-block { align-items:flex-start; }
-    .dv .ch-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:3px 0; }
-    .dv .ch-row .ch-k { color:var(--hint); font-size:12px; min-width:56px; }
-    .dv .ch-row .ch-v { font-size:13px; word-break:break-all; }
+    /* 🔴 C5-52③（Joe：只删「渠道」两个字，条目全保留）：
+       渠道条目**升为与邮箱/官网并列的联系方式行** ⇒ 原来那套"一个 .cl 里套多行"的样式
+       （`.cl.ch-block` / `.ch-row .ch-k`）**唯一的生产者已经没了，一并摘掉**，
+       ⛔ 不留谁都不匹配的规则（同 C5-50 摘 `.grouplbl` 那次）。 */
+    .dv .cl.ch-row .k { width:auto; min-width:66px; }   /* 「WhatsApp」「Instagram」34px 装不下 */
+    .dv .cl .ch-v { word-break:break-all; }
+    /* 复制按钮靠右贴边：⛔ 不跟着值一起被挤（值长起来时按钮不该被推出可视区） */
+    .dv .cl .cp-btn { margin-left:auto; flex-shrink:0; }
+    /* C5-52 标签：复用既有 .pill 的形状，⛔ 不新造一套药丸。
+       否定结论（不匹配）用弱化色 —— 它是**结论不是故障**，⛔ 不用红。 */
+    .pill.tg { background:var(--panel); border:1px solid var(--border); color:var(--text); }
+    .pill.tg.x { color:var(--muted); }
+    .pill.tg b { margin-left:4px; cursor:pointer; color:var(--hint); font-weight:400; }
+    .pill.tg b:hover { color:var(--red); }
+    .tg-q.on { border-color:var(--brand); color:var(--brand); }
+    .dv .cl .cp-btn.ok { color:var(--brand); border-color:var(--brand); }
     .dv .cl .v { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .dv .cl .v.mu { color:var(--hint); }
     .dv .cl a { color:var(--brand); text-decoration:none; }
@@ -2566,6 +2576,18 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
     // 列表与详情页共用的三个小件（detail-v6 从 loadList 里提出来：同一个徽章/同一组渠道小格，两个面一份实现）
     const MU_DASH = `<span class="mu">—</span>`;
     const scPillOf = (s) => s == null ? MU_DASH : `<span class="pill sc ${Number(s) >= SCORE_LINE ? 'g' : 'r'}">${Number(s)}</span>`;
+    /**
+     * C5-52②：列表评分格 —— **人工分优先，且必须看得出是人工的**。
+     * ⚠️ 只带一个记号（`人` 上标），⛔ 不换颜色 —— 颜色在这一列已经表达"够不够分数线"，
+     *   再用颜色表达"是不是人工的"，一个通道要说两件事，看的人分不清。
+     * ⚠️ AI 分挂在 title 里，鼠标一停就看得到 —— **不在格子里塞两个数**（列宽只有 60px）。
+     */
+    const humanScPill = (l) => {
+      const h = (l.human_score === 0 || l.human_score) ? Number(l.human_score) : null;
+      if (h == null) return scPillOf(l.match_score);
+      const ai = (l.match_score === 0 || l.match_score) ? Number(l.match_score) : null;
+      return `<span class="pill sc ${h >= SCORE_LINE ? 'g' : 'r'}" title="人工分${ai != null ? ` · AI 原分 ${ai}` : ''}">${h}<sup>人</sup></span>`;
+    };
     const GREY_CATS = new Set(["unclear", "other", "nontarget", "non_target"]);
     const catPillOf = (l) => l.customer_category
       ? `<span class="pill cat${GREY_CATS.has(String(l.customer_category)) || /^(非目标|资料不足|其他)$/.test(String(l.customer_category_label||'')) ? ' x' : ''}" title="${esc(l.customer_type)||''}">${esc(l.customer_category_label||l.customer_category)}</span>` : MU_DASH;
@@ -3171,7 +3193,8 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
       // 第 8 列「本页专属」：列名与内容按页（SPEC §2 表）
       // Joe（09-03）：「触达方式干掉」⇒ 全部/待审批/待联系/已忽略 四页**没有第 8 列**（NO_OWN_PAGES，8 列，公司吸余）；
       //   其它页第 8 列不动：待分析=状态 · 无官网=失败原因 · 已联系/已成交=邮件 · 跟进 · 已回复=回复 · 黑名单=原因
-      const OWN_HEAD = { unscored:"状态", noscore:"失败原因", sent:"邮件 · 跟进", won:"邮件 · 跟进", replied:"回复", blacklisted:"原因" };
+      // C5-52①：已联系/已成交两页的第 8 列由「邮件 · 跟进」改为「标签 · 跟进」（Joe：1 封没意义，让位给标签）
+      const OWN_HEAD = { unscored:"状态", noscore:"失败原因", sent:"标签 · 跟进", won:"标签 · 跟进", replied:"回复", blacklisted:"原因" };
       const ownCell = (l) => {
         switch (current) {
           case "unscored": {
@@ -3181,12 +3204,21 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
             // toolbar-v9 §3：只留小标（521 / 403 / 空壳…），截断的原文串删 —— 全文在详情页失败卡（title 悬浮仍有）
             return `<span class="pill fail" title="${esc(l.reason||'')}">${esc(failCode(l.reason))}</span>`;
           case "sent": case "won": {
-            const n = Number(l.email_count) || 0, bits = [];
-            if (n > 0) bits.push(`${n} 封`); else if (l.bench_channel) { const m = BENCH_CHANNEL_OPTS.find(([k]) => k === l.bench_channel); bits.push(`手动 · ${esc(m ? m[1] : l.bench_channel)}`); }
+            // 🔴 C5-52①（Joe：「这个 1 封没有什么意义，我觉得可以让位」）：
+            //   这一列改为**同事的复核结论**（标签），发信数收进详情页，⛔ 不另加列。
+            //   ⚠️ 打开/点击那两个记号**留着** —— 它们不是"发了几封"，是**对方有没有反应**，
+            //     那是同事决定要不要再跟一封的依据（Joe 点名的是"1 封"这个数，⛔ 不是这一整列）。
+            const tags = parseTags(l.tags);
+            const bits = [];
             if (l.has_open) bits.push("👀"); if (l.has_click) bits.push("🔥");
+            if (Number(l.has_notes)) bits.push(`<span class="t" title="有备注">📝</span>`);
             let due = "";
             if (l.next_action_date) due = isDue(l) ? ` <span class="t due" title="${esc(l.next_action)||''}">· 🔔 今天跟进</span>` : ` <span class="t" title="${esc(l.next_action)||''}">· ${fmtMD(l.next_action_date)} 跟进</span>`;
-            return (bits.length || due) ? `<span class="t">${bits.join(" · ")}</span>${due}` : mu; }
+            const tagHtml = tags.length
+              ? tags.map(t => `<span class="pill tg${TAG_X.has(t) ? " x" : ""}">${esc(t)}</span>`).join("")
+              : "";
+            return (tagHtml || bits.length || due)
+              ? `${tagHtml}${bits.length ? `<span class="t">${bits.join(" ")}</span>` : ""}${due}` : mu; }
           case "replied": {
             if (!l.latest_reply_cat && !l.latest_reply_summary) return mu;
             const c = l.latest_reply_cat || "other";
@@ -3213,7 +3245,7 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
                ⭐ 规矩（这次学到的）：往定稿模板里加东西前先问**它会不会改骨架**（行高/列数/对齐）——
                  不改骨架的角标/颜色/图标可以加；**改骨架的一律先问 Joe，哪怕那条信息再重要**。 */''}
           <td class="ac"><span class="pill stg">${esc(STAGE_LABEL[gridKeyOf(l)] || l.status)}</span>${stageMark(l)}</td>
-          <td class="ac">${scPill(l.match_score)}</td>
+          <td class="ac">${humanScPill(l)}</td>
           <td>${catPill(l)}</td>
           <td class="ac"${l.country ? ` data-cc="${esc(l.country)}"` : ""}>${l.country ? esc(countryName(l.country)) : mu}</td>
           <td title="${esc(l.email)||''}">${l.email ? esc(l.email) : mu}</td>
@@ -3695,13 +3727,13 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
       const dis = key === "blacklisted";
       const site = lead.website ? safeHref(lead.website) : "";
       const emailCtl = dis
-        ? `<span class="v${lead.email ? "" : " mu"}">${esc(lead.email) || "—"}</span>`
-        : `<span class="v" id="email-ctl" data-email="${esc(lead.email) || ""}" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;white-space:normal">${lead.email
+        ? `<span class="v ch-v${lead.email ? "" : " mu"}">${esc(lead.email) || "—"}</span>`
+        : `<span class="v ch-v" id="email-ctl" data-email="${esc(lead.email) || ""}" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;white-space:normal">${lead.email
             ? `<span>${esc(lead.email)}</span><button class="mini" onclick="editContactEmail(${lead.id})">改</button>`
             : `<span class="mu">—</span><button class="mini" onclick="editContactEmail(${lead.id})">填</button><button class="mini p" onclick="findMail(${lead.id},false)" title="免费：再抓一遍官网找公开邮箱">补邮箱</button>${hunterEligible(lead, a) ? `<button class="mini" onclick="findMail(${lead.id},true)" title="Hunter 按域名查，每家 1 积分">Hunter</button>` : ""}`}</span>`;
       return `<div class="card${dis ? " dis" : ""}"><div class="ct"><b>联系方式</b>${dis ? '<span class="r">不再联系</span>' : ""}</div>
-        <div class="cl"><span class="k">邮箱</span>${emailCtl}</div>
-        <div class="cl"><span class="k">官网</span><span class="v${lead.website ? "" : " mu"}">${site ? `<a href="${esc(site)}" target="_blank" rel="noopener">${esc(hostOf(lead.website))}</a>` : (lead.website ? esc(hostOf(lead.website)) : "—")}</span></div>
+        <div class="cl ch-row"><span class="k">邮箱</span>${emailCtl}${lead.email ? `<button class="mini cp-btn" data-copy="${esc(lead.email)}" onclick="dvCopyText(this)">复制</button>` : ""}</div>
+        <div class="cl ch-row"><span class="k">官网</span><span class="v ch-v${lead.website ? "" : " mu"}">${site ? `<a href="${esc(site)}" target="_blank" rel="noopener">${esc(hostOf(lead.website))}</a>` : (lead.website ? esc(hostOf(lead.website)) : "—")}</span>${lead.website ? `<button class="mini cp-btn" data-copy="${esc(lead.website)}" onclick="dvCopyText(this)">复制</button>` : ""}</div>
         ${dvChannelsBlock(lead)}</div>`;
     }
     /**
@@ -3730,6 +3762,25 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
      */
     const CH_MEANINGLESS = new Set(["pages", "profile.php", "people", "p", "pg", "company", "in", "groups", "share"]);
     const chLooksMeaningless = (s) => { const v = String(s || "").trim().toLowerCase(); return !v || /^\d+$/.test(v) || CH_MEANINGLESS.has(v); };
+    // ══ C5-52：标签与人工分（Mike 的人工复核工作流）══
+    //
+    // 快捷标签只给**最常按的那几个**（Joe：「常规的就设计几个快捷标签，外加支持人工输入」）。
+    // ⚠️ 3-4 个为限：多了就不是快捷，是又一个要读的清单。
+    const QUICK_TAGS = ["匹配", "不匹配", "已亲发"];
+    const TAG_X = new Set(["不匹配"]);        // 否定结论用弱化色，⛔ 不用红（它不是故障，是结论）
+    // ⚠️ 存的是 JSON 数组（标签允许自由输入，逗号会把一个标签劈成两个）。
+    //   解析必须**吞掉坏数据**：一条脏行不该让整张列表白屏。
+    const parseTags = (raw) => {
+      if (!raw) return [];
+      try { const a = JSON.parse(raw); return Array.isArray(a) ? a.map(String).filter(Boolean) : []; }
+      catch { return []; }
+    };
+    /** 显示用的分数：**人工分优先**，AI 分保留可见。⚠️ 只影响显示，⛔ 不影响任何机器判断。 */
+    const scoreOf = (l) => {
+      const h = (l.human_score === 0 || l.human_score) ? Number(l.human_score) : null;
+      const ai = (l.match_score === 0 || l.match_score) ? Number(l.match_score) : null;
+      return { shown: h != null ? h : ai, isHuman: h != null, ai };
+    };
     function dvChannelsBlock(lead){
       const ch = chanOf(lead);
       const ORDER = ["phone", "whatsapp", "linkedin", "facebook", "instagram", "telegram", "youtube"];
@@ -3744,16 +3795,126 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
         const val = safe
           ? `<a href="${esc(safe)}" target="_blank" rel="noopener">${esc(shown)}</a>`
           : `<span title="数据不规范，点不开">${esc(shown)}</span>`;
-        return `<div class="ch-row"><span class="ch-k">${esc(meta.label)}</span><span class="ch-v">${val}</span></div>`;
+        // ⚠️ 复制的是**原始值** `ch[k]`，⛔ 不是展示用的简写 —— 他要粘进拨号盘/浏览器的是那个原文。
+        //   （`shown` 可能已经被回落成 host+path，粘那个过去打不开。）
+        return `<div class="cl ch-row"><span class="k">${esc(meta.label)}</span>`
+             + `<span class="v ch-v" style="overflow:visible">${val}</span>`
+             + `<button class="mini cp-btn" data-copy="${esc(String(ch[k]))}" onclick="dvCopyText(this)">复制</button></div>`;
       });
-      // 一个渠道都没有时明写一句 —— 一个 `—` 分不出"没抓到"和"这一块坏了"。
-      return `<div class="cl ch-block"><span class="k">渠道</span><span class="v" style="overflow:visible">`
-        + (rows.length ? rows.join("") : `<span class="mu">没有抓到任何联系方式</span>`)
-        + `</span></div>`;
+      // 🔴 C5-52③（Joe：只删「渠道」两个字，条目全保留）：
+      //   原来它是**一整行**（`<span class="k">渠道</span>` + 一堆子行），现在每条渠道
+      //   **各自成为一行**，与「邮箱」「官网」并列 —— 同事就是靠这些联系客户的，它们不该缩在一个二级块里。
+      // ⚠️ 一个渠道都没有时仍要明写一句 —— 一个 `—` 分不出"没抓到"和"这一块坏了"。
+      return rows.length ? rows.join("")
+        : `<div class="cl"><span class="k">其它联系方式</span><span class="v mu">没有抓到</span></div>`;
     }
-    function dvNotesCard(lead){
-      return `<div class="card"><div class="ct"><b>备注</b><span class="r"><span id="dv-notes-msg">只有你看得到</span></span></div>
-        <textarea id="dv-notes" class="ta" style="min-height:56px" placeholder="记点什么：谁接的电话、报了什么价、为什么忽略…">${esc(lead.notes || "")}</textarea></div>`;
+    /**
+     * 复制一个具体值（原样取自 spike/detail-contacts-copy-whatsapp @ 7fbd6ac —— 这次 Joe 自己要了）。
+     * ⚠️ **必须有反馈** —— 静默的复制按钮，人分不出"复制了"和"点了没反应"。
+     * ⚠️ 三级退让，⛔ 每一级都不许假装成功：
+     *   ① `navigator.clipboard.writeText`
+     *   ② `execCommand('copy')`
+     *   ③ 🔴 两级都不行 ⇒ **把那个值选中，告诉他按 Ctrl+C** —— 与其说"复制不了"让他自己想办法，
+     *      不如把他要的字送到他手边。（实测：剪贴板 API 在文档没有焦点时抛 `NotAllowedError`，
+     *      ⇒ 这一级**不是理论兜底，是真会走到的**。）
+     */
+    window.dvCopyText = async (btn) => {
+      const v = btn.dataset.copy || "";
+      const flash = (txt, ok) => {
+        const t0 = btn.dataset.label || btn.textContent;
+        btn.dataset.label = t0; btn.textContent = txt; btn.classList.toggle("ok", !!ok);
+        setTimeout(() => { btn.textContent = btn.dataset.label || "复制"; btn.classList.remove("ok"); }, 2000);
+      };
+      try { await navigator.clipboard.writeText(v); flash("已复制", true); return; } catch {}
+      const ta = document.createElement("textarea"); ta.value = v; document.body.appendChild(ta);
+      ta.select(); let ok = false; try { ok = document.execCommand("copy"); } catch {}
+      ta.remove();
+      if (ok) { flash("已复制", true); return; }
+      const cell = btn.closest(".ch-row") && btn.closest(".ch-row").querySelector(".ch-v");
+      if (cell) {
+        // 🔴 C5-52：这一级**必须选中"会被复制的那个值"，⛔ 不是屏幕上的简写**。
+        //   实测暴露的差异：LinkedIn 那行显示 `ready-c`，而该复制的是
+        //   `https://linkedin.com/company/ready-c` —— 退让时把简写送到他手边，**粘过去是没用的**。
+        //   （spike 那版直接选 cell，当时显示值与原始值差别小，没露出来；现在展示做了回落，差别变大了。）
+        // ⇒ 差异存在时**把原始值渲染进去再选中**：他看到的就是他将要复制的。
+        //   ⛔ 不还原 —— 2 秒后把字抢走，正好可能发生在他按 Ctrl+C 的那一下。
+        if (cell.textContent.trim() !== v) cell.textContent = v;
+        const rng = document.createRange(); rng.selectNodeContents(cell);
+        const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(rng);
+        flash("已选中 · 按 Ctrl+C", false);
+      } else flash("复制不了", false);
+    };
+    // ══ C5-52 复核卡的三个动作 ══
+    // ⚠️ 每一个都**当场落库 + 当场重画那张卡**（⛔ 不攒到某个"保存"按钮）：
+    //   同事一条一条过，中间不该有"我改了没存上"这种状态。
+    // ⚠️ 失败必须说出来并**把界面退回真值**（重画即可，卡片从服务端返回的数据画）——
+    //   ⛔ 绝不留下"看起来改了、其实没存"的界面（本仓最贵的那一类）。
+    const dvRvMsg = (t, bad) => { const e = $("#dv-rv-msg"); if (!e) return;
+      e.textContent = t; e.style.color = bad ? "var(--red)" : "var(--muted)";
+      if (!bad) setTimeout(() => { if (e) e.textContent = ""; }, 2000); };
+    async function dvPatchAndRefresh(id, path, body, okMsg){
+      const r = await fetch(`/api/leads/${id}/${path}`, { method:"PATCH",
+        headers:{"content-type":"application/json"}, body:JSON.stringify(body) })
+        .then(x => x.json()).catch(e => ({ error:String(e) }));
+      if (r.error) { dvRvMsg(`没存上：${r.error}`, true); return null; }
+      dvRvMsg(okMsg);
+      await openDetail(id);           // 重画：界面上的值一律来自服务端，⛔ 不本地猜
+      return r;
+    }
+    window.dvToggleTag = async (id, tag) => {
+      const cur = parseTags((_dvLead && _dvLead.tags) || null);
+      const next = cur.includes(tag) ? cur.filter(t => t !== tag) : [...cur, tag];
+      await dvPatchAndRefresh(id, "tags", { tags: next }, "已保存");
+    };
+    window.dvAddTagFromInput = async (id) => {
+      const el = $("#dv-tag-new"); if (!el) return;
+      const t = String(el.value || "").trim(); if (!t) return;
+      const cur = parseTags((_dvLead && _dvLead.tags) || null);
+      if (cur.includes(t)) { el.value = ""; dvRvMsg("这个标签已经有了"); return; }
+      el.value = "";
+      await dvPatchAndRefresh(id, "tags", { tags: [...cur, t] }, "已保存");
+    };
+    window.dvSaveHumanScore = async (id) => {
+      const el = $("#dv-hs"); if (!el) return;
+      const raw = String(el.value || "").trim();
+      // ⚠️ 空框**什么都不做**，⛔ 不当成 0、也⛔ 不当成"清空"——清空有它自己的按钮。
+      if (raw === "") { dvRvMsg("先填个分数（1-100）；要清掉人工分请点「用回 AI 分」", true); return; }
+      await dvPatchAndRefresh(id, "human-score", { score: Number(raw) }, "已按人工分记下");
+    };
+    window.dvClearHumanScore = async (id) =>
+      dvPatchAndRefresh(id, "human-score", { score: null }, "已清掉人工分，AI 分复显");
+    /**
+     * C5-52：复核卡 —— 标签 + 人工分 + 备注，**三样都是"人的判断"，放在一起**。
+     * ⚠️ 这张卡是给同事复核用的：他看完一条线索，下一步就是在这里落结论。
+     * 🔴 人工分与 AI 分**分开显示**：人工分带「人工」记号，AI 分**始终可见** ——
+     *   他要知道"机器怎么看"和"我怎么看"分别是多少，⛔ 不能只留一个数。
+     */
+    function dvReviewCard(lead, a){
+      const tags = parseTags(lead.tags);
+      const s = scoreOf({ human_score: lead.human_score, match_score: a && a.match_score });
+      const quick = QUICK_TAGS.map(t =>
+        `<button class="mini tg-q${tags.includes(t) ? " on" : ""}" onclick="dvToggleTag(${lead.id},'${esc(t)}')">${esc(t)}</button>`).join("");
+      const chips = tags.length
+        ? tags.map(t => `<span class="pill tg${TAG_X.has(t) ? " x" : ""}">${esc(t)}<b onclick="dvToggleTag(${lead.id},'${esc(t)}')" title="去掉">×</b></span>`).join("")
+        : `<span class="mu">还没打标签</span>`;
+      return `<div class="card"><div class="ct"><b>复核</b><span class="r"><span id="dv-rv-msg" class="hint" style="margin:0"></span></span></div>
+        <div class="cl"><span class="k" style="width:auto;min-width:66px">标签</span>
+          <span class="v" style="overflow:visible;white-space:normal;display:flex;gap:6px;flex-wrap:wrap;align-items:center" id="dv-tags">${chips}</span></div>
+        <div class="cl"><span class="k" style="width:auto;min-width:66px"></span>
+          <span class="v" style="overflow:visible;white-space:normal;display:flex;gap:6px;flex-wrap:wrap;align-items:center">${quick}
+            <input id="dv-tag-new" class="inp" style="flex:0 0 130px;height:26px" placeholder="自己写一个，回车" onkeydown="if(event.key==='Enter'){event.preventDefault();dvAddTagFromInput(${lead.id});}">
+          </span></div>
+        <div class="cl"><span class="k" style="width:auto;min-width:66px">评分</span>
+          <span class="v" style="overflow:visible;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <b style="font-size:15px">${s.shown != null ? s.shown : "—"}</b>
+            ${s.isHuman ? `<span class="pill">人工</span>` : ""}
+            ${s.isHuman && s.ai != null ? `<span class="t mu">AI ${s.ai}</span>` : ""}
+            <input id="dv-hs" type="number" min="1" max="100" class="inp" style="flex:0 0 68px;height:26px" placeholder="改分" value="">
+            <button class="mini" onclick="dvSaveHumanScore(${lead.id})">存</button>
+            ${s.isHuman ? `<button class="mini" onclick="dvClearHumanScore(${lead.id})" title="清掉人工分，AI 分自动复显">用回 AI 分</button>` : ""}
+          </span></div>
+        <textarea id="dv-notes" class="ta" style="min-height:56px;margin-top:8px" placeholder="记点什么：谁接的电话、报了什么价、为什么忽略…">${esc(lead.notes || "")}</textarea>
+        <div class="hint" id="dv-notes-msg" style="margin:4px 0 0">备注只有你们看得到</div></div>`;
     }
     function dvNextCard(lead){
       return `<div class="card"><div class="ct"><b>下一步</b></div><div class="row" style="margin-top:0">
@@ -3817,7 +3978,7 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
         main = `<div class="card fail"><div class="ct"><b>${why[0]}</b><span class="r">${esc(fmtYMD(lead.updated_at))}</span></div><div class="txt">${why[1]}</div></div><div class="card">${dvThread(_dvComm)}</div>`;
       }
       // ── 侧栏：基本信息 → 联系方式 → 备注 → 下一步（只 4 格）→ 时间线 ──
-      const side = dvInfoCard(lead, a, key) + dvContactCard(lead, a, key) + dvNotesCard(lead)
+      const side = dvInfoCard(lead, a, key) + dvContactCard(lead, a, key) + dvReviewCard(lead, a)   /* C5-52：备注卡并入复核卡（标签+人工分+备注同属"人的判断"）⛔ 两张同时渲染会出现重复的 #dv-notes */
         + (["ready","sent","replied","won"].includes(key) ? dvNextCard(lead) : "")
         + `<div class="card"><div class="ct"><b>时间线</b></div><div id="timeline" class="mu">加载中…</div></div>`;
       $("#v-page").innerHTML = `<div class="dv">

@@ -45,7 +45,9 @@ import { currentActivity, setActivity, clearActivity, readActivity, type Activit
  */
 const LEAD_ROW_COLS =
   "l.id, l.company_name, l.website, l.email, l.country, l.source, l.keyword, l.status, l.created_at, l.channels, " +
-  "l.next_action, l.next_action_date, l.last_engaged_at, l.bench_channel, " +   // nav-table-v2：已联系页「邮件·跟进」列，没邮件时显示「手动 · 渠道」
+  "l.next_action, l.next_action_date, l.last_engaged_at, l.bench_channel, " +
+  // C5-52：人的判断（Mike 复核工作流）——「邮件·跟进」列让位给标签，备注只出一个小标记
+  "l.tags, l.human_score, (CASE WHEN l.notes IS NOT NULL AND trim(l.notes)<>'' THEN 1 ELSE 0 END) AS has_notes, " +   // nav-table-v2：已联系页「邮件·跟进」列，没邮件时显示「手动 · 渠道」
   // 批⑲：这两列**只读**，给「待分析」分组页用 —— 组B 要显示无官网的**具体原因**
   // （批⑰ 已把超时/403/TLS/DNS 分开落库），组A 要显示「重试中 n/3」让 Joe 知道机器在干活。
   // ⚠️ 只加列，**不动任何 WHERE**（口径一个字没变）。
@@ -1371,6 +1373,7 @@ function leadsWhere(qs: (k: string) => string | undefined): { where: string[]; b
 
 // ---- 线索列表（多维筛选：状态组 / 国家 / 客户类型 / 有无邮箱 / 最低分 / 关键词）----
 app.get("/api/leads", async (c) => {
+  await ensureHumanColumns(c.env);   // C5-52：这条 SELECT 点名了 l.tags / l.human_score，缺列会让主列表恒 500
   const { where, binds, due, group } = leadsWhere((k) => c.req.query(k));
   const CLICKED = CLICKED_SQL;
   let sql = `SELECT ${LEAD_ROW_COLS} FROM leads l LEFT JOIN lead_analysis a ON a.lead_id = l.id`;
@@ -1859,6 +1862,7 @@ app.post("/api/admin/normalize-countries", async (c) => {
 
 // ---- 线索详情（含 AI 分析）----
 app.get("/api/leads/:id", async (c) => {
+  await ensureHumanColumns(c.env);   // C5-52
   const id = Number(c.req.param("id"));
   // 🔴 C5-14 根治：这里原来**手抄了一份**列表的派生列（has_open/has_click/has_followup/latest_reply_cat）。
   //   抄一份就会漂，而它已经漂了：**`match_score` 抄漏了**（它在 lead_analysis 里，这条查询压根没 join）。
@@ -2170,6 +2174,51 @@ app.get("/api/leads/:id/comm", async (c) => {
 
 // ---- detail-v6：备注（leads.notes，只有 Joe 看得到；自动保存）----
 // ⚠️ 不碰 updated_at：它参与「进入本格时间」的推导，写备注不该让列表的时间列跳
+// ══ C5-52：人的判断两个写入口（标签 / 人工分）══
+//
+// ⚠️⚠️ 这两个端点是**这三列唯一的写入方**。任何自动流程（cron / 分析器 / 重扫 / 导入）
+//   ⛔ 一律不许写它们 —— 与 `is_test`、`notes` 同一族纪律：**人的判断只由人写**。
+// 🔴 「AI 重扫永不覆盖人工分」**由结构保证，⛔ 不靠任何"别覆盖"的判断**：
+//   AI 分住在 `lead_analysis.match_score`（重扫重写它），人工分住在 `leads.human_score`
+//   —— **两张表两个字段，重扫的 SQL 里根本没有这一列**。
+//   ⇒ 不需要有人记得维护一条豁免规则（同「replied 进不了 SENDABLE_WHERE 的门」）。
+app.patch("/api/leads/:id/tags", async (c) => {
+  await ensureHumanColumns(c.env);
+  const id = Number(c.req.param("id"));
+  if (!Number.isFinite(id)) return c.json({ error: "invalid id" }, 400);
+  const b = await jsonBody<{ tags?: unknown }>(c);
+  if (!Array.isArray(b.tags)) return c.json({ error: "tags 必须是数组" }, 400);
+  // 清洗：去空白 → 丢空 → 去重 → 每个 ≤24 字 → 最多 12 个。
+  // ⚠️ 上限不是刁难，是防一次误粘把整段文字塞成一个"标签"，列表那一格会被撑爆。
+  const tags = [...new Set(b.tags.map((t) => String(t ?? "").trim()).filter(Boolean).map((t) => t.slice(0, 24)))].slice(0, 12);
+  // ⚠️ 空数组 ⇒ 存 NULL（"没有标签"与"存了个空数组"应当是同一件事，⛔ 别造第二种空）
+  const res = await c.env.DB.prepare("UPDATE leads SET tags=?, updated_at=datetime('now') WHERE id=?")
+    .bind(tags.length ? JSON.stringify(tags) : null, id).run();
+  if (!res.meta.changes) return c.json({ error: "not found" }, 404);
+  return c.json({ ok: true, id, tags });
+});
+
+app.patch("/api/leads/:id/human-score", async (c) => {
+  await ensureHumanColumns(c.env);
+  const id = Number(c.req.param("id"));
+  if (!Number.isFinite(id)) return c.json({ error: "invalid id" }, 400);
+  const b = await jsonBody<{ score?: unknown }>(c);
+  // ⚠️ **`null` 是"清掉人工分"，不是"没传"** —— 两者必须分得开，否则清不掉（同 numKnob 那条纪律）。
+  //   清掉之后 AI 分自然复显，⛔ 不需要把 AI 分抄回来。
+  if (b.score === null) {
+    const r0 = await c.env.DB.prepare("UPDATE leads SET human_score=NULL, human_score_at=NULL, updated_at=datetime('now') WHERE id=?").bind(id).run();
+    if (!r0.meta.changes) return c.json({ error: "not found" }, 404);
+    return c.json({ ok: true, id, score: null, cleared: true });
+  }
+  const n = Math.floor(Number(b.score));
+  if (!Number.isFinite(n) || n < 1 || n > 100) return c.json({ error: "分数要在 1-100 之间（清空请传 null）" }, 400);
+  const res = await c.env.DB.prepare(
+    "UPDATE leads SET human_score=?, human_score_at=datetime('now'), updated_at=datetime('now') WHERE id=?"
+  ).bind(n, id).run();
+  if (!res.meta.changes) return c.json({ error: "not found" }, 404);
+  return c.json({ ok: true, id, score: n });
+});
+
 app.patch("/api/leads/:id/notes", async (c) => {
   const id = Number(c.req.param("id"));
   if (!Number.isFinite(id)) return c.json({ error: "invalid id" }, 400);
@@ -3303,7 +3352,31 @@ const SELF_HEAL_COLUMNS: { table: string; column: string; ddl: string }[] = [
   // 而 runDiscovery 由每分钟的 tick 驱动，会先到。
   { table: "keywords", column: "lang",
     ddl: "ALTER TABLE keywords ADD COLUMN lang TEXT" },
+  // C5-52：人的判断三列。⚠️ 与 replies.source / keywords.lang 同理 —— **真正保证它们存在的是
+  // `ensureHumanColumns()`**（列表页那条 SELECT 就是第一个读它们的人，缺列会让主列表直接 500，
+  // 正是 2026-09-01 那次事故的形状）。列在这里只是**声明**。
+  { table: "leads", column: "tags", ddl: "ALTER TABLE leads ADD COLUMN tags TEXT" },
+  { table: "leads", column: "human_score", ddl: "ALTER TABLE leads ADD COLUMN human_score INTEGER" },
+  { table: "leads", column: "human_score_at", ddl: "ALTER TABLE leads ADD COLUMN human_score_at TEXT" },
 ];
+/**
+ * C5-52：人的判断三列的自愈补列。
+ *
+ * 🔴 **必须挂在读路径最前面**：`LEAD_ROW_COLS` 里点名了 `l.tags` / `l.human_score`，
+ *   缺列 ⇒ `no such column` ⇒ **主列表恒 500**（不是某个角落，是 Joe 打开就看到的那一页）。
+ *   这与 2026-09-01 那次 `archived` 的事故**逐字同形**：迁移只挂在稀有写路径上，
+ *   而读路径每次开页面就跑、它先到。
+ * ⚠️ 判据不是"有没有写进 SELF_HEAL_COLUMNS"，是**第一个读它的人来的时候列在不在**。
+ */
+async function ensureHumanColumns(env: Env): Promise<void> {
+  for (const ddl of [
+    "ALTER TABLE leads ADD COLUMN tags TEXT",
+    "ALTER TABLE leads ADD COLUMN human_score INTEGER",
+    "ALTER TABLE leads ADD COLUMN human_score_at TEXT",
+  ]) {
+    try { await env.DB.prepare(ddl).run(); } catch { /* 已存在 —— 正常，不是错误 */ }
+  }
+}
 async function ensureKeywordArchivedColumn(env: Env): Promise<void> {
   for (const m of SELF_HEAL_COLUMNS) {
     try { await env.DB.prepare(m.ddl).run(); }

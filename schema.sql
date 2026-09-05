@@ -44,6 +44,16 @@ CREATE TABLE IF NOT EXISTS leads (
   analyzing_at       TEXT,                          -- 分析认领戳（10 分钟过期）。fastTick 与手动批量分析
                                                     -- 并发时用它抢占，避免同一条线索被两边各烧一次 AI。
   human_approved     INTEGER NOT NULL DEFAULT 0,   -- Joe 手动放行 <60（humanapprove，唯一豁免分数线的口子）
+  -- ══ C5-52：**人的判断**三件（Mike 的人工复核工作流）══
+  -- ⚠️ 与 `is_test` / 机器字段同理：**任何自动流程一律不许写这三列**。
+  --   `notes` 也属这一族（早就有了），⛔ 别让 cron/分析器碰它们。
+  tags               TEXT,              -- JSON 数组，如 ["匹配","已亲发"]。⚠️ 用 JSON 不用逗号串：
+                                        --   标签允许自由输入，逗号会把一个标签劈成两个（CSV 的老坑）。
+  -- 🔴 人工分**与 AI 分分开存**：AI 分在 `lead_analysis.match_score`，重扫会重写它；
+  --   人工分在这里，**重扫碰不到** —— 这条靠"两个字段"这个结构保证，⛔ 不靠任何"别覆盖"的判断。
+  --   人工分清掉（置 NULL）后 AI 分自然复显。
+  human_score        INTEGER,           -- 1-100，NULL = 没人工改过
+  human_score_at     TEXT,              -- 人工改分的时刻（NULL 与 human_score 同进同出）
   bench_queued       INTEGER NOT NULL DEFAULT 0,   -- 转触达工作台（humanapprove）
   bench_contacted_at TEXT,              -- 工作台「已联系」时间（humanapprove）
   bench_channel      TEXT               -- 工作台「已联系」渠道（humanapprove）
