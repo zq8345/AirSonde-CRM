@@ -4387,6 +4387,58 @@ app.post("/api/inbound", async (c) => {
       //   （官网侧那条纪律的镜像：静默吞掉询盘最贵；反过来 CRM 半步失败也不该让人白填一遍。）
       console.error("inbound: 写 replies 行失败（线索已入库，不影响访客）:", e);
     }
+
+    // ⭐ 方案 A（Joe 批的"AI 分析照跑但只做补充"）：**后台**补一次分析。
+    //
+    // ⚠️ 三条边界，缺一条这件事就变味：
+    //   ① `waitUntil` 后台跑 —— **访客绝不等 AI**。他点完"提交"就该拿到 ok。
+    //   ② **先落档、后分析** —— 上面 lead 与 replies 都写完了才起这一步。
+    //      🔴 分析失败**只记日志**：⛔ 不影响建档、⛔ 不重试。询盘本身的安全性
+    //      必须与 AI 可用性**解耦**（同"静默吞掉询盘最贵"那条：反过来也成立）。
+    //   ③ 只写 `lead_analysis`，⛔ 不碰 `status`。
+    // 🔴 而第 ③ 条**由结构保证、不需要我加特例**：`analyzeLead` 里两处状态写入分别带
+    //   `AND status='new'` 和 `AND status='approved'` 守卫（`recordFetchFailure` 里那两处同样），
+    //   ⇒ 对一条 `replied` 全是空操作。**我逐个查过这四处**，⛔ 不是"应该不会动"。
+    //   这与"`replied` 进不了 `SENDABLE_WHERE` 的门"是同一个哲学：能靠结构保证的，
+    //   就别再加一个要维护的开关。
+    const analyzeId = leadId;
+    c.executionCtx.waitUntil((async () => {
+      try {
+        const row = await c.env.DB.prepare("SELECT * FROM leads WHERE id=?").bind(analyzeId).first<any>();
+        if (!row) return;
+        // 🔴 官网表单**不收官网地址**（契约字段就是 name/company/email/phone/inquiry_type/message/来源页），
+        //   而分析的第一步就是抓官网 ⇒ 不补这一步，方案 A 对官网询盘**永远是空转的**
+        //   （实测：第一版跑出来就是"没有官网，跳过分析"）。
+        // ⇒ 用**邮箱域名**推官网。⚠️ 两条约束：
+        //   · 免费邮箱域不推（`k.weber@gmail.com` 推不出公司站）—— 复用同一份 `FREE_EMAIL_DOMAINS`；
+        //   · **只在内存里给这一次分析用，⛔ 不写回 `leads.website`** —— 它是推断不是事实，
+        //     落库就会变成"系统说这是他家官网"，而抓错站的代价是给整条线索打一个错的分。
+        //     （抓到的渠道/邮箱由 analyzeLead 自己按真实抓取结果落库，那些是事实。）
+        let target = row;
+        if (!row.website) {
+          const dom = domainOfEmail(String(row.email || "").toLowerCase());
+          if (!dom || FREE_EMAIL_DOMAINS.has(dom)) {
+            console.log(`inbound: #${analyzeId} 无官网且邮箱域推不出（${dom || "无域名"}），跳过分析（询盘本身已入库）`);
+            return;
+          }
+          target = { ...row, website: `https://${dom}` };
+          console.log(`inbound: #${analyzeId} 无官网，按邮箱域名试抓 https://${dom}（⛔ 不写回线索）`);
+        }
+        await analyzeLead(c.env, target, { scoreOnly: true });   // scoreOnly：只打分/判类型，⛔ 不写开发信草稿——这条线索不发冷邮件
+        // ⚠️ **报真正发生了什么，⛔ 不报"我调用了它"**：`analyzeLead` 抓不到官网时走
+        //   `recordFetchFailure` **正常返回**（不抛），第一版我在这里无条件打「补充分析完成」——
+        //   本地实测那条线索 `lead_analysis` 是 0 行、`fetch_fail_count` 加了 1，而日志说"完成"。
+        //   ⇒ 判据落在**产出**（分析行在不在），不落在"那一步跑过没有"。
+        const wrote = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM lead_analysis WHERE lead_id=?")
+          .bind(analyzeId).first<{ n: number }>();
+        console.log(wrote?.n
+          ? `inbound: #${analyzeId} 补充分析已写入`
+          : `inbound: #${analyzeId} 补充分析没写出结果（多半是抓不到官网）—— 询盘已入库、阶段未变`);
+      } catch (e) {
+        // ⚠️ 原话进日志，⛔ 不转述、⛔ 不重试。
+        console.error(`inbound: #${analyzeId} 补充分析失败（询盘已入库、阶段未变，不影响访客）:`, e);
+      }
+    })());
   }
 
   // 推飞书（压制态 / 超软限 时跳过；失败不影响入库）
