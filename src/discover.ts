@@ -131,6 +131,39 @@ export const BLACKLIST_GL = new Set(["af", "by", "cn", "hk", "mo", "kp", "ru", "
 //   Joe 要"系统全包国家"，所以不再是"勾选子集"。配置缺失 = 全量（见 getSearchConfig），不是零。
 export const DEFAULT_COUNTRIES = Object.keys(COUNTRIES).filter((c) => !BLACKLIST_GL.has(c));
 
+// ══⭐ C5-50②：关键词的**语言**决定它跑哪些国家（Joe 2026-09-04 批的多语言试水）══
+//
+// 为什么要绑：一个德语词在巴西搜没有意义，还白烧一次 Serper 额度。
+// ⚠️ 映射**做成数据**，⛔ 不散在代码里 —— 散开的话"某个语言跑哪几国"就会有第二个家。
+// ⚠️ `"ALL"` 是显式值，⛔ 不用"空数组=全部"这种约定：空数组在别处天然表示"一个都没有"，
+//    让同一个形状承担两种相反的含义，就是下一次静默停搜的来源。
+export const LANG_COUNTRIES: Record<string, string[] | "ALL"> = {
+  en: "ALL",                                            // 英文 = 全部国家（现状不变）
+  de: ["de", "at", "ch"],                               // 德奥瑞
+  es: ["es", "mx", "co", "pe", "cl", "ar", "uy"],       // 西班牙 + 墨哥秘智阿乌（mx 是 C5-50① 才加进目录的）
+  fr: ["fr", "be", "ch"],                               // 法比瑞
+  it: ["it", "ch"],                                     // 意瑞
+};
+
+/**
+ * 这个语言在**本轮实际可搜的国家**里能跑哪几个。
+ *
+ * ⚠️ 一定是与 `available`（已选国家 ∩ 未拉黑）取交集，不是直接返回语言组 ——
+ *    Joe 把德国取消勾选之后，德语词就该只剩奥地利和瑞士，⛔ 不能绕过他的选择。
+ * ⚠️ 认不出的语言 **回落 "ALL" 并吼一声**，⛔ 不回落空数组：
+ *    空数组 = 这个词从此静默不搜，而这正是本仓反复栽的那类病（没搜和搜不到长得一样）。
+ */
+export function countriesForLang(lang: string, available: string[]): string[] {
+  const g = LANG_COUNTRIES[String(lang || "en").trim().toLowerCase()];
+  if (g === undefined) {
+    console.log(`discovery: 关键词语言 "${lang}" 不在 LANG_COUNTRIES 里 —— 按全部国家跑（请补映射）`);
+    return available.slice();
+  }
+  if (g === "ALL") return available.slice();
+  const set = new Set(available);
+  return g.filter((gl) => set.has(gl));
+}
+
 // 遗留数据国家推断：按官网 ccTLD 后缀映射（最佳努力）。
 // 通用后缀（.com/.net/.org 等）+ 被当"通用短域名"卖的伪 ccTLD（.co/.io/.ai/.me/.tv/.cc，
 //   如 .co=哥伦比亚但大量美国公司在用）一律不当国家信号 → 返回 ""（保持 NULL，不猜、不默认美国）。
@@ -165,20 +198,28 @@ export function inferCountryFromWebsite(website: string): string {
 }
 
 // 搜索提供商（可插拔）：默认 Serper（Google 搜索 API，便宜，有免费额度）
-// gl = 国家定向（如 us/au/ca）
-export async function searchCompanies(env: Env, query: string, num = 10, gl = "us"): Promise<SearchResult[]> {
+// gl = 国家定向（如 us/au/ca）；hl = 界面语言（如 de/es）
+//
+// 🔴 C5-50②：**只设 gl 不设 hl，Google 仍然偏向英文结果，多语言方案会白做。**
+// ⚠️ 但 `hl` 对**英文词一律不发**（下面 searchSerper 里只在 hl 非空时才加这个键）——
+//    判据是"英文词行为零变化，改动前后请求逐字相同"。多发一个 `hl:"en"` 即使语义等价，
+//    也已经不是"逐字相同"了，而我**没有实测过** Serper 的 hl 缺省值就是 en。
+//    ⇒ 不知道的事就别改它。
+export async function searchCompanies(env: Env, query: string, num = 10, gl = "us", hl = ""): Promise<SearchResult[]> {
   const provider = (env.SEARCH_PROVIDER || "serper").toLowerCase();
-  if (provider === "serper") return searchSerper(env, query, num, gl);
+  if (provider === "serper") return searchSerper(env, query, num, gl, hl);
   throw new Error(`未知搜索提供商: ${provider}（目前支持 serper）`);
 }
 
-async function searchSerper(env: Env, query: string, num: number, gl: string): Promise<SearchResult[]> {
+async function searchSerper(env: Env, query: string, num: number, gl: string, hl = ""): Promise<SearchResult[]> {
   if (!env.SEARCH_API_KEY) throw new Error("缺少 SEARCH_API_KEY（去 serper.dev 生成，免费额度即可）");
   const q = `${query} ${EXCLUDE_QUERY}`.trim(); // E2：追加排除串，滤中国铺货平台/中文站
   const res = await fetch("https://google.serper.dev/search", {
     method: "POST",
     headers: { "X-API-KEY": env.SEARCH_API_KEY, "content-type": "application/json" },
-    body: JSON.stringify({ q, num, gl }),
+    // ⚠️ `hl` **只在非空时才进 body** —— 英文词走的是与改动前**逐字相同**的请求体
+    //    `{q, num, gl}`。这不是省事，是判据：英文词行为零变化要能被"抓一条请求逐字对照"验到。
+    body: JSON.stringify(hl ? { q, num, gl, hl } : { q, num, gl }),
   });
   if (!res.ok) throw new Error(`Serper ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`);
   const data: any = await res.json();
@@ -523,8 +564,25 @@ export async function runDiscovery(env: Env, opts: { keywords?: string[]; perKey
   const countries = (opts.countries?.length ? opts.countries : cfg.countries).filter((gl) => !BLACKLIST_GL.has(gl));
 
   // 展平所有 keyword×country 组合（每组合 = 1 次 Serper 搜索）
-  let combos: { kw: string; gl: string }[] = [];
-  for (const kw of keywords) for (const gl of countries) combos.push({ kw, gl });
+  //
+  // ⭐ C5-50②：国家不再是"每个词都跑全部"，而是**由这个词的语言决定**（见 LANG_COUNTRIES）。
+  //   英文词 = 全部国家（与改动前完全一致）；德语词只在德奥瑞，等等。
+  const langs = await getKeywordLangs(env);
+  let combos: { kw: string; gl: string; hl: string }[] = [];
+  const starvedByLang: string[] = [];
+  for (const kw of keywords) {
+    const lang = langs.get(kw) || "en";
+    const allowed = countriesForLang(lang, countries);
+    // ⚠️ 交集为空 ⇒ 这个词本轮**一次都不会搜**。这必须吼出来：
+    //   静默跳过会让"这个词没找到客户"和"这个词根本没跑过"长得一模一样。
+    if (!allowed.length) { starvedByLang.push(`${kw}(${lang})`); continue; }
+    // hl 只给非英文词发（保证英文词请求体逐字不变，见 searchSerper 上方注释）
+    const hl = lang === "en" ? "" : lang;
+    for (const gl of allowed) combos.push({ kw, gl, hl });
+  }
+  if (starvedByLang.length) {
+    console.log(`discovery: 本轮无国家可跑的词（语言组 ∩ 已选国家 = 空）：${starvedByLang.join(", ")}`);
+  }
 
   // ⭐ 批㉑：国家从 27 → 全量那一刻，combos 总数变了 → 旧 discovery_cursor 指向的 (kw,gl)
   //   会错位（游标是 combos 的**平铺下标**）。上线首日一次性把游标归零，让轮转从头开始，
@@ -537,14 +595,39 @@ export async function runDiscovery(env: Env, opts: { keywords?: string[]; perKey
   // P0-b 轮转窗口：cron 传 maxCombos 时，只跑一小批，用 discovery_cursor 环绕，下轮接着跑（别每轮全量 572）
   if (opts.maxCombos && opts.maxCombos < combos.length) {
     const totalC = combos.length;
+
+    // ⭐⭐ C5-50②：**游标错位的根治，取代"每次改动加一个一次性标记"。**
+    //
+    // 病：`discovery_cursor` 是 combos 的**平铺下标**。只要 combos 的**长度或顺序**变了
+    //     （加/停关键词、加/减国家、词绑语言……），旧游标就指向了另一个 (kw,gl)。
+    //     ⚠️ 错位**从外面完全看不出来**：不报错、照常搜、照常入库，只是轮转公平性没了。
+    // 🔴 batch㉑ 当时的处理是"上线首日一次性归零 + 一个标记"。那修的是那一次，
+    //     **而这个 bug 会在每一次改动上原样复发** —— 我自己差点又踩：如果这次也只放一个
+    //     一次性标记，它会在**部署那一刻**用掉（那时还没有小语种词、combos 根本没变），
+    //     等 4 个小语种词真正入库、combos 从 900 变 1155 时，标记已经消费完了。
+    // ⇒ 改成**记住上一轮的 combos 总数，一变就归零**。自维持，不需要有人记得加标记。
+    // ⚠️ 只在"按配置跑"的轮次里判：`opts.countries` 是单国定向的一次性覆盖，
+    //    它天然会算出另一个 totalC，拿它去比会**每次都误判成漂移**。
+    if (!opts.countries?.length) {
+      const lastN = Number(await getS(env, "discovery_combos_n", "")) || 0;
+      if (lastN !== totalC) {
+        await setS(env, "discovery_cursor", "0");
+        await setS(env, "discovery_combos_n", String(totalC));
+        console.log(`discovery: 组合总数 ${lastN || "(未记录)"} → ${totalC}，游标归零（平铺下标已失效）`);
+      }
+    }
+
     let cursor = Number(await getS(env, "discovery_cursor", "0")) || 0;
     cursor = ((cursor % totalC) + totalC) % totalC;
-    const window: { kw: string; gl: string }[] = [];
+    const window: { kw: string; gl: string; hl: string }[] = [];
     for (let i = 0; i < opts.maxCombos; i++) window.push(combos[(cursor + i) % totalC]);
     const next = (cursor + opts.maxCombos) % totalC;
     await setS(env, "discovery_cursor", String(next));
     // 批㉑：轮转推进日志（游标是 combos 的平铺下标，"接着上次往下走"，环绕）——公平性实测靠它取证。
     console.log(`discovery rotation: cursor ${cursor} → ${next}（共 ${totalC} 个 kw×国 组合，本轮取 ${opts.maxCombos} 个）`);
+    // ⭐ C5-50②：**把这一轮实际取到的组合逐个打出来。** 归零之后"游标有没有跳格"
+    //   只能靠看真正取到了什么来判 —— ⛔ 不许拿"没报错"当证据。
+    console.log(`discovery window: ${window.map((c) => `${c.kw}@${c.gl}${c.hl ? "/" + c.hl : ""}`).join(" | ")}`);
     combos = window;
   }
 
@@ -607,14 +690,14 @@ export async function runDiscovery(env: Env, opts: { keywords?: string[]; perKey
   await publishProgress();
 
   let cancelled = false;
-  for (const { kw, gl } of combos) {
+  for (const { kw, gl, hl } of combos) {
     if (usedToday >= budget) { budgetStopped = true; break; }   // 触及今日预算 → 停
     // 取消（只对带 roundId 的人工整轮生效）：Joe 点了芯片上的 ✕ ⇒ discover_cancel = 本轮 id
     if (opts.roundId && (await getS(env, "discover_cancel", "")).trim() === opts.roundId) { cancelled = true; break; }
     let results: SearchResult[];
     try {
       const _ts = tick();
-      results = await searchCompanies(env, kw, perKeyword, gl);
+      results = await searchCompanies(env, kw, perKeyword, gl, hl);
       msSearch += tick() - _ts;
       searched++; usedToday++;
       await setS(env, usedKey, String(usedToday));   // 每搜一次即记账，进程中断也不丢
@@ -874,6 +957,33 @@ export async function getKeywords(env: Env): Promise<string[]> {
     if (filtered.length) return filtered;   // 勾选集非空→只用勾选的；全没匹配上则回落全表（防误清空导致 0 词）
   }
   return list;
+}
+
+/**
+ * ⭐ C5-50②：关键词 → 语言。**单独一个函数，⛔ 不改 `getKeywords()` 的返回形状。**
+ *
+ * 为什么不把 lang 塞进 getKeywords：它返回 `string[]`，有 4 个消费方（两处直接把它当
+ * 字符串数组丢给前端）。为了一个只有 runDiscovery 用得上的字段去改公共形状，
+ * 是拿 4 处的风险换 1 处的方便。
+ *
+ * 🔴 **自愈补列挂在这里，因为「第一个读这一列的人」就是它。**
+ *   判据不是"有没有把列写进 SELF_HEAL_COLUMNS"，而是**第一个读它的人来的时候列在不在**。
+ *   （2026-09-04 刚栽过同形状的一次：`emails.delivered_at` 只加进整点班那张清单，
+ *     而 webhook 抢在前面到，于是读一个不存在的列。）
+ */
+async function ensureKeywordLangColumn(env: Env): Promise<void> {
+  try { await env.DB.prepare("ALTER TABLE keywords ADD COLUMN lang TEXT").run(); }
+  catch { /* 已经有这一列 —— 正常，不是错误 */ }
+}
+export async function getKeywordLangs(env: Env): Promise<Map<string, string>> {
+  await ensureKeywordLangColumn(env);
+  const out = new Map<string, string>();
+  try {
+    const rows = await env.DB.prepare("SELECT keyword, lang FROM keywords").all();
+    // ⚠️ NULL / 空 一律当 en：存量 51 个词就是这么落到 en 的，⛔ 不需要一次性 UPDATE 脚本。
+    for (const r of (rows.results as any[])) out.set(r.keyword, String(r.lang || "en").trim().toLowerCase() || "en");
+  } catch (e) { console.error("getKeywordLangs 读失败，全部按 en 处理：", e); }
+  return out;
 }
 
 export async function seedDefaultKeywords(env: Env): Promise<void> {

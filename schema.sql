@@ -151,6 +151,10 @@ CREATE TABLE IF NOT EXISTS keywords (
   --   战绩（sent_count / reply_count）就存在这一行上，硬删会把它一起销毁，
   --   而派单明确要求"历史战绩数据保留在库不清"。所以下架用标记，不用 DELETE。
   archived    INTEGER NOT NULL DEFAULT 0,
+  -- C5-50②：关键词语言（'en'/'de'/'es'/'fr'/'it'）。语言决定它跑哪些国家（LANG_COUNTRIES）
+  --   以及搜索请求的 `hl` 参数。⚠️ NULL 一律当 'en' 处理 —— 存量词因此天然是英文，
+  --   ⛔ 不需要一次性 UPDATE 脚本（需要有人记得跑的迁移，就是迟早忘记的迁移）。
+  lang        TEXT,
   created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

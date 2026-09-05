@@ -4594,8 +4594,13 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
             //   ⚠️ CSS 第 89 行的注释原本就写着「国家 + 关键词共用一套」—— 皮早就是一套，
             //     漂的是这个渲染函数。⇒ 改成和国家逐字同一套 chip 标记，⛔ 不新造第二套看起来像的。
             //   ⚠️ 删除叉在 chip 内部，必须 stopPropagation，否则点 × 会连带把这个词的勾选也翻掉。
-            return `<span class="chip kwitem${on?'':' off'}" data-kw="${esc(k.keyword)}" title="权重 ${k.weight!=null?k.weight:1}（按回复率自动加权）" onclick="fcKwToggle(this)">`
-                 + `<span class="cbx">${on?'✓':''}</span>${esc(k.keyword)}${stat}`
+            // C5-50②：小语种词打个语言标。⛔ 英文词不打 —— 绝大多数词是英文，
+            //   给每个都挂一个 "EN" 就是 26 个 chip 各加一份噪音（同上面那条战绩的判据）。
+            const lt = (k.lang && k.lang !== 'en')
+              ? `<span style="color:var(--muted);font-size:12px">${esc(String(k.lang).toUpperCase())}·</span>`
+              : ``;
+            return `<span class="chip kwitem${on?'':' off'}" data-kw="${esc(k.keyword)}" title="权重 ${k.weight!=null?k.weight:1}（按回复率自动加权）${k.lang&&k.lang!=='en'?` · 语言 ${esc(k.lang)}：只在该语言对应的国家搜`:''}" onclick="fcKwToggle(this)">`
+                 + `<span class="cbx">${on?'✓':''}</span>${lt}${esc(k.keyword)}${stat}`
                  + `${_fcKwManage?`<i onclick="event.stopPropagation();delKeyword(${k.id})" title="删除">×</i>`:''}</span>`;
           }).join("") + `</div>`
         : `<span class="muted">当前用内置默认 ${_fcKwEffCount} 个关键词。点右上「管理」→「载入默认」把它们变成可编辑、可勾选，或添加自定义词。</span>`;

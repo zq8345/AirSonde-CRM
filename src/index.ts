@@ -13,7 +13,7 @@ import { sendLead, sendApprovedBatch, sendFollowupBatch, sendWarmFollowupNow, un
 // 系统发信上限可设的最大值。Joe 拍板 1000 → 老的 500 clamp 会静默截断，故放宽到 2000 留余量。
 // （不设无穷：手滑多打一个 0 就把域名烧了，这类不可逆代价才值得一个上限。）
 const LIMIT_MAX = 2000;
-import { TIER1_COUNTRIES, runDiscovery, getKeywords, seedDefaultKeywords, getSearchConfig, COUNTRIES, DEFAULT_COUNTRIES, recomputeKeywordStats, inferCountryFromWebsite, getSerperUsage, runNmeaDiscovery, runLinkHarvest, runDirectoryRefresh, RVWITHTITO_URL, RVWITHTITO_BLACKLIST, SERPER_DAILY_BUDGET_DEFAULT, findDuplicateLead } from "./discover";
+import { TIER1_COUNTRIES, runDiscovery, getKeywords, seedDefaultKeywords, getSearchConfig, COUNTRIES, DEFAULT_COUNTRIES, recomputeKeywordStats, inferCountryFromWebsite, getSerperUsage, runNmeaDiscovery, runLinkHarvest, runDirectoryRefresh, RVWITHTITO_URL, RVWITHTITO_BLACKLIST, SERPER_DAILY_BUDGET_DEFAULT, findDuplicateLead, getKeywordLangs, LANG_COUNTRIES } from "./discover";
 import { findLeadEmail, diagnoseSite, type PageProbe } from "./findemail";
 import { ingestReplies, matchReplyToLead } from "./replies";
 import { ensureReplyColumns, stripQuoted, previewOf, isNoiseReply, tabOf, type InboxTab } from "./reply-inbox";
@@ -3206,9 +3206,14 @@ app.post("/api/settings/search", async (c) => {
 
 // ---- 关键词池管理 ----
 app.get("/api/keywords", async (c) => {
+  // C5-50②：语言从 getKeywordLangs 取，⛔ 不在这条 SELECT 里加 `lang` 列 ——
+  //   那样这个读路径就需要自己再兜一次"列还不存在"（正是 2026-09-01 那次 500 的形状）。
+  //   getKeywordLangs 内部会先 ensure，一条路径管到底。
+  const langs = await getKeywordLangs(c.env);
   const rows = await c.env.DB.prepare("SELECT id, keyword, weight, sent_count, reply_count FROM keywords WHERE COALESCE(archived,0)=0 ORDER BY weight DESC, id ASC").all();
   const keywords = (rows.results as any[]).map((k) => ({
     ...k,
+    lang: langs.get(k.keyword) || "en",
     reply_rate: k.sent_count > 0 ? k.reply_count / k.sent_count : null,  // 无发送则为 null（新词，无数据）
   }));
   return c.json({ keywords, effective: await getKeywords(c.env) });
@@ -3219,12 +3224,30 @@ app.post("/api/keywords/recompute", async (c) => {
   return c.json(out);
 });
 app.post("/api/keywords", async (c) => {
-  const b = await jsonBody<{ keyword?: string; seedDefaults?: boolean }>(c);
+  const b = await jsonBody<{ keyword?: string; lang?: string; seedDefaults?: boolean }>(c);
   if (b.seedDefaults) { await seedDefaultKeywords(c.env); return c.json({ ok: true }); }
   const kw = (b.keyword || "").trim();
   if (!kw) return c.json({ error: "keyword 不能为空" }, 400);
-  await c.env.DB.prepare("INSERT INTO keywords (keyword) VALUES (?) ON CONFLICT(keyword) DO NOTHING").bind(kw).run();
-  return c.json({ ok: true });
+  // C5-50②：语言。⚠️ **只认 LANG_COUNTRIES 里有的**，⛔ 不接受任意字符串 ——
+  //   一个不认识的语言会走 countriesForLang 的"回落全部国家"，等于一个德语词在全球乱搜。
+  const lang = String(b.lang || "en").trim().toLowerCase();
+  if (!(lang in LANG_COUNTRIES)) {
+    return c.json({ error: `语言 "${lang}" 没有对应的国家组（可用：${Object.keys(LANG_COUNTRIES).join("/")}）` }, 400);
+  }
+  await getKeywordLangs(c.env);   // 只为 ensure 那一列存在；这里必须先于写 lang
+  const ins = await c.env.DB.prepare("INSERT INTO keywords (keyword, lang) VALUES (?, ?) ON CONFLICT(keyword) DO NOTHING")
+    .bind(kw, lang).run();
+  // ⚠️ 原来这里无论如何都回 `{ok:true}` —— **"新加成功"和"这个词早就在库里（还可能是下架状态）"
+  //   长得一模一样**。加词的人会以为加上了。行为不变，但把发生了什么说出来。
+  if (ins.meta.changes === 1) return c.json({ ok: true, action: "inserted", keyword: kw, lang });
+  const cur = await c.env.DB.prepare("SELECT id, COALESCE(archived,0) AS archived FROM keywords WHERE keyword=?")
+    .bind(kw).first<{ id: number; archived: number }>();
+  return c.json({
+    ok: true,
+    action: cur?.archived ? "exists_archived" : "exists_active",
+    keyword: kw, id: cur?.id ?? null,
+    note: cur?.archived ? "这个词库里已经有了，但处于**下架**状态 —— 新加没有生效，要用得先恢复它" : "这个词已经在用，本次没有新增",
+  });
 });
 /**
  * C5-29③：把关键词**下架**（从轮转移除），不是删除它。
@@ -3273,6 +3296,12 @@ const SELF_HEAL_COLUMNS: { table: string; column: string; ddl: string }[] = [
   // ⛔ 别指望这张清单来兜底 —— 它只在整点班和三个关键词端点跑。
   { table: "replies", column: "source",
     ddl: "ALTER TABLE replies ADD COLUMN source TEXT" },
+  // C5-50②：关键词语言。⚠️ 与上面 replies.source 同理 —— **真正保证它存在的是
+  // `getKeywordLangs()` 自己的 `ensureKeywordLangColumn`**（第一个读这一列的就是它）。
+  // 列在这里只是**声明**，⛔ 别指望这张清单兜底：它只在整点班和三个关键词端点跑，
+  // 而 runDiscovery 由每分钟的 tick 驱动，会先到。
+  { table: "keywords", column: "lang",
+    ddl: "ALTER TABLE keywords ADD COLUMN lang TEXT" },
 ];
 async function ensureKeywordArchivedColumn(env: Env): Promise<void> {
   for (const m of SELF_HEAL_COLUMNS) {
