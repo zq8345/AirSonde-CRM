@@ -167,7 +167,8 @@
     #v-machine .sec-indent { margin-left:26px; }
     #v-machine .toolbar { display:flex; gap:8px; margin-left:auto; }
     /* chips（国家 + 关键词共用一套） */
-    #v-machine .grouplbl { font-size:12px; color:var(--muted); margin:12px 0 6px; }
+    /* `.grouplbl` 已随「一级/二级市场」组标题一起删（C5-50）——**唯一的生产者没了，规则就跟着摘**，
+       ⛔ 不留一条谁都不匹配的 CSS 在这儿（那正是"删元素没删绑定"那一族，只是方向反过来）。 */
     #v-machine .chips { display:flex; flex-wrap:wrap; gap:8px; }
     #v-machine .chip { font-size:13px; border:1px solid var(--brand); background:var(--brand-tint);
                        color:var(--brand-strong); border-radius:8px; padding:5px 10px;
@@ -4524,17 +4525,19 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
       const box = document.getElementById('fc-cc-block'); if (!box) return;
       const all = Object.keys(_fcAllCountries);
       if (!all.length) { box.innerHTML = '<div class="hint">这次没读到国家清单</div>'; return; }
-      const t1 = all.filter(c => _fcTier1.includes(c));
-      const t2 = all.filter(c => !_fcTier1.includes(c));
+      // 🔴 C5-50（Joe：「国家不用分什么一级市场和二级市场，依次排列即可」）：**一个平铺列表**。
+      // ⚠️ 只动**渲染层** —— `_fcTier1` / 后端 `TIER1_COUNTRIES` 一个字没动：
+      //   它还在被重刷弹窗的「只选一级市场」用（`rsPickTier1`）。**分组这个概念没被删，只是这里不再按它分栏。**
+      //   ⛔ 顺手删掉那个数据结构会连带删掉一个 Joe 还在用的能力。
+      // ⚠️ 顺序**天然就是原来的**：`Object.keys(_fcAllCountries)` 走的是后端 COUNTRIES 的声明顺序，
+      //   而那份声明本来就是"一级 15 个在前、二级在后" ⇒ 拼掉组标题后每个 chip 的位置一个都没变。
+      //   ⛔ 没有重新排序（Joe 明确说了保持现有次序）。
       const chip = (gl) => {
         const on = _fcCcChecked.has(gl);
         return `<span class="chip${on ? '' : ' off'}" data-gl="${esc(gl)}" onclick="fcCcToggle('${esc(gl)}')">` +
                `<span class="cbx">${on ? '✓' : ''}</span>${esc(_fcAllCountries[gl] || gl)}</span>`;
       };
-      const group = (label, list) => list.length
-        ? `<div class="grouplbl">${esc(label)}（${list.length}）</div><div class="chips">${list.map(chip).join('')}</div>`
-        : '';
-      box.innerHTML = group('一级市场', t1) + group('二级市场', t2)
+      box.innerHTML = `<div class="chips">${all.map(chip).join('')}</div>`
         + (_fcCcChecked.size === 0
             ? `<div class="warn">⚠ 一个国家都没选，机器不会再找新客户</div>`
             : '');
