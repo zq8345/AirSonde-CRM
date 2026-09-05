@@ -2776,10 +2776,19 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
         `<span class="ttl">${esc(label)}${cntTxt}${subTxt}</span>${selTxt}<div class="div"></div>`
         + `<div class="zB${n===0?' off':''}">${slot('s1')}${slot('s2')}${slot('s4')}${slot('s5')}${slot('s6')}</div>`
         + `<span class="hint" id="bulk-msg"></span>`
-        + `<div class="zR">${fleet}${fleet ? `<div class="div"></div>` : ""}${filters}`
-        // nav-table-v2：生效的筛选做成 chip 放「重置筛选」左边，点 × 单个去掉（type 是内部枚举，不是用户数据）
-        + (_filterChips || []).map(c => `<span class="chip">${esc(c.label)}<b onclick="clearHdrFilter('${c.type}')" title="去掉这个筛选">×</b></span>`).join("")
-        + `<button class="b-qui" onclick="resetFilters()" title="清空列头里的国家/分类/邮箱/评分/阶段/渠道筛选">重置筛选</button></div>`;
+        // 🔴 C5-50（总工拍板，起因是 Joe 那句「后面有用的按钮都没显示全」在勾选态仍然成立）：
+        //   **一个状态一套动作。** 勾着行的时候，右侧那组全局动作（发全部 / 免费抓 / 付费补 / 重置筛选）
+        //   本来就不是他此刻要按的 —— ⛔ 不是把八个按钮都挤下去，而是这一态**不渲染**它们。
+        // ⚠️ **靠状态切换不渲染，⛔ 不是 display:none 挂在那儿** —— 后者正是本仓那条
+        //   "元素删了绑定还活着 / 元素留着没人用"的老坑。取消勾选时整条 bar 重渲染，绑定随之回来。
+        // ⚠️ 生效中的筛选 chip **保留**：它是**状态显示**不是全局动作，藏掉会让 Joe 不知道自己正被筛着。
+        + `<div class="zR">`
+        + (n === 0
+            ? `${fleet}${fleet ? `<div class="div"></div>` : ""}${filters}`
+              + (_filterChips || []).map(c => `<span class="chip">${esc(c.label)}<b onclick="clearHdrFilter('${c.type}')" title="去掉这个筛选">×</b></span>`).join("")
+              + `<button class="b-qui" onclick="resetFilters()" title="清空列头里的国家/分类/邮箱/评分/阶段/渠道筛选">重置筛选</button>`
+            : (_filterChips || []).map(c => `<span class="chip">${esc(c.label)}<b onclick="clearHdrFilter('${c.type}')" title="去掉这个筛选">×</b></span>`).join(""))
+        + `</div>`;
     }
     // ⭐ 批⑪B：「待跟进」降级成「已联系」页的筛选（跟 🔥 点过链接同一层，不占左栏一格）。
     //   复用既有的 dueMode + 后端 `due=1` —— **底下一行没动**，只是换了个入口。
