@@ -218,8 +218,16 @@
          原来那句"这一区没有任何可编辑控件"已作废，⛔ 不留说谎的注释。 */
     .mr-vitals { padding:16px 18px; }
     /* v10.1 卡一「机器现在」四行：[圆点][环节名][状态词 · 数字][动作链接]。⚠️ 两盏灯 .mr-lamps* 与四格大数 .mr-bigs* 已删。 */
-    .mr-eng { display:flex; align-items:baseline; gap:10px; padding:9px 0; border-top:1px solid var(--border); font-size:13px; }
-    .mr-eng:first-of-type { border-top:none; }
+    /* 🔴 2026-09-05 Joe 指认「两条线」的根因之一就在这两行。
+       原写法：每个 .mr-eng 画 border-top，再用 `:first-of-type` 去掉第一条。
+       **`:first-of-type` 认的是"同类型(div)兄弟里的第一个"，不是"第一个 .mr-eng"** ——
+       而它前面还有一个 `.pr-head`（也是 div，且自带 border-bottom）⇒ 守卫**不命中**，
+       于是 pr-head 的底线与第一条 mr-eng 的顶线并排出现，中间隔 4px = 两条线。
+       ⇒ 改成 `.mr-eng + .mr-eng`：线**只画在两条之间**，结构上不可能画在第一条上方。
+       ⚠️ 这不是"把守卫修好"，是**换成一个不需要守卫的写法** —— `:first-of-type` 那种
+          "先都画、再挑一个去掉"的形状，只要兄弟里混进别的元素就会静默失效。 */
+    .mr-eng { display:flex; align-items:baseline; gap:10px; padding:9px 0; font-size:13px; }
+    .mr-eng + .mr-eng { border-top:1px solid var(--border); }
     .mr-d { width:8px; height:8px; border-radius:50%; background:var(--border-strong); flex-shrink:0; align-self:center; }
     .mr-d.ok { background:var(--brand); }
     .mr-d.no { background:var(--amber); }
@@ -773,7 +781,14 @@
          也不要再悄悄折行）。 */
     .pr-row { display:grid; grid-template-columns:120px 1fr; gap:12px; align-items:center;
               padding:11px 0; border-bottom:1px solid var(--border); }
-    .pr-row:last-child { border-bottom:none; }
+    /* 🔴 2026-09-05 Joe 指认「两条线」的根因之二（分析与批准 / 发信 / 收信与通知 三张卡同病）：
+       `.mr-tools` 自带 border-top，而它前面那条 `.pr-row` 的 border-bottom **还在** ——
+       因为 `.pr-row` 已经不是 `:last-child` 了（最后一个孩子是 .mr-tools）⇒ 守卫不命中，
+       两条线相隔 12px 并排出现。
+       ⇒ 规则说成一句：**「本区块最后一条内容行不画底线」** —— `.mr-tools` 就是区块结束的标志。
+       ⛔ 不是逐处删线，也⛔ 不是去掉 .mr-tools 的顶线（那样它若排在没有 pr-row 的卡里就没线了）。 */
+    .pr-row:last-child,
+    .pr-row:has(+ .mr-tools) { border-bottom:none; }
     .pr-k { font-size:13px; color:var(--muted); white-space:nowrap; }
     .pr-v { display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:14px; }
     .pr-v .hint { margin:0; }
