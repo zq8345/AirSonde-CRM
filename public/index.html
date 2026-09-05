@@ -5905,7 +5905,9 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
           const r = c.auto_send_blocked_reason;
           // 🔴 2026-09-05：原文「发信这一步现在没在跑」会被读成"一封信都不发了"——
           //   而「无回复跟进」是另一条路，此刻可能正在发。⇒ 收窄到它真正成立的范围。
-          w.textContent = (c.automation_enabled && r) ? `⚠️ 新开发信现在没在跑：${r}` : "";
+          // ⚠️ 前缀**不再重复主语**：理由串（autoSendBlockedReason）自己已经点名"新开发信"，
+          //   两处都写就成了「新开发信现在没在跑：新开发信这一步被单独关掉了」。主语归理由串一处出。
+          w.textContent = (c.automation_enabled && r) ? `⚠️ 现在没在跑：${r}` : "";
           w.style.color = "var(--red)";
         } }
       // ⭐ 批㉒：两个引擎开关**勾选即存**，不再跟着「保存」按钮走（见 save-sendcfg 那段注释）。
