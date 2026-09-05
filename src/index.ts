@@ -5435,6 +5435,28 @@ async function scheduled(event: ScheduledController, env: Env, ctx: ExecutionCon
     await alertReplyFailure(env, e?.message || String(e));
   }
 
+  // ⭐⭐ 2026-09-05 Joe 拍板「补」：「自动模式」总开关的语义定为 **关 = 全停**。
+  //   在此之前它**只管得住 fastTick**（本文件 5207 那一句 return），整点班**一条闸都没有** ⇒
+  //   关掉总开关之后，整点班照样爬目录、抓官网+调模型打分、补邮箱、**发跟进信**。
+  //   生产实证（09-05）：「机器自己发」关着的 11 小时里，整点班照发 27 封跟进（14:02–15:06 两簇贴着整点）。
+  //
+  // ⚠️ 闸**不加在函数顶部**（那是 fastTick 的形状，这里不适用）：Joe 定的语义是
+  //   **「关的是机器的嘴和手，不关耳朵」**（设置页卡五的卡头副标就是这七个字）⇒
+  //   **收回复（step 0）与告警/简报（step 4）必须照跑**，否则关一次总开关等于"客户回信也不收了"，
+  //   而那正是这个开关**从来没有**承诺过的事。⇒ 只关**出站**那四步。
+  // ⚠️ **只读一次，四处共用**：⛔ 别在每步各读一次 —— 一轮之内若读出两个不同的值，
+  //   就会出现"半停"（前两步停了、后两步还在跑），那种状态事后谁也解释不清。
+  // 🔴 结构上的取舍，说在前面：理想形状是把这四步**包进一个 if 块**，那样以后新增的出站步骤
+  //   会自动落在闸内、不依赖谁记得加。没那么做是因为它要重排约 185 行缩进，
+  //   会把"本次行为改动只有这一条"淹没在缩进 diff 里、让验收无从下手。
+  //   ⇒ 折中：一次读 + 四处显式闸 + 每处都打印跳过原因；
+  //     "往整点班新增出站步骤时必须自己加闸"这条已写进 docs/automation-truth.md。
+  const autoOn = await automationEnabled(env);
+  if (!autoOn) {
+    console.log("hourly: 自动模式总开关关着 —— 出站四步（目录源 / 分析 / 补邮箱 / 跟进）全部跳过；" +
+                "收回复与告警照跑（Joe 定的语义：关的是嘴和手，不关耳朵）");
+  }
+
   subMark("1-discovery");
   // 🔴 2026-09-02 Joe 拍板：找客户搬进 fastTick（每分钟全速跑），整点班**不再做 discovery**。
   //   见 fastTick 里的 3d) 段。这里保留路标，防止有人再排回来。
@@ -5447,7 +5469,12 @@ async function scheduled(event: ScheduledController, env: Env, ctx: ExecutionCon
     // ⚠️ 同样只在 0/6/12/18 跑。它虽然零 Serper，但要**爬别人的站**（NMEA 有 Crawl-delay 10）——
     //    每小时去敲一次门是对人家站点的骚扰，哪怕内部有 >7 天的自判也不该每小时问一遍。
     //    "免费"不等于"可以随便跑"。
-    if (!isDirectoryRound) {
+    if (!autoOn) {
+      // 出站闸①/④：爬别人的站是出站动作。⚠️ 这一步当前本来就是惰的（AirSonde 尚无自有目录源，
+      //   directorySourcesEnabled() 恒 false）—— 仍然加闸，是为了让"关=全停"这条**不变式成立**，
+      //   而不是等哪天启用了目录源才发现它在闸外。
+      console.log("directory refresh skipped: 自动模式总开关关着");
+    } else if (!isDirectoryRound) {
       console.log(`directory refresh skipped: 本轮 ${hourUtc}:00 不是目录班次（只在 0/6/12/18，守 Crawl-delay 与礼貌节奏）`);
     } else {
       const dr = await runDirectoryRefresh(env);
@@ -5463,8 +5490,14 @@ async function scheduled(event: ScheduledController, env: Env, ctx: ExecutionCon
   //    （对照 P0-1 拔掉的那个 `Math.min(autoRoom,5)`：那个是**业务**常数，锁死了 Joe 的每日上限，已删。）
   const CRON_ANALYZE_MAX = 12; // 单轮最多分析条数（~8-12 安全区，别在一次 Cron 抽干 100+）
   // C5-22：抽成 analyzePending()，与每分钟快 tick 共用同一份实现。
-  const _an = await analyzePending(env, CRON_ANALYZE_MAX, { budget });
-  analyzed += _an.ok;
+  // 出站闸②/④：分析 = 抓官网 + 调模型，两样都是出站（也都花钱）。
+  //   ⚠️ fastTick 里的那条分析路径已被函数顶部的总开关 return 挡住，这里是整点班这条。
+  if (!autoOn) {
+    console.log("analyze skipped: 自动模式总开关关着（抓官网与调模型都是出站动作）");
+  } else {
+    const _an = await analyzePending(env, CRON_ANALYZE_MAX, { budget });
+    analyzed += _an.ok;
+  }
 
   subMark("2.5-自动批准");
   // 2.5) 自动批准：≥auto_approve_min（默认 60）且有邮箱 → approved。
@@ -5511,7 +5544,14 @@ async function scheduled(event: ScheduledController, env: Env, ctx: ExecutionCon
   //   `Too many subrequests` 还是别的 —— 分类是我们的判断，原话是事实。
   const feErrSamples: string[] = [];
   try {
-    if ((await getSetting(env, "find_email_enabled", "1")) !== "1") {
+    if (!autoOn) {
+      // 出站闸③/④：补邮箱 = 去抓陌生站点的联系页，是出站动作。
+      // ⚠️ outcome 用**独立取值** `skipped:automation-off`，⛔ 不复用 `skipped:disabled` ——
+      //   那两件事原因不同（总开关关 vs 这一步自己被关），糊成一个值，
+      //   明天回头查"到底为什么没跑"就只能靠猜。这仓刚因为同一个病吃过亏（空结果与真结果同形）。
+      feOutcome = "skipped:automation-off";
+      console.log("auto-find-email skipped: 自动模式总开关关着");
+    } else if ((await getSetting(env, "find_email_enabled", "1")) !== "1") {
       feOutcome = "skipped:disabled";
       console.log("auto-find-email skipped: find_email_enabled=0");
     } else if (!budget.has(60_000)) {
@@ -5613,7 +5653,14 @@ async function scheduled(event: ScheduledController, env: Env, ctx: ExecutionCon
     //   「机器自己发」单独关 · 熔断 · 自动模式总开关关。
     //   生产实证：09-05 04:08:47→15:09:32 开关关着，其间整点班照发 27 封跟进。
     //   ⚠️ Joe 拍板「保持现状、改说法」（2026-09-05）⇒ 这里只改日志措辞，⛔ 行为一个字不动。
-    if (!(await autoSendEnabled(env))) console.log("hourly: 自动发送关着（或已熔断）—— ⚠️ 但下面 3.5 步的跟进**照常跑**：它只看 followup_enabled，不受这个开关控制");
+    // ⚠️ 2026-09-05 补闸之后这句**必须分叉**：`autoSendEnabled` 为假有三种来路
+    //   （总开关关 / 熔断 / 「机器自己发」单独关），而补闸后**只有第一种会连跟进一起停**。
+    //   不分叉的话，这句话在总开关关着时就又变成"日志说了代码没做的事" —— 正是本支要治的病。
+    if (!(await autoSendEnabled(env))) {
+      console.log(autoOn
+        ? "hourly: 新开发信关着（单独关 或 已熔断）—— ⚠️ 但下面 3.5 步的跟进**照常跑**：它只看 followup_enabled，不受这个开关控制"
+        : "hourly: 自动模式总开关关着 —— 新开发信与跟进**都不发**（2026-09-05 Joe 拍板：关=全停）");
+    }
   } catch (e) { console.error("breaker-eval:", e); }
 
   // 3) 收回复已挪到 **step 0**（cron 最前面）—— 见那里的注释。这里只留个路标防止有人再排回来。
@@ -5628,7 +5675,10 @@ async function scheduled(event: ScheduledController, env: Env, ctx: ExecutionCon
     // 走唯一咽喉点 + 冷发口径（与 sendFollowupBatch 内部同闸同计数 → 传进去的数不会再被"悄悄改小"）。
     const { effective: fuLimit } = await systemDailySendLimit(env);   // 跟进=批量通道，走 effective
     const fuRoom = Math.max(0, fuLimit - (await coldSentToday(env)));
-    if (!budget.has(90_000)) console.log(`followup: 本轮时间预算只剩 ${Math.round(budget.remaining()/1000)}s，跳过跟进，下轮继续（平台限制，非 Joe 的上限）`);
+    // 出站闸④/④ —— **本单的主目标**：跟进信是这条链上唯一真正发给客户的出站动作。
+    //   ⚠️ 它必须排在最前面：后面两条是"额度/预算"，那是"能发几封"，不是"该不该发"。
+    if (!autoOn) console.log("followup: 自动模式总开关关着 —— 跟进不发（2026-09-05 Joe 拍板：关=全停，含跟进）");
+    else if (!budget.has(90_000)) console.log(`followup: 本轮时间预算只剩 ${Math.round(budget.remaining()/1000)}s，跳过跟进，下轮继续（平台限制，非 Joe 的上限）`);
     else if (fuRoom <= 0) console.log(`followup: 今日发信额度已用尽（${fuLimit}/天，Joe 设的）`);
     else await sendFollowupBatch(env, fuRoom);
   } catch (e) { console.error("followup:", e); }
