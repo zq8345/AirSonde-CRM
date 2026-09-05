@@ -5607,7 +5607,13 @@ async function scheduled(event: ScheduledController, env: Env, ctx: ExecutionCon
   //   不是初次触达，不构成第二条初次发信路径。这一点别混。
   try {
     await evaluateSendBreaker(env);
-    if (!(await autoSendEnabled(env))) console.log("hourly: 自动发送关着（或已熔断）—— 跟进步骤会照此跳过");
+    // 🔴 2026-09-05：这句原来写的是「跟进步骤会照此跳过」——**日志说了一件代码没做的事**。
+    //   下面 3.5 步的 `sendFollowupBatch` 只查 `followup_enabled`，`autoSendEnabled` 它一个字都不看；
+    //   `scheduled()` 全程也没有自动模式总开关的闸（只有 fastTick 有）⇒ 三种情况下跟进都照发：
+    //   「机器自己发」单独关 · 熔断 · 自动模式总开关关。
+    //   生产实证：09-05 04:08:47→15:09:32 开关关着，其间整点班照发 27 封跟进。
+    //   ⚠️ Joe 拍板「保持现状、改说法」（2026-09-05）⇒ 这里只改日志措辞，⛔ 行为一个字不动。
+    if (!(await autoSendEnabled(env))) console.log("hourly: 自动发送关着（或已熔断）—— ⚠️ 但下面 3.5 步的跟进**照常跑**：它只看 followup_enabled，不受这个开关控制");
   } catch (e) { console.error("breaker-eval:", e); }
 
   // 3) 收回复已挪到 **step 0**（cron 最前面）—— 见那里的注释。这里只留个路标防止有人再排回来。

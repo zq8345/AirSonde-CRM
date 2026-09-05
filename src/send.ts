@@ -120,7 +120,9 @@ export async function autoSendBlockedReason(env: Env): Promise<string | null> {
     const why = (await getSetting(env, "auto_send_trip_reason", "")).trim();
     return `已熔断，需要你手动复位${why ? `（${why}）` : ""}`;
   }
-  if ((await getSetting(env, "auto_send_enabled", "1")) !== "1") return "发信这一步被单独关掉了";
+  // 🔴 2026-09-05：原文「发信这一步被单独关掉了」会被读成"信都不发了"，而跟进链此刻照发
+  //   （sendFollowupBatch 只看 followup_enabled）⇒ 把这一句收窄到它真正成立的范围。
+  if ((await getSetting(env, "auto_send_enabled", "1")) !== "1") return "新开发信这一步被单独关掉了";
   return null;
 }
 

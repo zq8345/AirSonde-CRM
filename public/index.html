@@ -1714,10 +1714,16 @@
           <span class="pr-v">
             <label class="tgl tgl-sm"><input type="checkbox" id="cfg-autosend" onchange="applyAutoSend(this)"><span class="tgl-track"><span class="tgl-knob"></span></span></label>
             <!-- C5-51④：这句是我今天写的，990 下把这一行撑到 87px（全卡最高的单控件行）。
-                 ⚠️ 精简的是**措辞**，⛔ 三件事一件没少：只停自动发信 · 手动不受影响 · 全停走总开关。
-                 细节移进 (?)，与本页其余行的写法一致。 -->
-            <span class="hint" style="margin-left:8px">只停自动发信 · 手动发不受影响</span>
-            <span class="gj-help" data-help title="关掉只停「机器自动发开发信」——找客户、分析、收信照跑；你手动点「发选中」也不受它管。要全停，用卡一右上角的自动模式总开关。">(?)</span>
+                 ⚠️ 精简的是**措辞**，⛔ 三件事一件没少：只停自动发新开发信 · 手动不受影响 · 跟进另有开关。
+                 细节移进 (?)，与本页其余行的写法一致。
+                 🔴 2026-09-05：原文写的是「只停自动发信 · 手动发不受影响」，(?) 里还写着「要全停，用
+                    卡一右上角的自动模式总开关」——**两句都不实**：跟进链（sendFollowupBatch）只看
+                    `followup_enabled`，`scheduled()` 全程没有总开关的闸 ⇒ 这个开关关掉、熔断、
+                    甚至总开关关掉，**跟进信照发**。生产实证：09-05 开关关着的 11 小时里发了 27 封跟进。
+                    ⚠️ 病在**列举**：它列了"手动不受影响"却漏掉跟进 ⇒ 读者合理推断"除手动外全停"。
+                    Joe 拍板「保持现状、改说法」⇒ 只改这两句话，⛔ 行为一个字不动。 -->
+            <span class="hint" style="margin-left:8px">只停自动发新开发信 · 手动发和下面的「无回复跟进」都不受它管</span>
+            <span class="gj-help" data-help title="关掉只停「机器自动发新开发信」——找客户、分析、收信照跑；你手动点「发选中」也不受它管。⚠️ 下面那行「无回复跟进」是另一个开关：它开着的话跟进信照发——这个开关、熔断、甚至自动模式总开关都停不住它，只有它自己那个开关能停。">(?)</span>
           </span></div>
 
         <div class="pr-row"><span class="pr-k">自动通道单独限量</span>
@@ -1746,7 +1752,7 @@
           <span class="pr-v"><span class="u">最近</span><input id="cfg-brk-win" type="number" min="5" class="set-num">
             <span class="u">封里超过</span><input id="cfg-brk-th" type="number" min="1" max="90" class="set-num"><span class="u">% 就停</span>
             <span class="pill" id="cfg-brk-src" style="display:none"></span>
-            <span class="gj-help" data-help title="只停自动发信，分析 / 批准 / 手动发不受影响。停了不会自动恢复，这里会出现「恢复自动发信」按钮。样本不足时不判——5 封里 2 封退订说明不了任何事。">(?)</span><span class="mr-live" id="mr-live-brk"></span>
+            <span class="gj-help" data-help title="只停自动发新开发信，分析 / 批准 / 手动发不受影响；⚠️「无回复跟进」也不受熔断影响，熔断期间跟进信照发（要停它去下面那行）。停了不会自动恢复，这里会出现「恢复自动发信」按钮。样本不足时不判——5 封里 2 封退订说明不了任何事。">(?)</span><span class="mr-live" id="mr-live-brk"></span>
             <!-- 熔断态：这一行右端出绿实心「恢复自动发信」（走现有重开路径），只在真熔断时插入 -->
             <span id="mr-resume-slot" style="margin-left:auto"></span></span></div>
 
@@ -1756,7 +1762,11 @@
             <input id="fu-engaged-delay" type="number" min="1" max="60" class="set-num"><span class="u">天 · 最多</span>
             <input id="fu-max" type="number" min="1" max="5" class="set-num"><span class="u">次 ·</span>
             <input id="fu-noreply" type="number" min="1" max="90" class="set-num"><span class="u">天放弃</span>
-            <span class="gj-help" data-help title="几天后跟进：建议 3-5 天，太快像催、太慢对方已经忘了你是谁。点过链接的：那个人此刻正在关注你，建议 1-2 天。最多跟几次：建议 1-2 次，跟太多次会从提醒变骚扰。多久后放弃：跟满还没回音就归档。">(?)</span></span></div>
+            <span class="gj-help" data-help title="几天后跟进：建议 3-5 天，太快像催、太慢对方已经忘了你是谁。点过链接的：那个人此刻正在关注你，建议 1-2 天。最多跟几次：建议 1-2 次，跟太多次会从提醒变骚扰。多久后放弃：跟满还没回音就归档。">(?)</span>
+            <!-- 🔴 2026-09-05：跟进封数第一次在界面上有落脚点（见 followupTodayText 的注释）。
+                 ⛔ 纯展示：它是 span 不是 input，保存 payload 逐个按 id 取（见 saveSettings 里的 fu 那段），
+                 结构上带不上它 —— 这仓有「改一句话术顺手开了自动发信」的案底，显示层绝不许流进写入层。 -->
+            <span class="hint" id="fu-today" style="margin-left:8px"></span></span></div>
         <!-- 工具行（AI 写开发信 / 发开发信 两条 + 发件地址） -->
         <div class="mr-tools" id="mr-tools-send"></div>
       </div>
@@ -5610,7 +5620,8 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
       const el = $("#sendcfg-result");
       // ⚠️ 失败要**把开关拨回去**：让它停在"看起来已经关了"而后端还开着，正是这次要治的那个病。
       if (r && r.error) { m.checked = !m.checked; if (el) el.textContent = `❌ 没存上：${r.error}`; return; }
-      if (el) { el.textContent = m.checked ? "⚠️ 机器自己发 已打开" : "✅ 机器自己发 已关闭（手动「发选中」不受影响）"; setTimeout(()=>{ if(el) el.textContent=""; },3500); }
+      // 🔴 2026-09-05：关闭提示原来只说「手动「发选中」不受影响」——同一个漏列举的病（见本页开关那行的注释）。
+      if (el) { el.textContent = m.checked ? "⚠️ 机器自己发 已打开" : "✅ 机器自己发 已关闭（手动「发选中」和「无回复跟进」不受影响）"; setTimeout(()=>{ if(el) el.textContent=""; },3500); }
       paintStatusBar();
       try { renderAutomation(await fetch("/api/settings/sending").then(r2=>r2.json())); } catch (e) { console.error("回填自动化状态失败:", e); }
     };
@@ -5839,6 +5850,11 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
       $("#fu-engaged-delay").value = fu.engaged_delay_days;
       $("#fu-max").value = fu.max_followups;
       $("#fu-noreply").value = fu.no_reply_days;
+      // 🔴 2026-09-05：把「今天跟进发了几封」摆到跟进那一行上 —— 与上面「今天已自动发 N 封」
+      //   （#cfg-auto-used）在同一张卡里两行相望。⚠️ 刻意**不并进那一行**：那一行的数是
+      //   `auto_sent_today`，量的是「自动通道单独限量」这个配额的用量，而跟进**不占那个配额**
+      //   （sendFollowup 不写 auto_sent）—— 挤在一起会让人以为跟进吃那个额度，等于修一句谎造一句新的。
+      { const el = $("#fu-today"); if (el) el.innerHTML = followupTodayText(c.sent_today_breakdown); }
       renderAutomation(c);
       await loadNotifyCfg();          // 飞书那块也一起刷新
       _cfgLoaded = true;              // 全部字段都真填上了，才允许保存
@@ -5887,7 +5903,9 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
       // "现在为什么不自动发信"取后端**唯一**那个理由（autoSendBlockedReason），不在前端另拼一句。
       { const w = $("#cfg-automation-why"); if (w) {
           const r = c.auto_send_blocked_reason;
-          w.textContent = (c.automation_enabled && r) ? `⚠️ 发信这一步现在没在跑：${r}` : "";
+          // 🔴 2026-09-05：原文「发信这一步现在没在跑」会被读成"一封信都不发了"——
+          //   而「无回复跟进」是另一条路，此刻可能正在发。⇒ 收窄到它真正成立的范围。
+          w.textContent = (c.automation_enabled && r) ? `⚠️ 新开发信现在没在跑：${r}` : "";
           w.style.color = "var(--red)";
         } }
       // ⭐ 批㉒：两个引擎开关**勾选即存**，不再跟着「保存」按钮走（见 save-sendcfg 那段注释）。
@@ -6292,13 +6310,22 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
      *   前者是"今天没到跟进的点"（正常），后者是"跟进在坏"（要人管）。
      *   把它们合并成一句，就是又造一个假绿灯。
      */
-    function followupTruth(t){
-      const s = (t && t.sent) || {}, f = (t && t.failed) || {};
-      const sent = s.followup || 0, failed = f.followup || 0;
-      if (sent > 0 && failed === 0) return `今天已发出 <b>${sent}</b> 封「无回复自动跟进」（那条路不受这个开关控制）。`;
-      if (sent > 0 && failed > 0)   return `今天「无回复自动跟进」发出 <b>${sent}</b> 封、<b style="color:var(--red)">失败 ${failed} 封</b>（那条路不受这个开关控制）。`;
-      if (failed > 0)               return `⚠️ 今天「无回复自动跟进」<b style="color:var(--red)">一封也没发出去（${failed} 次失败）</b> —— 那条路虽不受这个开关控制，但它现在是坏的。`;
-      return `今天「无回复自动跟进」也是 <b>0 封</b>（没有失败记录 ⇒ 是今天没有到跟进时点的线索，不是它坏了）。`;
+    /**
+     * 🔴 2026-09-05 重写并**真正接线**（原 `followupTruth` 在这里躺了一个多月，
+     *    全仓零调用点 —— 2026-09-01 的对抗审计已把它列进「疑似零引用函数 11 个」）。
+     *    ⇒ 它写的那句"那条路不受这个开关控制"**一次都没渲染过**：屏幕上关于这件事的信息量是 0。
+     *    这正是「今日已发 94」吓到 Joe 那次的根 —— 跟进封数在界面上**没有落脚点**。
+     *
+     * ⚠️ **只说数据支持得住的话**：`sent_today_breakdown` 只有已发计数、**没有失败计数**。
+     *   所以原版那句"没有失败记录 ⇒ 是今天没到跟进时点，不是它坏了"**这一版不许说** ——
+     *   那是拿一个查不到的量去下结论，正是原版注释自己警告过的假绿灯。
+     *   0 封就只报 0 封，⛔ 不替它解释原因。（要区分"没到点"和"坏了"，得先有 failed 口径 —— 另派。）
+     * ⚠️ 读不到就说读不到，⛔ 不填 0 冒充"今天没发"。
+     */
+    function followupTodayText(bd){
+      if (!bd) return `<span class="mu">今天发了几封读不到</span>`;
+      const n = Number(bd.followup) || 0;
+      return `今天已发 <b>${n}</b> 封 · 不受上面「机器自己发」控制`;
     }
 
 
@@ -6847,7 +6874,9 @@ ${esc(d.ours.body||'')}</div></details>`
                    return `${ago ? `<b>${esc(ago)}</b> · ` : ''}${esc(why.slice(0, 110))}`; })(),
           '去自动化', "openMachineRoom()") : '',
         A.breakerTrippedAt ? row('td-bad', '⚠️',
-          `自动发送已停 —— <b>现在没有在自动发信</b>`,
+          // 🔴 2026-09-05：原文「现在没有在自动发信」在熔断期间是**假话** —— 跟进链不受熔断影响，
+          //   它此刻可能正在发。⇒ 把断言收窄到它真正成立的范围（新开发信），并点名另一条路还开着。
+          `自动发送已停 —— <b>现在没有在自动发新开发信</b>（「无回复跟进」不受熔断影响，仍会发）`,
           // 🔴 C5-48c：原文写的是「到自动化 · **发信闸门**里手动重开」——**那张卡已经被删了**
         //   （C5-48 合并成「运行参数」）。熔断触发那天 Joe 会照这句话去找一个不存在的地方。
         // ⚠️ 我上一轮的产出扫描**看不见它**：这句话在条件分支里（只有熔断触发才渲染），
