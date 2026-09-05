@@ -2307,6 +2307,10 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
       //   ⚠️ 只改 label 与图标：`data-nav="today"` / `btn-today` / activeView 的 'today' 是契约，一字不动。
       const navTop = `<div class="side-nav" data-nav="today" onclick="document.getElementById('btn-today').click()"><span class="ico">${ICON.todo}</span>待办事项${_todoCount ? `<span class="cnt">(${_todoCount})</span>` : ''}</div>`
           + `<div class="side-nav" data-nav="dashboard" onclick="document.getElementById('btn-dashboard').click()"><span class="ico">${ICON.dash}</span>数据看板</div>`
+      // ⭐⭐ 2026-09-05「投放体检」（Joe：「按你的建议来，**但是我需要能看到**」）——
+      //   ⚠️ 那句话点名的就是"能看到"，所以它必须是**导航里的一格**，不是日志、不是文件、不是弹窗。
+      //   紧挨数据看板：两者都是"看账"，⛔ 不塞进自动化页（那是"调机器"的地方，进去的动机不同）。
+          + `<div class="side-nav" data-nav="scoreboard" onclick="openScoreboard()"><span class="ico">${ICON.health}</span>投放体检</div>`
       // C5-1：「📬 回复箱」导航项**撤除** —— 回信列表已内嵌进「今天」页（客户回你了 = 今天最该看的事，
       //   它不该是一个要你自己想起来去点的第二个入口）。
       //   ⚠️ `openReplyInbox` / `openReplyDetail` 两个函数**保留**：详情视图仍由内嵌列表调用。
@@ -3363,6 +3367,8 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
       gear:    ico(`<line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>`),
       // 补货：加号圆（plus-circle）
       plus:    ico(`<circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>`, 16),
+      // 投放体检：脉搏线（activity）—— 与看板的柱状图明显不同形，⛔ 别让两个"看账"的入口撞脸
+      health:  ico(`<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>`),
     };
     // nav-table-v2：9 列的列头筛选映射（索引 = thead 顺序：0 公司 · 1 阶段 · 2 评分 · 3 分类 · 4 国家 · 5 邮箱 · 6 联系方式 · 7 本页专属 · 8 时间）。
     //   漏斗只做筛选；排序只在评分列点文字（▼/▲）。联系方式一个菜单（全部 / 有 LinkedIn (N) / 有 WhatsApp (N) …）替代原 5 列各一个。
@@ -6731,23 +6737,37 @@ ${esc(d.ours.body||'')}</div></details>`
 
       // ── ③ 关键词搜索 ─────────────────────────────────────────────────
       //   命中率 = 该词入库的公司里真客户的占比。⚠️ n < minSample 的**不给比率**，标"样本不足"。
-      const kws = V.keywords;
-      const rated = kws.filter(k => k.n >= V.minSample).map(k => ({ ...k, rate: k.n ? k.hit / k.n : 0 }));
-      const thin = kws.filter(k => k.n < V.minSample);
-      const more = rated.filter(k => !k.archived).sort((a, b) => b.rate - a.rate).slice(0, 6);
-      const stop = rated.filter(k => !k.archived).sort((a, b) => a.rate - b.rate)
-        .filter(k => k.rate < 0.3).slice(0, 7);
+      // 🔴🔴 2026-09-05：这张卡的**版式一字未动，数据口径整个换掉**（总工裁定）。
+      //   病来历：它原来用**自己一套判据** —— "好" = `customer_category` 属真客户五类，
+      //   "该停" = 命中率 **< 30% 写死**。而新的「投放体检」页用的是 **≥60 分**（发信闸真正用的那条线）
+      //   + **均值 ÷ 3** 的阈值。
+      //   ⇒ 生产实测（39 个样本≥20 的词）：**这张卡判 26 个该停，体检页判 4 个，22 个词结论相反**。
+      //   ⚠️ 两个"率"的平均值几乎相同（28.0% vs 28.5%）⇒ 分歧**不是指标造成的，是那个 30%**——
+      //     它约等于全站均值，实质是「**低于平均就该停**」，会砍掉 39 个词里的 26 个。
+      //   ⇒ 两块屏幕对同一个词给相反建议，而 Joe 不知道该信哪个。**同一份名单，一个真源**（铁律五）。
+      //   ⛔ 版式没动是刻意的：v11 是 Joe 批过的稿，要不要收成"一行摘要+链接"由他明早定。
+      const _sb = await fetch("/api/scoreboard").then(r => r.json()).catch(() => null);
+      const _sbT = (_sb && _sb.thresholds) || {};
+      const _sbRows = (_sb && _sb.rows) || [];
+      // 映射成这张卡原有的字段形状（kw/n/hit/rate/archived）——⛔ 不改 kwRow，也不改 DOM。
+      const kws = _sbRows.map(r => ({ kw: r.keyword, n: r.dug, hit: r.good, rate: r.good_rate, archived: r.archived, suggestion: r.suggestion }));
+      const _minSample = _sbT.min_sample || V.minSample;
+      const rated = kws.filter(k => k.n >= _minSample);
+      const thin = kws.filter(k => k.n < _minSample);
+      const more = rated.filter(k => !k.archived && k.suggestion === 'boost').sort((a, b) => b.rate - a.rate).slice(0, 6);
+      const stop = rated.filter(k => !k.archived && k.suggestion === 'stop').sort((a, b) => a.rate - b.rate).slice(0, 7);
       const kwRow = (k, bad) => `<span title="${esc(k.kw)}">${esc(k.kw)}</span>`
         + `<span class="b"><i style="width:${Math.round(k.rate * 100)}%;background:${bad ? 'var(--red)' : 'var(--brand)'}"></i></span>`
         + `<span class="v">${Math.round(k.rate * 100)}%</span><span class="x">${bad ? '废 ' : ''}${bad ? (k.n - k.hit) : k.n}</span>`;
       const q3body = rated.length
         ? `<div class="two">
              <div><span class="th t-more">该加大</span><div class="kw">${more.map(k => kwRow(k, false)).join('')}</div></div>
-             <div><span class="th t-stop">该停</span><div class="kw">${stop.length ? stop.map(k => kwRow(k, true)).join('') : `<span class="hint">目前没有命中率低于 30% 的在用词</span>`}</div></div>
+             <div><span class="th t-stop">该停</span><div class="kw">${stop.length ? stop.map(k => kwRow(k, true)).join('') : `<span class="hint">目前没有达到"该停"门槛的在用词</span>`}</div></div>
            </div>
-           ${thin.length ? `<p class="hint">另有 <b>${thin.length}</b> 个词入库不足 ${V.minSample} 家，<b>样本不足</b>，这里不给命中率 —— ⛔ 不是它们不好，是还看不出来。</p>` : ''}
-           ${stop.length ? `<div class="qact">${act2(`停用这 ${stop.length} 个词`, 'v11StopKw()')}<span class="hint">停用 = 不再搜，⛔ 已入库的公司一条都不删</span></div>` : ''}`
-        : `<div class="hint">还没有哪个关键词入库满 ${V.minSample} 家 —— <b>样本不足，不给命中率</b>。⛔ 这不是"命中率 0"。</div>`;
+           ${thin.length ? `<p class="hint">另有 <b>${thin.length}</b> 个词入库不足 ${_minSample} 家，<b>样本不足</b>，这里不给结论 —— ⛔ 不是它们不好，是还看不出来。</p>` : ''}
+           ${stop.length ? `<div class="qact">${act2(`停用这 ${stop.length} 个词`, 'v11StopKw()')}<span class="hint">停用 = 不再搜，⛔ 已入库的公司一条都不删</span></div>` : ''}
+           <p class="hint">判据与「投放体检」同一套：优质 = <b>≥${SCORE_LINE} 分</b>（发信用的那条线）· 低于均值 ${((_sbT.avg_good_rate || 0) * 100).toFixed(1)}% 的三分之一 → 该停。<a onclick="openScoreboard()">看完整体检 →</a></p>`
+        : `<div class="hint">还没有哪个关键词入库满 ${_minSample} 家 —— <b>样本不足，不给结论</b>。⛔ 这不是"命中率 0"。</div>`;
       window._v11Stop = stop.map(k => k.kw);
       window.v11StopKw = async () => {
         const list = window._v11Stop || []; if (!list.length) return;
@@ -6794,6 +6814,119 @@ ${esc(d.ours.body||'')}</div></details>`
         + card2('客户类型', 'AI 逐家分类', '', q2body, q2foot)
         + card2('关键词搜索', `命中率 = 搜回来的里有几个真客户`, '', q3body, '');
     }
+
+    // ══════════════ ⭐⭐ 投放体检（2026-09-05）══════════════
+    //
+    // Joe 原话：「按你的建议来，**但是我需要能看到**」⇒ 它必须是**导航里一格能打开的页**。
+    //
+    // 🔴 **两件刻意没有的**（SPEC 自己的规矩：算不出的列不摆，会骗人的选项别放）：
+    //   ① **成本列**：Serper 用量在 `discovery_log` 装上之前只有全局日计数，没有按词/按国的账
+    //      ⇒ 每词成本无从摊。记账已随本批装上，**从装上那天起**才有数 ⇒ 页面写明"自 X 日起"。
+    //   ② **投放国**：`leads.country` 是**公司自己在哪国**（ccTLD 推断，gl 仅兜底），不是我们投的那个国
+    //      ⇒ 这一版展开看的是「这些公司在哪些国家」，标签如实写，⛔ 不冒充投放国。
+    // ⚠️ 回复数全库个位数 ⇒ 后端给 `reply_sparse`，这里把它显示成"数据还少"，
+    //   ⛔ 0 不许读成"这个词没用"，更⛔ 不参与任何建议判据。
+    // ⚠️ **机器永不自动执行**：这一页只给建议，唯一的执行路径是 Joe 亲手点那颗按钮。
+    let _sbData = null;
+    async function openScoreboard(retried) {
+      showMainView('scoreboard');
+      const head = pageHeader('投放体检', '');
+      $("#v-page").innerHTML = head + `<p class="hint">加载中…</p>`;
+      const d = await fetch("/api/scoreboard").then(r => r.json()).catch(e => ({ error: String(e) }));
+      if (!d || d.error) {
+        $("#v-page").innerHTML = head + `<div class="load-error">${loadErrorHtml('sb-retry', retried)}</div>`;
+        const b = $("#sb-retry"); if (b) b.onclick = () => openScoreboard(true); return;
+      }
+      _sbData = d;
+      const T = d.thresholds || {}, pct = (x) => `${(Number(x || 0) * 100).toFixed(1)}%`;
+      const rows = d.rows || [];
+      const stop = rows.filter(r => r.suggestion === 'stop' && !r.archived);
+      const boost = rows.filter(r => r.suggestion === 'boost' && !r.archived);
+      const thin = rows.filter(r => r.dug < (T.min_sample || 20));
+
+      // ⭐ 判据**印在页面上**（SPEC 点名）：Joe 要能看见"凭什么说它该停"，⛔ 不是藏在代码里的魔法数。
+      const ruleLine = `<p class="hint">判据：挖到 <b>≥${T.min_sample}</b> 家才下结论 ·`
+        + ` 全站平均优质率 <b>${pct(T.avg_good_rate)}</b> ·`
+        + ` 低于 <b>${pct(T.stop_below)}</b>（均值 ÷ 3）→ 建议停 ·`
+        + ` 高于 <b>${pct(T.boost_above)}</b>（均值 × 1.5）→ 建议加码</p>`;
+
+      // ⚠️ "数据截至"与"记账从哪天起"分开说：它们是两件事，混成一句会让人以为成本也有历史。
+      const logLine = d.log && d.log.rows
+        ? `<p class="hint">数据截至 <b>${esc(d.as_of)}</b> · 每次搜索的记账自 <b>${esc(String(d.log.since || '').slice(0, 10))}</b> 起（共 ${d.log.rows} 条）—— <b>单条成本与"投放到哪个国"要等这份账攒够才算得出，历史补不回来</b>。</p>`
+        : `<p class="hint">数据截至 <b>${esc(d.as_of)}</b> · <b>搜索记账刚装上，还没有数据</b> —— 单条成本与"投放到哪个国"暂时算不出来，⛔ 所以这一版没有那两列（下一轮找客户跑完就开始有）。</p>`;
+
+      const sparseNote = d.reply_sparse
+        ? `<p class="hint">⚠️ 全库回复共 <b>${(d.totals || {}).replied || 0}</b> 条 —— <b>回复这一列数据还太少</b>，只报数，⛔ 不参与判断，也⛔ 不能把 0 读成"这个词没用"。</p>`
+        : '';
+
+      const sug = (r, kind) => `<div class="td-row">
+          <div style="flex:1">
+            <div><b>${esc(r.keyword)}</b> <span class="pill sc ${kind === 'boost' ? 'g' : 'r'}">${pct(r.good_rate)}</span></div>
+            <div class="t" style="margin-top:2px">${esc(r.evidence)}</div>
+          </div>
+          <div>${kind === 'stop'
+            ? `<button class="mini" onclick="sbAdoptStop(${r.keyword_id}, this)"${r.keyword_id ? '' : ' disabled title="库里没有这个词的记录，停不了"'}>停用它</button>`
+            : `<span class="t">保持 / 手动调权重</span>`}</div>
+        </div>`;
+
+      const tableRows = rows.map(r => `<tr class="row" onclick="sbToggleCountries('${esc(r.keyword).replace(/'/g, "\\'")}', this)">
+          <td>${esc(r.keyword)}${r.archived ? ` <span class="pill">已停用</span>` : ''}</td>
+          <td class="ac">${r.dug}</td>
+          <td class="ac">${r.good}</td>
+          <td class="ac"><b>${pct(r.good_rate)}</b></td>
+          <td class="ac">${r.contacted}</td>
+          <td class="ac">${r.replied}${d.reply_sparse ? ` <span class="t">数据还少</span>` : ''}</td>
+          <td class="ac">${r.n_countries}</td>
+          <td>${r.suggestion === 'stop' ? '<span class="pill sc r">建议停</span>' : r.suggestion === 'boost' ? '<span class="pill sc g">建议加码</span>' : `<span class="t">—</span>`}</td>
+        </tr>`).join('');
+
+      $("#v-page").innerHTML = head + ruleLine + logLine + sparseNote
+        + `<div class="page-card" style="margin-bottom:16px">
+             <div class="td-t">建议停 ${stop.length} 个　·　建议加码 ${boost.length} 个</div>
+             ${stop.length ? stop.map(r => sug(r, 'stop')).join('') : `<p class="hint">目前没有词达到"建议停"的门槛。</p>`}
+             ${boost.length ? boost.map(r => sug(r, 'boost')).join('') : ''}
+             <p class="hint" style="margin-top:10px">停用 = <b>不再拿它去搜</b>；⛔ 已入库的公司一条都不删，战绩也留着（随时可在自动化页恢复）。<b>不点就什么都不变 —— 机器不会自己执行这些建议。</b></p>
+             ${thin.length ? `<p class="hint">另有 <b>${thin.length}</b> 个词挖到不足 ${T.min_sample} 家，<b>样本不够，这里不下结论</b> —— ⛔ 这不是"它们不好"。</p>` : ''}
+           </div>
+           <div class="page-card table-card"><table>
+             <thead><tr>
+               <th>关键词</th><th class="ac" style="width:70px">挖到</th><th class="ac" style="width:70px">优质</th>
+               <th class="ac" style="width:80px">优质率</th><th class="ac" style="width:80px">已联系</th>
+               <th class="ac" style="width:90px">回复</th><th class="ac" style="width:80px">国家数</th><th style="width:110px">建议</th>
+             </tr></thead>
+             <tbody id="sb-rows">${tableRows}</tbody>
+           </table></div>`;
+    }
+    // 展开一行 → 这个词挖到的公司**分布在哪些国家**。⚠️ 是公司所在国，⛔ 不是投放国（页面上也这么写）。
+    window.sbToggleCountries = async (kw, tr) => {
+      const next = tr.nextElementSibling;
+      if (next && next.classList.contains('sb-cc')) { next.remove(); return; }
+      const td = document.createElement('tr');
+      td.className = 'sb-cc';
+      td.innerHTML = `<td colspan="8"><span class="hint">加载中…</span></td>`;
+      tr.after(td);
+      const d = await fetch(`/api/scoreboard/countries?keyword=${encodeURIComponent(kw)}`).then(r => r.json()).catch(e => ({ error: String(e) }));
+      if (!d || d.error) { td.innerHTML = `<td colspan="8"><span class="hint">读不到：${esc((d && d.error) || '未知')}</span></td>`; return; }
+      const cc = (d.countries || []).map(c => `<span class="chip">${esc(countryName(c.country) || c.country)} ${c.n}<b style="pointer-events:none"> · 优质 ${c.good}</b></span>`).join('');
+      td.innerHTML = `<td colspan="8"><div class="hint" style="margin-bottom:6px">这些公司<b>自己在哪些国家</b>（按域名后缀推）—— ⚠️ <b>不是我们投放的国家</b>，投放国要等搜索记账攒够才有。</div>${cc || '<span class="hint">没有国家信息</span>'}</td>`;
+    };
+    // 采纳「停用」——⚠️ 走**现有** archived 机制（DELETE /api/keywords/:id），⛔ 不新造开关。
+    window.sbAdoptStop = async (id, btn) => {
+      const row = (_sbData && (_sbData.rows || []).find(r => r.keyword_id === id)) || null;
+      if (!row) return;
+      if (!(await uiConfirm({
+        title: `停用「${row.keyword}」`,
+        body: `以后**不再拿这个词去搜**。\n\n· ${row.evidence}\n· 已入库的 ${row.dug} 家公司**一条都不删**，战绩也留着\n· 随时可以在「自动化 → 找客户」里恢复它`,
+        confirmText: "停用", cancelText: "先不停" }))) return;
+      if (btn) btn.disabled = true;
+      const r = await fetch(`/api/keywords/${id}`, { method: 'DELETE' }).then(x => x.json()).catch(e => ({ error: String(e) }));
+      if (r && r.error) { if (btn) { btn.disabled = false; btn.textContent = '没停上'; } return; }
+      // 🔴 **回读核实**：以"它现在还在不在用"为准，⛔ 不以那个 200 为准（看板那条停用流程也是这么做的）。
+      const after = await fetch('/api/keywords').then(x => x.json()).catch(() => null);
+      const still = ((after && after.keywords) || []).some(k => k.keyword === row.keyword && !k.archived);
+      if (still) { if (btn) { btn.disabled = false; btn.textContent = '没停上'; } return; }
+      openScoreboard();
+    };
     // C5-7：从看板「补一轮这国」进补货 —— 打开弹窗并**只勾这一国**。
     //   ⚠️ 必须等 openRestock 里的 loadSearchCfg + rsResetParams 跑完再改（否则会被默认值覆盖回去，
     //     静默失效、看不出异常 —— 原来那版就是设一个"还不存在的 option"）。

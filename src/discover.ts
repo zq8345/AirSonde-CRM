@@ -689,12 +689,20 @@ export async function runDiscovery(env: Env, opts: { keywords?: string[]; perKey
   };
   await publishProgress();
 
+  // ⭐ 2026-09-05：建表**每轮一次**（⛔ 不是每搜一次）。写者这一路自愈，读者那一路在体检表端点里另有一次。
+  // ⚠️ 连建表本身也 best-effort：建不出来就是没有记账，⛔ 但绝不能因此让找客户跑不了。
+  try { await ensureDiscoveryLog(env); }
+  catch (e) { console.error("discovery-log: 建表失败，本轮不记账（找客户照常）:", e); }
+
   let cancelled = false;
   for (const { kw, gl, hl } of combos) {
     if (usedToday >= budget) { budgetStopped = true; break; }   // 触及今日预算 → 停
     // 取消（只对带 roundId 的人工整轮生效）：Joe 点了芯片上的 ✕ ⇒ discover_cancel = 本轮 id
     if (opts.roundId && (await getS(env, "discover_cancel", "")).trim() === opts.roundId) { cancelled = true; break; }
     let results: SearchResult[];
+    // ⭐ 2026-09-05：本组合入库了几条 = 循环后的 `inserted` 减去这里的快照。
+    //   （`inserted` 是整轮累加的，没有 per-combo 计数器；⛔ 不新造一个平行计数器 —— 那就是第二个真源。）
+    const insBefore = inserted;
     try {
       const _ts = tick();
       results = await searchCompanies(env, kw, perKeyword, gl, hl);
@@ -754,6 +762,10 @@ export async function runDiscovery(env: Env, opts: { keywords?: string[]; perKey
       }
       inserted++;
     }
+    // ⭐ 2026-09-05 搜索记账：**这一次搜索**用了哪个词、投的哪个国、返回几条、真入库几条。
+    //   ⚠️ 只在**搜索成功**这条路上记（失败那支上面已 `continue`）—— 记一条 results=0 的假成功，
+    //     会让体检页把"搜索坏了"读成"这个词没货"，那是两件完全不同的事。
+    await logDiscoverySearch(env, { keyword: kw, gl, results: results.length, inserted: inserted - insBefore });
     comboDone++;
     await publishProgress();   // 每个关键词跑完发布一次：Joe 要看见"第 N/26"，不是一个空转的圈
   }
@@ -767,6 +779,48 @@ export async function runDiscovery(env: Env, opts: { keywords?: string[]; perKey
 }
 
 // P0-c：读今日 Serper 用量 + 预算（供后台展示）
+/**
+ * ⭐⭐ 2026-09-05：搜索记账（投放体检表的地基）。
+ *
+ * 在它之前，"这条线索是在哪个投放国、用哪个词搜到的"**库里没有任何地方记着**：
+ *   · Serper 用量只有全局日计数 `serper_used_YYYY-MM-DD`；
+ *   · `leads.country` 是**公司自己在哪国**（ccTLD 推断，`gl` 仅兜底）——不是投放国。
+ * ⇒ 「每词成本」与「投放国漏斗」当时算不出来。**这张表就是为了从现在起把账记对。**
+ *
+ * ⚠️ 建表放在**读者与写者两条路上各一次**（本函数 + 体检表端点）：
+ *   本仓栽过一次「迁移只挂在稀有写路径上 ⇒ 列一直没被创建 ⇒ 读的那头恒 500」（keywords.archived，
+ *   见 index.ts 那段注释）。判据是"**第一个读它的人来时表在不在**"，不是"我写了迁移"。
+ * ⚠️ 每轮只建一次（runDiscovery 开头调），⛔ 不要每搜一次就 CREATE 一遍。
+ */
+export async function ensureDiscoveryLog(env: Env): Promise<void> {
+  await env.DB.prepare(
+    `CREATE TABLE IF NOT EXISTS discovery_log (
+       id INTEGER PRIMARY KEY AUTOINCREMENT,
+       keyword TEXT NOT NULL, gl TEXT NOT NULL,
+       searched_at TEXT NOT NULL DEFAULT (datetime('now')),
+       results INTEGER NOT NULL DEFAULT 0, inserted INTEGER NOT NULL DEFAULT 0)`
+  ).run();
+  await env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_discovery_log_kw ON discovery_log(keyword, gl)").run();
+  await env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_discovery_log_at ON discovery_log(searched_at)").run();
+}
+
+/**
+ * 记一次搜索。**best-effort**：失败只留结构化日志，⛔ 绝不把异常抛回找客户那条链。
+ * ⚠️ 记账的重要性**低于产出** —— 与上面 `serper_fail_last` 那处同一条处置原则。
+ */
+async function logDiscoverySearch(
+  env: Env, row: { keyword: string; gl: string; results: number; inserted: number },
+): Promise<void> {
+  try {
+    await env.DB.prepare(
+      "INSERT INTO discovery_log (keyword, gl, results, inserted) VALUES (?, ?, ?, ?)"
+    ).bind(row.keyword, row.gl, row.results, row.inserted).run();
+  } catch (e) {
+    // ⚠️ 说出来：静默失败会让体检页的"自 X 日起统计"变成一句无法证伪的话。
+    console.error(`discovery-log: ${row.keyword}/${row.gl} 记账失败（找客户不受影响）:`, e);
+  }
+}
+
 export async function getSerperUsage(env: Env): Promise<{ usedToday: number; budget: number }> {
   const usedKey = `serper_used_${new Date().toISOString().slice(0, 10)}`;
   const usedToday = Number(await getS(env, usedKey, "0")) || 0;

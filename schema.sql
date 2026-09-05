@@ -168,6 +168,26 @@ CREATE TABLE IF NOT EXISTS keywords (
   created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- ============ 搜索记账（2026-09-05：投放体检表的地基）============
+-- ⭐ 为什么非有这张表不可：在它之前，Serper 用量**只有一个全局日计数**
+--   （settings.serper_used_YYYY-MM-DD），而 `leads.country` 存的是**公司自己在哪国**
+--   （ccTLD 推断，gl 仅兜底，见 discover.ts 那行注释）⇒ 库里**没有任何地方**记着
+--   "这条线索是在哪个投放国、用哪个词搜到的"。
+--   ⇒ 「每词成本」「投放国漏斗」两件事**当时算不出来**，硬做就是把一件事的标签贴在另一件上。
+-- ⚠️ 历史**补不回来**：这张表只从装上那天开始有数，体检页必须写明"自 X 日起统计"。
+-- ⚠️ 写入是 **best-effort**：INSERT 失败只记结构化日志，⛔ 绝不拖垮找客户本身
+--   （同 serper_fail_last 那处的处理，记账的重要性低于产出）。
+CREATE TABLE IF NOT EXISTS discovery_log (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  keyword     TEXT NOT NULL,
+  gl          TEXT NOT NULL,                                  -- **投放国**（我们搜的那个 gl），⚠️ 与 leads.country 不是一回事
+  searched_at TEXT NOT NULL DEFAULT (datetime('now')),
+  results     INTEGER NOT NULL DEFAULT 0,                     -- Serper 这一次返回几条
+  inserted    INTEGER NOT NULL DEFAULT 0                      -- 这一次真入库几条新线索（判重之后）
+);
+CREATE INDEX IF NOT EXISTS idx_discovery_log_kw ON discovery_log(keyword, gl);
+CREATE INDEX IF NOT EXISTS idx_discovery_log_at ON discovery_log(searched_at);
+
 -- ============ 全局配置（客户画像/发信上限/BCC存档/飞书等）============
 CREATE TABLE IF NOT EXISTS settings (
   key   TEXT PRIMARY KEY,
