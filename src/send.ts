@@ -120,7 +120,9 @@ export async function autoSendBlockedReason(env: Env): Promise<string | null> {
     const why = (await getSetting(env, "auto_send_trip_reason", "")).trim();
     return `已熔断，需要你手动复位${why ? `（${why}）` : ""}`;
   }
-  if ((await getSetting(env, "auto_send_enabled", "1")) !== "1") return "发信这一步被单独关掉了";
+  // 🔴 2026-09-05：原文「发信这一步被单独关掉了」会被读成"信都不发了"，而跟进链此刻照发
+  //   （sendFollowupBatch 只看 followup_enabled）⇒ 把这一句收窄到它真正成立的范围。
+  if ((await getSetting(env, "auto_send_enabled", "1")) !== "1") return "新开发信这一步被单独关掉了";
   return null;
 }
 
@@ -751,7 +753,12 @@ export async function sendWarmFollowupNow(env: Env, lead: any, fullText: string)
 // ids 传入时只跟进这些选中的（仍受全部闸门：followup_enabled 开关 + status='sent' + 有邮箱 +
 // 累计跟进 <= followup_max + 冷却天数未到不发 + 每日上限 + deliverEmail 幂等 + 压制名单）。
 // engaged(点过链接)的会自动用「趁热」暖变体——所以「跟进选中」和「趁热跟进选中」共用这一条路径。
-export async function sendFollowupBatch(env: Env, requested: number, ids?: number[]): Promise<{ processed: number; sent: number; results: SendOutcome[]; disabled?: boolean; capReached?: boolean; dailyLimit: number; sentToday: number }> {
+export async function sendFollowupBatch(
+  env: Env, requested: number, ids?: number[],
+  // ⭐ 2026-09-05：只有 cron 会传这两个；默认值**刻意保持原行为**（手动跟进不受影响）。
+  //   `budget` 用结构类型收，⛔ 不从 index.ts 引入 RoundBudget —— 这里只需要"还剩不剩得下"这一个能力。
+  opts: { gapMs?: number; budget?: { has(ms: number): boolean } } = {},
+): Promise<{ processed: number; sent: number; results: SendOutcome[]; disabled?: boolean; capReached?: boolean; dailyLimit: number; sentToday: number }> {
   if ((await getSetting(env, "followup_enabled", "0")) !== "1") {
     return { processed: 0, sent: 0, results: [], disabled: true, dailyLimit: 0, sentToday: 0 };
   }
@@ -805,13 +812,36 @@ export async function sendFollowupBatch(env: Env, requested: number, ids?: numbe
   const leads = rows.results as any[];
 
   const results: SendOutcome[] = [];
+  // ⭐⭐ 2026-09-05：**批内间隔**。总开关补闸（关=全停，含跟进）**创造了一个此前不存在的场景**——
+  //   跟进以前从不停摆、无从积压；补闸之后它会攒，攒到重开那一刻**一次性放完**。
+  //   实测（本地，3 条到期）：补闸后重开总开关，3 封的 created_at 是**同一秒**。
+  //   ⇒ 爆发是补闸的**新产物**，与它同一单收拾。
+  // ⚠️ ⛔ **不新造旋钮**：直接用 Joe 已有的 `send_interval_seconds`（调用方传进来）。
+  //   初次信那条路的间隔语义**一个字没动**（它仍是"每 tick 查一次、在批之前"，见 index.ts fastTick）——
+  //   这里加的是**跟进批内**的等待，两件事互不影响。
+  // ⚠️ 默认 `gapMs=0` ⇒ **手动路径（/api/followup/run）行为逐字不变**：Joe 手点时不该被我们晾着。
+  //   与 sendApprovedBatch 的 concurrency/budget 同一形状：只有 cron 传，默认保持原行为。
+  const gapMs = Math.max(0, Number(opts.gapMs) || 0);
+  let attempted = 0;
   for (const lead of leads) {
     // 系统级日限：满则该轮不发（下轮 cron 继续，不丢线索）
     if (coldUsed >= dailyLimit) {
       results.push({ ok: false, id: lead.id, skipped: `今日发信上限已满(${coldUsed}/${dailyLimit})，该轮不发` });
       continue;
     }
+    // 第一封不等（等了也不改变"批内非同秒"这条判据，只是白白吃掉本轮预算）。
+    if (attempted > 0 && gapMs > 0) {
+      // ⚠️ 等之前先问**这一轮还剩不剩得下**：等完还要留出真发一封的时间（一封实测 31-43s，留 45s）。
+      //   预算不够就**停在这里**，剩下的下一班继续 —— 跟进"停=延后不丢"（条件是距上次发信 ≥N 天，越等越满足）。
+      //   ⛔ 不硬撑：撑过 Cron 的墙会让整轮被平台掐断，那比少发一封坏得多。
+      if (opts.budget && !opts.budget.has(gapMs + 45_000)) {
+        results.push({ ok: false, id: lead.id, skipped: `本轮时间不够再等一个间隔（${Math.round(gapMs / 1000)}s），剩下的下一班继续` });
+        break;
+      }
+      await new Promise((r) => setTimeout(r, gapMs));
+    }
     const out = await sendFollowup(env, lead, !!lead.has_click);   // engaged（有点击）→ 暖变体
+    attempted++;
     if (out.ok) coldUsed++;
     results.push(out);
   }
