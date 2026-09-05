@@ -6964,6 +6964,18 @@ ${esc(d.ours.body||'')}</div></details>`
       const serper = (today && today.serper) || {};
       const br = cfg.breaker || {};
       const scfgOk = !!scfg;
+      // 🔴 2026-09-05：`ccN` / `kwN` 在本函数里**从来没有定义过** —— 下面 mr-live-cc / mr-live-kw
+      //   两行直接引用它们（它们只在 renderWheelSummary 里定义，那是**另一个函数**的局部变量）。
+      //   ⇒ `ReferenceError: ccN is not defined` 抛在这里，把它**之后**的实时位全部带走：
+      //     国家数 · 关键词数 · 收信（上次拉取/今日收到）· 飞书连接状态 —— 四个位置一直空着。
+      //   ⚠️ 它为什么潜伏这么久：两行都写成 `scfgOk ? \`…${ccN}…\` : '读不到'`，
+      //     **只有读得到搜索配置时才求值** ⇒ 接口一慢/一挂反而不炸，看着像"偶尔才空"。
+      //   ⚠️ 口径按**各自调用点**定，⛔ 不照抄 renderWheelSummary 那两行：
+      //     · kwN 这里要的是**全部**关键词（含归档）—— 下一行的「· 在用 M」正是拿它做对照，
+      //       抄成 activeKeywords 会让 `on !== kwN` 恒为假，「在用」永远不显示（换个静默错）。
+      //     · ccN 要的是**机器实际会搜几国**（effectiveCountries），不是目录里有几国。
+      const kwN = ((scfg && scfg.keywords) || []).length;
+      const ccN = ((scfg && scfg.effectiveCountries) || []).length;
 
       // ══════════ 卡一 · 机器现在（v10.1：四行 = 找客户 / AI 分析 / 发信 / 收信）══════════
       //
