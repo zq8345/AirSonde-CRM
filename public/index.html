@@ -1549,6 +1549,11 @@
       <div id="tb" class="tb"></div>
       <!-- 批㉓ 组间跳转条：仅在三个分组视图（待分析/待审批/待联系）出现，renderGroupJump 按 current+leads 填真值 -->
       <div id="grp-jump" class="grp-jump" style="display:none"></div>
+      <!-- ⭐⭐ 2026-09-05（Joe 第二次问「已联系刷没刷」）：这一格的**分析时间窗**。
+           ⚠️ 他问的是**批级**问题，逐行日期回答不了 —— 356 行他得自己扫一遍再自己比。
+           ⚠️ 只加**表格上方一行**，⛔ 不动定稿表格的骨架（行高/列数/对齐一个没碰）。
+           ⚠️ 没有分析数据的格（如全是待分析的）**整行不渲染**，不占位、不说废话。 -->
+      <div id="an-window" class="hint" style="display:none;margin:0 2px 8px"></div>
       <!-- 批⑤B 翻牌堆：在「待审批」格选「<60 翻牌堆」时，**顶掉表格**换成按"被杀原因"分组的复核视图。
            不造新房间（走既有的 待审批+筛选 那条路），但换一种读法：Joe 扫组名整组略过，只在杀错的地方下钻。 -->
       <div id="flip-pile" style="display:none"></div>
@@ -2589,6 +2594,41 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
     function readyGroupOf(l){ return hasEmail(l) ? 'A' : (hasChannel(l) ? 'B' : 'C'); }
     // 列表与详情页共用的三个小件（detail-v6 从 loadList 里提出来：同一个徽章/同一组渠道小格，两个面一份实现）
     const MU_DASH = `<span class="mu">—</span>`;
+    /**
+     * ⭐⭐ 2026-09-05：「这一格是什么时候、按哪版标准分析的」——一行答完。
+     *
+     * 起因：Joe **两次**问「已联系那批刷没刷」。第一次我去查库回答了他，第二次还问 ——
+     *   说明问题不在那次回答，在**仪表盘上没有这个读数**：全前端 grep `analyzed_at` 只命中一行注释。
+     * ⚠️ 他问的是**批级**问题 ⇒ 逐行日期回答不了它（356 行要他自己扫、自己比）。
+     *   所以这里显示的是**当前筛选下的全量**聚合，不是屏幕上那 300 行（见后端注释）。
+     * ⚠️ 「刷没刷过」的**参照物是最近一次全库重扫的起点**，不是"有没有日期"——
+     *   有日期但早于重扫起点，恰恰就是"没刷到"。参照物读不到时**少说这一句**，⛔ 不假装全刷过。
+     * ⚠️ 没有分析数据的格整行不渲染：⛔ 不显示「0 家已分析」那种占位废话。
+     */
+    function renderAnalysisWindow(w) {
+      const el = document.getElementById("an-window");
+      if (!el) return;
+      if (!w || !Number(w.analyzed)) { el.style.display = "none"; el.innerHTML = ""; return; }
+      // 库里是 UTC 且不带 Z —— 与 fmtDay 同一个补 Z 的写法（⛔ 别在这儿另发明一种解析）
+      const fmtDT = (s) => {
+        if (!s) return "—";
+        const d = new Date(String(s).replace(" ", "T") + (/[Zz]|[+-]\d\d:?\d\d$/.test(String(s)) ? "" : "Z"));
+        if (isNaN(d)) return String(s).slice(0, 16);
+        const p = (n) => String(n).padStart(2, "0");
+        return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+      };
+      const notYet = Number(w.total || 0) - Number(w.analyzed || 0);
+      let s = `这一格 <b>${w.analyzed}</b> 家已分析` + (notYet > 0 ? `（另有 ${notYet} 家还没分析）` : "")
+            + ` · 分析于 <b>${fmtDT(w.first_at)}</b> — <b>${fmtDT(w.last_at)}</b>`;
+      const stale = w.stale_before_rescan;
+      if (w.rescan_started_at && stale != null) {
+        s += stale === 0
+          ? ` · ✅ 全部是最近一次全库重扫（${fmtDT(w.rescan_started_at)} 起）之后打的分`
+          : ` · <b style="color:var(--red)">其中 ${stale} 家还是那次重扫之前的分数</b>`;
+      }
+      el.innerHTML = s;
+      el.style.display = "";
+    }
     const scPillOf = (s) => s == null ? MU_DASH : `<span class="pill sc ${Number(s) >= SCORE_LINE ? 'g' : 'r'}">${Number(s)}</span>`;
     /**
      * C5-52②：列表评分格 —— **人工分优先，且必须看得出是人工的**。
@@ -3149,7 +3189,8 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
       const box = $("#flip-pile"), tbl = document.querySelector('.main table');
       if (box) box.style.display = "none"; if (tbl) tbl.style.display = "";
       renderOrphans();   // 批⑧：孤儿回复条（只在「已回复」格出现；不 await，别让它拖慢列表）
-      const { leads } = await fetch(`/api/leads?${filterQuery()}`).then(r=>r.json());
+      const { leads, analysis_window } = await fetch(`/api/leads?${filterQuery()}`).then(r=>r.json());
+      renderAnalysisWindow(analysis_window);   // ⭐ 这一格「什么时候按哪版标准分析的」——见函数注释
       // v8 补丁④：空态文案按格取自 EMPTY_TEXT（单一真源），不再全站一句"点上方找客户"（找客户只在全部页有）
       { const em = $("#empty"); em.textContent = EMPTY_TEXT[current] || "没有数据"; em.style.display = leads.length ? "none" : "block"; }
       _loadedLeads = leads;
@@ -3644,7 +3685,17 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
       // 🔴 返修②：「重新分析」从小字链接（.lnk）改成**描边次级按钮**（.mini，与卡头按钮同皮），
       //   出现范围不变（只在 opts.re 为真时给 = 待审批/待联系，SPEC 定的范围）。
       const tags = String(a.needed_products || "").split(/[、,，;；]/).map(p => p.trim()).filter(Boolean);
+      // ⭐⭐ 2026-09-05（Joe 第二次问「刷没刷」）：**这段判断是什么时候做的**，必须写在判断旁边。
+      //   ⚠️ 措辞刻意**不写"按当前标准"** —— 这张卡看不到"最近一次重扫起点"，
+      //     早于那个起点的旧分数也会走到这里，说"当前标准"就是在替它作保。**只报事实：分析于 X。**
+      //   ⚠️ `model` 里带着"这条是重扫刷的还是单独分析的"（service.ts 写入时打的标记），
+      //     是"哪版标准"这半个问题的唯一现成答案 —— 但**原样显示太脏**（含模型名），只取那个括号里的意思。
+      const anWhen = a.analyzed_at ? fmtDT(a.analyzed_at) : "";
+      const anHow = /fetch-failed/.test(String(a.model || "")) ? "抓不到官网，未打分"
+                  : /重扫/.test(String(a.model || "")) ? "那次全库重扫刷的"
+                  : a.model ? "单独分析的" : "";
       return `<div class="card"><div class="ct"><b>判断理由</b>${opts.re ? `<span class="r"><button class="mini" onclick="analyzeOne(${opts.id}, this)">重新分析</button></span>` : ""}</div>
+        ${anWhen ? `<div class="t" style="margin:-4px 0 8px">分析于 <b>${esc(anWhen)}</b>${anHow ? ` · ${esc(anHow)}` : ""}</div>` : ""}
         <div class="txt">${esc(dvReasonText(a.reason)) || '<span class="mu">（没有理由正文）</span>'}</div>
         ${tags.length ? `<div class="tags">${tags.map(t => `<span class="tag">${esc(t)}</span>`).join("")}</div>` : ""}
       </div>`;
