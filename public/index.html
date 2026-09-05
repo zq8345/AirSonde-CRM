@@ -775,8 +775,11 @@
        ⚠️ 判据是**行几何**（104px 标签列 / 11px 行距 / 1px 细线），不是"看着像"。 */
     .pr-head { display:flex; align-items:center; gap:8px; margin:0 0 4px;
                padding-bottom:12px; border-bottom:1px solid var(--border); }
-    /* 🔴 2026-09-03 Joe 截图指认：「我是谁 · 找什么客户」断行断在"客/户"中间。
-         真因是标签列钉死 104px，而这条标签实测要 114px（其余最长的也就 78px 上下）。
+    /* 🔴 2026-09-03 Joe 截图指认：那条最长的标签（当时叫「我是谁 · 找什么客户」，
+         C5-51② 已改名为「定位与标准」）断行断在"客/户"中间。
+         ⚠️ 120px 这个值是**按当时那条 114px 的标签**定的；现在最长的标签短了，
+         这个宽度只是"够用且没人再动它"，⛔ 不是重新量过的最优值。
+         真因是标签列钉死 104px，而当时那条标签实测要 114px（其余最长的也就 78px 上下）。
        ⚠️ 列宽必须**所有行同一个数**：`.pr-row` 是一行一个 grid，改成 max-content 会让每行
          各自算宽 ⇒ 标签竖着对不齐。⇒ 加宽到 120 并且 nowrap（宁可将来溢出被一眼看见，
          也不要再悄悄折行）。 */
@@ -791,6 +794,14 @@
     .pr-row:last-child,
     .pr-row:has(+ .mr-tools) { border-bottom:none; }
     .pr-k { font-size:13px; color:var(--muted); white-space:nowrap; }
+    /* 🔴 C5-51④（Joe：三张卡「精简、清晰、优美」）—— ⛔ 不做重构，只做两件**量得出来**的：
+       ① **标签顶边对齐**：`.pr-row` 全站是 `align-items:center`，一旦值区换行（发信卡多行都换），
+          标签就吊在半空 —— 与 Joe 在设置页点名过的**同一个症状**，那次的修法他已经接受，这里照搬。
+          ⚠️ 只压在 `#v-machine` 下，⛔ 不动全站（列表页那些单行行靠居中才齐）。
+       ② 值区换行时行与行贴太紧 ⇒ 显式给 `row-gap`，让折下来的那几行有呼吸。
+       ⛔ 一个开关、一个字段、一条工具行都没减；状态性红字（熔断/未接钥匙）原样保留。 */
+    #v-machine .pr-row { align-items:start; }
+    #v-machine .pr-v { row-gap:6px; }
     .pr-v { display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:14px; }
     .pr-v .hint { margin:0; }
     .pr-v .set-num { width:74px; }
@@ -1602,13 +1613,14 @@
               <span class="gj-help" data-help title="Serper 每次搜索算 1 次。预算 = 你愿意每天花多少次；找到多少家取决于关键词 × 国家的组合数。用满就停到明天。">(?)</span>
               <span class="mr-live" id="mr-live-search"></span></span></div>
 
-          <!-- 找哪些国家：只读态只显「N 个」+ chip；编辑态才出 全选/全不选（C5-49 三层锁不变） -->
-          <div class="pr-row"><span class="pr-k">找哪些国家</span>
+          <!-- 目标区域：只读态只显「N 个」+ chip；编辑态才出 全选/全不选（C5-49 三层锁不变）
+               ⚠️ C5-51②（Joe）：只改**标签文案**，⛔ 键名/接口字段一个没动（`search_countries` 照旧）。 -->
+          <div class="pr-row"><span class="pr-k">目标区域</span>
             <span class="pr-v"><span class="mr-live" id="mr-live-cc"></span>
               <span class="cfg-editonly" style="margin-left:auto"><button class="mini" type="button" onclick="fcCcAll(true)">全选</button><button class="mini" type="button" onclick="fcCcAll(false)">全不选</button></span></span></div>
           <div id="fc-cc-block"></div>
 
-          <div class="pr-row"><span class="pr-k">用什么关键词</span>
+          <div class="pr-row"><span class="pr-k">关键词搜索</span>
             <span class="pr-v"><span class="mr-live" id="mr-live-kw"></span>
               <span class="cfg-editonly" style="margin-left:auto"><button class="mini" type="button" onclick="fcKwAll(true)">全选</button><button class="mini" type="button" onclick="fcKwAll(false)">全不选</button><button class="mini" id="fc-kw-manage" type="button" onclick="fcToggleManage()">管理</button></span></span></div>
           <div>
@@ -1622,14 +1634,16 @@
           </div>
 
           <!-- 我是谁·找什么客户：画像全文常显（预览态可读全文），编辑态换 textarea；重刷按钮在行末 -->
-          <div class="pr-row"><span class="pr-k">我是谁 · 找什么客户</span>
+          <div class="pr-row"><span class="pr-k">定位与标准</span>
             <span class="pr-v"><span class="badge" id="fc-profile-badge"></span>
               <button class="btn-secondary mini js-danger" id="btn-rescan" type="button" style="margin-left:auto;display:inline-flex;align-items:center;gap:5px" onclick="startRescan()">按当前标准重刷全库</button></span></div>
           <div>
             <div id="fc-profile-summary" class="fc-profile-full">（加载中…）</div>
             <textarea id="fc-profile" class="fc-collapsed" placeholder="描述你的理想客户；留空用内置默认画像"></textarea>
             <!-- 重刷的后果句：条数是后端真算的（/api/today.rescoreScope），⛔ 不写死 —— 这是 Joe 按下去前唯一能看到的代价 -->
-            <div class="hint" id="fc-rescan-note" style="margin-top:8px">改完上面这段之后用 · 正在算影响面…</div>
+            <!-- C5-51③：正常态这里是空的（Joe 删掉了「重刷会重置 N 条…· 很慢」）。
+                 ⚠️ 元素保留：它还是"读不到影响面"这条**错误状态**的落点。 -->
+            <div class="hint" id="fc-rescan-note" style="margin-top:8px"></div>
           </div>
           <div id="dp-save-msg" class="hint" style="margin-top:6px"></div>
           <!-- 工具行（pipeline 的「找客户（搜公司）」+「目录源采集」两条） -->
@@ -1689,7 +1703,11 @@
         <div class="pr-row"><span class="pr-k">机器自己发</span>
           <span class="pr-v">
             <label class="tgl tgl-sm"><input type="checkbox" id="cfg-autosend" onchange="applyAutoSend(this)"><span class="tgl-track"><span class="tgl-knob"></span></span></label>
-            <span class="hint" style="margin-left:8px">关掉只停「机器自动发开发信」，找客户/分析/收信照跑；要全停用卡一右上的自动模式总开关。你手动点「发选中」不受它管。</span>
+            <!-- C5-51④：这句是我今天写的，990 下把这一行撑到 87px（全卡最高的单控件行）。
+                 ⚠️ 精简的是**措辞**，⛔ 三件事一件没少：只停自动发信 · 手动不受影响 · 全停走总开关。
+                 细节移进 (?)，与本页其余行的写法一致。 -->
+            <span class="hint" style="margin-left:8px">只停自动发信 · 手动发不受影响</span>
+            <span class="gj-help" data-help title="关掉只停「机器自动发开发信」——找客户、分析、收信照跑；你手动点「发选中」也不受它管。要全停，用卡一右上角的自动模式总开关。">(?)</span>
           </span></div>
 
         <div class="pr-row"><span class="pr-k">自动通道单独限量</span>
@@ -1738,7 +1756,6 @@
     <div class="cfg-form preview" data-cfg-group="inbox" style="max-width:820px">
       <div class="set-card">
         <div class="pr-head"><span class="sec-title" style="margin:0">收信与通知</span>
-          <span class="hint" style="margin:0">· 不跟随自动模式</span>
           <span class="sec-tools" style="margin-left:auto">
             <button class="mini js-cfg-edit" type="button">编辑</button>
             <button class="mini js-cfg-cancel" type="button" style="display:none">取消</button>
@@ -4554,6 +4571,34 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
     //   · 选了具体几个 → 就那几个。
     // ⚠️ 后端 `countries` 字段已经把"从没设过"翻译成了全量（见 /api/settings/search 里
     //   `__UNSET__` 那段），所以前端**直接用它初始化**即可，不需要再判一次。
+    // ══ C5-51①（Joe：「默认只显示一行，剩下的折叠起来，点『更多』才看得到」）══
+    //
+    // ⚠️⚠️ **纯显示**：所有 chip **原样留在 DOM 里**，折叠只是把容器裁到一行高。
+    //   ⛔ 不删元素、⛔ 不动 `_fcCcChecked` / `_fcKwChecked`、⛔ 不碰任何保存 payload。
+    //   （前科就在这仓里：save payload 里混进 `auto_send_enabled`，"改一句话术点保存"顺手开了自动发信。
+    //     所以"显示层的改动绝不许流到写入层"这条要靠**结构**保证 —— 这里的结构就是：我只改 style。）
+    // ⚠️ **「一行」按真实换行判定**（比较 `offsetTop`），⛔ 不按 chip 个数拍 —— 个数会随视口宽度变。
+    // ⚠️ 展开态**不持久化**（Joe 没要）：每次重渲染回到折叠，⛔ 不写 localStorage / 不写 settings。
+    const _chipsOpen = {};                       // { boxId: true }，仅存在于本次页面生命周期
+    function collapseChips(boxId){
+      const box = document.getElementById(boxId); if (!box) return;
+      const chips = box.querySelector('.chips'); if (!chips) return;
+      box.querySelectorAll('.chips-more').forEach(b => b.remove());   // 重渲染时先摘旧按钮，⛔ 不留孤儿
+      const items = [...chips.children];
+      if (!items.length) return;
+      // 先还原成完全展开再量，否则量到的是上一次裁剪后的高度（尺子会读自己上一次的结果）
+      chips.style.maxHeight = ''; chips.style.overflow = '';
+      const top0 = items[0].offsetTop;
+      const rest = items.filter(el => el.offsetTop > top0 + 1).length;
+      if (!rest) return;                          // 本来就只有一行 ⇒ ⛔ 不出「更多」按钮
+      const open = !!_chipsOpen[boxId];
+      if (!open) { chips.style.maxHeight = items[0].offsetHeight + 'px'; chips.style.overflow = 'hidden'; }
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'mini chips-more'; b.style.marginTop = '6px';
+      b.textContent = open ? '收起' : `更多（还有 ${rest} 个）`;
+      b.onclick = () => { _chipsOpen[boxId] = !_chipsOpen[boxId]; collapseChips(boxId); };
+      chips.after(b);
+    }
     function renderCountries(){
       const box = document.getElementById('fc-cc-block'); if (!box) return;
       const all = Object.keys(_fcAllCountries);
@@ -4575,6 +4620,7 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
             ? `<div class="warn">⚠ 一个国家都没选，机器不会再找新客户</div>`
             : '');
       relockFormOf(box);   // C5-49：刚渲染出来的 chip 也要按当前模式锁一次
+      collapseChips('fc-cc-block');   // C5-51①：折叠到一行 + 「更多」（纯显示）
     }
     // 🔴 C5-49 第二层：这一区的内容是**异步渲染**的，`setOneFormMode` 那一趟锁属性早就跑完了
     //   ⇒ 后渲染出来的控件永远不会被加上 readOnly/disabled（关键词勾选框实测就是这样：
@@ -4657,6 +4703,7 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
         : `<span class="muted">当前用内置默认 ${_fcKwEffCount} 个关键词。点右上「管理」→「载入默认」把它们变成可编辑、可勾选，或添加自定义词。</span>`;
       rsPaint();
       relockFormOf($("#dp-kwlist"));   // C5-49：刚渲染出来的勾选框也要按当前模式锁一次
+      collapseChips('dp-kwlist');   // C5-51①：折叠到一行 + 「更多」（纯显示）
     }
     // 与 fcCcToggle 逐字同形：只读态**直接 return**（不改内存、不重渲染）——
     // 原来那版接的是原生 input，只读态要先把 `input.checked` 掰回去；chip 没有原生态可掰，这一层自然消失。
@@ -4830,7 +4877,7 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
         const txt=(p.profile||"").trim();
         // header-v3 追加②（Joe）：预览态**全文**可读，不再 40 字截断（CSS .fc-profile-full 负责换行）
         const sm=$("#fc-profile-summary"); if(sm) sm.textContent = txt ? txt : '（未设置，用内置默认画像）';
-        const bd=$("#fc-profile-badge"); if(bd) bd.textContent = p.isDefault ? '· 默认画像' : '· 已自定义';
+        const bd=$("#fc-profile-badge"); if(bd) bd.textContent = p.isDefault ? '· 默认画像' : '';   // C5-51(2) Joe: 删掉「· 已自定义」；⛔「默认画像」是状态，保留
         renderWheelSummary(cfg, !p.isDefault);   // C5-3：方向盘折叠行摘要（真值派生）
       }).catch(()=>{ renderWheelSummary(cfg, null); });   // 画像读不到就说读不到，别当成"默认"
       // 每次进入默认"管理关"（关键词的日常勾选态，藏增删）
@@ -6805,9 +6852,14 @@ ${esc(d.ours.body||'')}</div></details>`
       // ══ 行内实时位：旋钮说"你设了多少"，它说"这个设定此刻的实际表现" ══
       const live = (id, html) => { const e = document.getElementById(id); if (e) e.innerHTML = html; };
       // 「重刷全库」的后果句 —— 条数取后端真算的 rescoreScope。⛔ 读不到就说读不到，不编一个数骗他点。
+      // C5-51③（Joe：「删掉『重刷会重置 N 条…· 很慢』」）：正常态**不再出这句**。
+      // ⚠️ 但**读不到影响面**那句留着 —— 它不是说明文字，是**状态**（读失败时必须说出来，铁律八）。
+      //   Joe 点名的是那句说明，⛔ 不是这条错误路径。
+      // ⚠️ 影响面那个数**没有消失**：点重刷时的确认弹窗仍然逐条列出会发生什么（`startRescan` 里，
+      //   条数同样取自后端真算的值）⇒ **按下去之前他仍然看得见代价**，这才是那句话原本要保的东西。
       { const e = document.getElementById('fc-rescan-note');
         if (e) e.innerHTML = (today && today.rescoreScope != null)
-          ? `重刷会重置 <b>${today.rescoreScope} 条</b>（待分析／待审批／待联系）的分析与批准 · 很慢`
+          ? ``
           : `<b>读不到影响面</b>，请先刷新页面再决定`; }
       live('mr-live-limit', '');   // 「今天已发多少」归卡一那行，这里不重复（铁律五）
       live('mr-live-auto', tripped ? '<b style="color:var(--red)">已熔断，自动发信停了</b>' : '');
