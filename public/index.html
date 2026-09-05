@@ -5687,8 +5687,20 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
         let room = "读不到";
         try { const q = await fetch("/api/settings/sending").then(r=>r.json());
               if (Number.isFinite(Number(q.send_room_today))) room = q.send_room_today; } catch {}
-        const ok = confirm("打开自动模式后，机器会连续地找客户、分析、批准，并给真客户发真邮件，不等整点。\n" +
-                           "今日还可发 " + room + " 封。\n确定要打开吗？");
+        // 🔴 2026-09-05：这里原来用的是**原生 `confirm()`** —— 全仓唯一一处对外动作还在用它
+        //   （`applyAutoSend` / `mrResumeAutoSend` 早就是 `uiConfirm`），而它是**最重的那个开关**。
+        //   ⚠️ 原生弹窗会被浏览器的"阻止弹窗"策略**静默吞掉**：`confirm()` 直接返回 false、
+        //     不抛错、不留痕 ⇒ 最坏形态是 **Joe 以为自己点开了，实际没开**，而屏幕上没有任何东西说这件事。
+        //   ⚠️ 换成 `uiConfirm` 还顺带修掉一个更隐蔽的：原生 confirm **冻结整个页面**，
+        //     上面那次 `fetch` 拿到的"今日还可发 N 封"在弹窗期间无法刷新——这条不是本次要治的，
+        //     但换完之后它自然消失了。
+        //   ⛔ 只换确认机制：开关逻辑、请求体、失败处理**一个字没动**（见下方报告里单列的那条）。
+        const ok = await uiConfirm({
+          title: "打开「自动模式」",
+          body: `打开后机器会**连续地找客户、分析、批准，并给真客户发真开发信**，不等整点。\n\n`
+              + `今日还可发 ${room} 封。\n\n`
+              + `⚠️ 关掉它 = **出站全停**（含「无回复跟进」）；客户回信照收。`,
+          confirmText: "打开", cancelText: "先不开" });
         if (!ok) { m.checked = false; return; }
       }
       await fetch("/api/settings/sending",{method:"POST",headers:{"content-type":"application/json"},
