@@ -15,7 +15,7 @@ import { sendLead, sendApprovedBatch, sendFollowupBatch, sendWarmFollowupNow, un
 const LIMIT_MAX = 2000;
 import { TIER1_COUNTRIES, runDiscovery, getKeywords, seedDefaultKeywords, getSearchConfig, COUNTRIES, DEFAULT_COUNTRIES, recomputeKeywordStats, inferCountryFromWebsite, getSerperUsage, runNmeaDiscovery, runLinkHarvest, runDirectoryRefresh, RVWITHTITO_URL, RVWITHTITO_BLACKLIST, SERPER_DAILY_BUDGET_DEFAULT, findDuplicateLead, getKeywordLangs, LANG_COUNTRIES } from "./discover";
 import { findLeadEmail, diagnoseSite, type PageProbe } from "./findemail";
-import { ingestReplies, matchReplyToLead } from "./replies";
+import { ingestReplies, matchReplyToLead, FREE_EMAIL_DOMAINS, domainOfEmail } from "./replies";
 import { ensureReplyColumns, stripQuoted, previewOf, isNoiseReply, tabOf, type InboxTab } from "./reply-inbox";
 import { REAL_REPLY_SQL, realReplySql, replyNotTestSql, UNKNOWN_SOURCE_SQL, unknownSourceSql, NOT_TEST_SQL, notTestSql, LEADS_IS_TEST_DDL } from "./noise";
 import { installFetchMeter, meteredDB, mark as subMark, reset as subReset, summary as subSummary } from "./subreq";
@@ -74,6 +74,7 @@ const LEAD_ROW_COLS =
   //     那正是这一整节要治的病（把两类不同的东西并成一个名字），我在治它的代码里又犯了一次。
   //     渲染出来一看就露馅了：两条来源为 NULL 的行也挂上了「人工标记」。
   `(CASE
+      WHEN EXISTS (SELECT 1 FROM replies r WHERE r.lead_id = l.id AND r.source='inbound')   THEN 'inbound'
       WHEN EXISTS (SELECT 1 FROM replies r WHERE r.lead_id = l.id AND ${realReplySql("r")}) THEN 'real'
       WHEN EXISTS (SELECT 1 FROM replies r WHERE r.lead_id = l.id AND r.source='manual')    THEN 'manual'
       WHEN EXISTS (SELECT 1 FROM replies r WHERE r.lead_id = l.id AND ${unknownSourceSql("r")}) THEN 'unknown'
@@ -4318,26 +4319,74 @@ app.post("/api/inbound", async (c) => {
       `${productUrl ? " | " + productUrl : ""} | 姓名: ${person || "-"} | 电话: ${phone || "-"}${locale ? " | " + locale : ""} | 留言: ${message || "-"}`
     : `落地页询盘 | 在哪卖: ${whereSell || "-"} | 月走量: ${volume || "-"}`;
   // 去重取行：邮箱无 UNIQUE 约束、可能有重复行 → 压制态行优先返回，确保下方状态守卫命中（won/ignored 也拦）
-  const existing = await c.env.DB.prepare(
+  //
+  // ⭐ 2026-09-05：**先按邮箱精确，再按公司域名兜底**（Joe/总工 定的落法第 5 条）。
+  // ⚠️ 域名兜底**是猜**，所以照抄 replies.ts 那两条已经踩过坑的约束，⛔ 不另写一套：
+  //   · 免费邮箱域一律不猜（`FREE_EMAIL_DOMAINS`）—— 一个 gmail 询盘挂到另一个毫不相关的
+  //     gmail 线索上，比新建一条重复档案糟得多；
+  //   · 用的是**同一个** `FREE_EMAIL_DOMAINS` / `domainOfEmail`（从 replies.ts 导出），
+  //     ⛔ 不复制一份 —— 复制出来的第二份名单迟早与第一份漂开。
+  let existing = await c.env.DB.prepare(
     "SELECT id, status FROM leads WHERE lower(email)=? " +
     "ORDER BY CASE WHEN status IN ('unsubscribed','blacklisted','bounced','won','ignored') THEN 0 ELSE 1 END, id LIMIT 1"
   ).bind(email).first<{ id: number; status: string }>();
+  if (!existing) {
+    const dom = domainOfEmail(email);
+    if (dom && !FREE_EMAIL_DOMAINS.has(dom)) {
+      existing = await c.env.DB.prepare(
+        "SELECT id, status FROM leads WHERE lower(email) LIKE ? " +
+        "ORDER BY CASE WHEN status IN ('unsubscribed','blacklisted','bounced','won','ignored') THEN 0 ELSE 1 END, id LIMIT 1"
+      ).bind(`%@${dom}`).first<{ id: number; status: string }>();
+      if (existing) console.log(JSON.stringify({ evt: "inbound_matched_by_domain", dom, lead_id: existing.id }));
+    }
+  }
   let notify = !overSoftCap;   // 超软限：线索照常入库，只是不推飞书（防刷屏）
+  let leadId: number | null = null;
   if (existing) {
     if (SUPPRESSED_INBOUND.has(existing.status)) {
       notify = false; // 压制态：不改字段、不通知，静默返回 ok（不泄露状态）
     } else {
+      leadId = existing.id;
+      // 🔴 阶段抬到 `replied`：主动来问的人**不该待在冷线索流水线里**（见下方那段）。
+      // ⚠️ `won` 不在这里 —— 它已被 SUPPRESSED_INBOUND 拦在上面，⛔ 绝不降级，只是也不挂时间线。
       await c.env.DB.prepare(
-        "UPDATE leads SET next_action=?, next_action_date=date('now'), " +
+        "UPDATE leads SET status='replied', next_action=?, next_action_date=date('now'), " +
         // notes 追加加长度上限（保留最近 4000 字符，防无限膨胀）
         "notes = substr(COALESCE(notes,'') || char(10) || '[' || datetime('now') || '] ' || ?, -4000), updated_at=datetime('now') WHERE id=?"
       ).bind(nextAction, note, existing.id).run();
     }
   } else {
-    await c.env.DB.prepare(
+    // 🔴🔴 **`status='replied'`，⛔ 不是 `'new'`。**
+    //
+    // 旧行为是 `'new'` ⇒ 这条线索进冷流水线：分析 → ≥60 自动批准 → **被自动发一封冷开发信**。
+    // `SENDABLE_WHERE` 里**没有任何按 `source` 的排除**（我逐条核过）⇒ 一个主动来官网问的人，
+    // 收到的回应会是我们群发的陌生开发信。**这是本次接入前必须先堵的口子。**
+    // ⚠️ 判据不是"我改了状态"，而是 `SENDABLE_WHERE` 要求 `l.status='approved'` ——
+    //   `replied` 进不了那道门，所以这一条**由结构保证**，⛔ 不需要再加一个 source 黑名单。
+    const ins = await c.env.DB.prepare(
       "INSERT INTO leads (company_name, email, country, source, status, notes, next_action, next_action_date) " +
-      "VALUES (?, ?, ?, ?, 'new', ?, ?, date('now'))"
+      "VALUES (?, ?, ?, ?, 'replied', ?, ?, date('now'))"
     ).bind(company, email, countryDb, source, note.slice(0, 3000), nextAction).run();
+    leadId = Number(ins.meta?.last_row_id) || null;
+  }
+
+  // ⭐ 留言本身作为**第一条回信**挂进档案（Joe/总工 定的落法第 2 条）。
+  // ⚠️ `source='inbound'` 是**显式声明**，⛔ 不靠默认值 —— 同 `'imap'`/`'manual'` 那两个写入方的纪律：
+  //   漏给值会落进「口径未知」单独显示，绝不默默算成别的东西。
+  // ⚠️ 计数上它**算**"收到的回信"（REAL_REPLY_SQL 已含 inbound），但 `reply_evidence` 里
+  //   有自己的名字 `'inbound'`（官网询盘）—— **计数口径与标注口径是两件事。**
+  if (leadId) {
+    try {
+      await ensureReplyColumns(c.env);   // 第一读者/写者自己保证列在（source 列）
+      await c.env.DB.prepare(
+        "INSERT INTO replies (lead_id, category, content, from_email, subject, source, is_auto) " +
+        "VALUES (?, 'inquiry', ?, ?, ?, 'inbound', 0)"
+      ).bind(leadId, note, email, isWebsiteContact ? "官网询盘" : isProduct ? "产品询盘" : "落地页询盘").run();
+    } catch (e) {
+      // ⚠️ 挂档案失败**不能**让访客的提交变成失败：线索已经入库了，这一步只是补时间线。
+      //   （官网侧那条纪律的镜像：静默吞掉询盘最贵；反过来 CRM 半步失败也不该让人白填一遍。）
+      console.error("inbound: 写 replies 行失败（线索已入库，不影响访客）:", e);
+    }
   }
 
   // 推飞书（压制态 / 超软限 时跳过；失败不影响入库）

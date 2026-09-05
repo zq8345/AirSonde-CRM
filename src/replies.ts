@@ -75,7 +75,7 @@ async function classify(env: Env, subject: string, body: string): Promise<{ cate
 /** 免费邮箱域：**绝不能拿来做同域名匹配**。
  *  一个 gmail 回复匹配到另一个毫不相关的 gmail 线索，比漏掉更糟 —— 那是把 A 的回复安到 B 头上：
  *  B 被误标 replied（跟进停掉、进已回复格），而 A 那封真回复永远没人管。漏掉至少还在孤儿里能看见。 */
-const FREE_EMAIL_DOMAINS = new Set([
+export const FREE_EMAIL_DOMAINS = new Set([
   "gmail.com", "googlemail.com", "outlook.com", "hotmail.com", "live.com", "msn.com",
   "yahoo.com", "yahoo.co.uk", "ymail.com", "aol.com", "icloud.com", "me.com", "mac.com",
   "qq.com", "163.com", "126.com", "foxmail.com", "sina.com", "yeah.net",
@@ -83,7 +83,7 @@ const FREE_EMAIL_DOMAINS = new Set([
   "yandex.com", "yandex.ru", "web.de", "naver.com", "daum.net",
 ]);
 
-function domainOfEmail(email: string): string {
+export function domainOfEmail(email: string): string {
   const i = (email || "").lastIndexOf("@");
   return i < 0 ? "" : email.slice(i + 1).toLowerCase().trim();
 }

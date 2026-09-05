@@ -29,11 +29,18 @@
  * ⚠️ **`source IS NULL` 不算真回信，但也⛔ 不许默默扔掉** —— 见 UNKNOWN_SOURCE_SQL：
  *   多算一封的代价是 Joe 以为有客户在回他（据此做错决定），少算一封的代价是他晚看到一封信。
  *   两种错的代价不对称 ⇒ 不确定的一律**单独显示**，不并进任何一边。
+ *
+ * 🔴 2026-09-05 加入 `'inbound'`（官网询盘，总工/Joe 定）：**它比回信更强** ——
+ *   对方不是被我们敲了门才回话，是自己找上门来。⇒ 计数上**算**"收到的回信"。
+ * ⚠️ 但**标注上不许混进"真收到的信"** —— `reply_evidence` 里它有自己的名字「官网询盘」。
+ *   计数口径与标注口径是两件事：前者回答"有多少人回应了我们"，后者回答"这一条是怎么来的"。
+ * ⚠️ 改这条谓词就是改一个量的定义 ⇒ **消费方已逐个点过**（14 处，全部经由本文件这两个导出，
+ *   ⛔ 没有一处手写 `source='imap'`）—— 所以改这里一处就够，这正是当初把它收进单一真源的理由。
  */
-export const REAL_REPLY_SQL = "COALESCE(is_auto,0)=0 AND source='imap'";
+export const REAL_REPLY_SQL = "COALESCE(is_auto,0)=0 AND source IN ('imap','inbound')";
 /** 带表别名的版本（`FROM replies r` 这种）。 */
 export const realReplySql = (alias: string) =>
-  `COALESCE(${alias}.is_auto,0)=0 AND ${alias}.source='imap'`;
+  `COALESCE(${alias}.is_auto,0)=0 AND ${alias}.source IN ('imap','inbound')`;
 
 /**
  * **口径未知**的回信行：`source` 没值（回填之前的历史行，或某个写入方漏给了值）。
