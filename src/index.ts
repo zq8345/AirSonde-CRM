@@ -5148,6 +5148,19 @@ const TICK_ANALYZE_MAX = 3;
  *  ⚠️ 真正管"每天发多少"的是 Joe 在设置里的日限，这个数只管**一次 tick 别撑爆**。 */
 const TICK_SEND_MAX = 3;
 /**
+ * ⭐⭐ 2026-09-05：**每个整点班最多发几封跟进**。
+ *
+ * 它不是"限速"，是**消爆发**：总开关补闸（关=全停含跟进）之后，跟进会在关机期间**攒**，
+ * 而这一步原来传的是"当天全部剩余额度"、批内又无间隔 ⇒ 重开那一刻一次放完
+ * （生产 daily_send_limit=1000 ⇒ 理论上一个整点班上百封）。
+ *
+ * ⚠️ 3 这个数取自**实际量**，不是拍的：生产 2026-09-05 全天跟进 27 封（≈1.1 封/小时），
+ *   3/班 = 72/天 ≈ 实际量的 2.6 倍 ⇒ **正常运转永远碰不到这个顶**，它只在积压时兜底。
+ *   与 TICK_SEND_MAX 取同值，是为了让"两条链都是一班最多 3 封"好记，不是巧合。
+ * ⚠️ 真正管"每天最多发多少"的仍是 Joe 的 `daily_send_limit`；这个数只管**一班别一次放完**。
+ */
+const HOURLY_FOLLOWUP_MAX = 3;
+/**
  * 🔴 每个 fastTick 最多搜几个 keyword×country 组合（2026-09-02 Joe 定：全速找，不摊平）。
  *
  * Joe 原话：「以最快速度搜，2000 或许 3 小时就搜完，那我自己决定要不要加预算，
@@ -5680,7 +5693,26 @@ async function scheduled(event: ScheduledController, env: Env, ctx: ExecutionCon
     if (!autoOn) console.log("followup: 自动模式总开关关着 —— 跟进不发（2026-09-05 Joe 拍板：关=全停，含跟进）");
     else if (!budget.has(90_000)) console.log(`followup: 本轮时间预算只剩 ${Math.round(budget.remaining()/1000)}s，跳过跟进，下轮继续（平台限制，非 Joe 的上限）`);
     else if (fuRoom <= 0) console.log(`followup: 今日发信额度已用尽（${fuLimit}/天，Joe 设的）`);
-    else await sendFollowupBatch(env, fuRoom);
+    else {
+      // ⭐⭐ 2026-09-05 消爆发：**单班封顶 + 批内间隔**。
+      //   补闸（关=全停含跟进）创造了一个此前不存在的场景：跟进会**攒**。
+      //   而这一步原来传的是"当天全部剩余额度"，批内又没有任何间隔
+      //   ⇒ 关得越久、重开那一刻放得越多（生产日限 1000 ⇒ 理论上一个整点班能放上百封）。
+      //   ⚠️ 这不是旧毛病，是**补闸的新产物**，所以跟补闸同一支收拾。
+      // ⚠️ 封顶取 3/班的依据是**实际量**，不是拍的：生产 09-05 全天跟进 27 封（≈1.1 封/小时），
+      //   3/班 = 72/天，是实际量的 2.6 倍 ⇒ **正常运转碰不到这个顶**，它只在积压时才起作用。
+      //   （与 fastTick 的 TICK_SEND_MAX=3 取同值，便于理解：两条链都是"一班最多 3 封"。）
+      // ⚠️ 间隔**复用 Joe 已有的 `send_interval_seconds`**，⛔ 不新造旋钮；
+      //   初次信那条路的间隔语义一个字没动（它仍在 fastTick 里"每 tick 查一次、在批之前"）。
+      const fuGapSec = Math.max(0, Number(await getSetting(env, "send_interval_seconds", String(SEND_INTERVAL_DEFAULT))) || 0);
+      const fuTake = Math.min(fuRoom, HOURLY_FOLLOWUP_MAX);
+      const r = await sendFollowupBatch(env, fuTake, undefined, { gapMs: fuGapSec * 1000, budget });
+      // 说出来：封顶生效时**必须可见**，否则"今天怎么只跟了 3 封"会变成又一个查不出来的静默行为。
+      if (fuRoom > HOURLY_FOLLOWUP_MAX) {
+        console.log(`followup: 本班封顶 ${HOURLY_FOLLOWUP_MAX} 封（到期的还有更多，今日额度剩 ${fuRoom}）—— 积压按班摊开，⛔ 不一次放完`);
+      }
+      if (r.sent) console.log(`followup: 发出 ${r.sent}/${r.processed} 封，批内间隔 ${fuGapSec}s`);
+    }
   } catch (e) { console.error("followup:", e); }
 
   // 3.55) 顺带修①「没回音出口」：跟进次数用尽 + 又过了 X 天还是没回应 → 归档。

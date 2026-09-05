@@ -31,7 +31,7 @@
 | 2b | **抓不到官网** | 同上 | 正文 < `MIN_USABLE_TEXT=200` 字 | `fetch_fail_count+1`；满 3 次转 `analyzed` 且 `match_score=NULL`（**未打分 ≠ 不合格**） | — | `service.ts recordFetchFailure():65` |
 | 3 | **自动批准** | 快班 + 整点班 | `status='analyzed'` ∧ `match_score >= auto_approve_min`（默认 **60**）∧ 未与已发线索同邮箱 | `status='approved'` | 总开关（`autoApproveEnabled` 内含）· `auto_approve_enabled` | `index.ts autoApproveRound():5054` |
 | 4 | **发新开发信** | **只在快班** | `SENDABLE_WHERE`：`status='approved'` ∧ `match_score>=60` ∧ 有邮箱 ∧ 未压制 ∧ 未重地址 | `emails`(kind=`initial`) · `status='sent'` | 总开关 · **机器自己发** · 熔断 · 每封间隔 · 日限 · 自动通道单独限量 · `TICK_SEND_MAX=3`/tick | `send.ts sendApprovedBatch():835`；`SENDABLE_WHERE index.ts:476`；调用点 `:5303` |
-| 5 | **发跟进信** | **只在整点班** | `status='sent'` ∧ 有邮箱 ∧ **有已发出的 emails 行** ∧ `sent_count <= followup_max` ∧ 距上次发信 ≥ 冷却天数 | `emails`(kind=`followup`) | **总开关（本次新加）** · `followup_enabled` · 日限 ⛔ **不看分数、不看「机器自己发」、不看熔断、⚠️ 没有每封间隔** | `send.ts sendFollowupBatch():754`；调用点 `index.ts` 3.5 步 |
+| 5 | **发跟进信** | **只在整点班** | `status='sent'` ∧ 有邮箱 ∧ **有已发出的 emails 行** ∧ `sent_count <= followup_max` ∧ 距上次发信 ≥ 冷却天数 | `emails`(kind=`followup`) | **总开关（新加）** · `followup_enabled` · 日限 · **单班封顶 `HOURLY_FOLLOWUP_MAX=3`（新加）** · **批内间隔 = `send_interval_seconds`（新加）** ⛔ 仍然**不看分数、不看「机器自己发」、不看熔断** | `send.ts sendFollowupBatch():754`；调用点 `index.ts` 3.5 步 |
 | 6 | **补邮箱** | 整点班 | `email` 空 ∧ 有官网 ∧ `status IN ('approved','analyzed')`，每轮 ≤ `find_email_per_round`(20) | `leads.email` | **总开关（本次新加）** · `find_email_enabled` · 时间预算 ⛔ 硬编码不走 Hunter（不给"配置一改就烧积分"的口子） | `index.ts` 2.55 步 |
 | 7 | **收客户回复** | 整点班 **step 0（最前）** | IMAP 拉取 | `replies` · `leads.status='replied'` | ⛔ **不受总开关约束**（耳朵）· 需要 `LARK_IMAP_PASS` | `index.ts` step 0 |
 | 7b | **官网询盘** | 访客提交，实时 | `POST /api/inbound` | 落 `status='replied'` + 一条 `replies`(`source='inbound'`) | ⛔ 结构上进不了发信池（`SENDABLE_WHERE` 要 `approved`） | `index.ts /api/inbound:约 4435` |
@@ -54,7 +54,8 @@
 | **退订就停**（熔断） | `auto_send_tripped_at` | 停自动发**新开发信** | ⚠️ **跟进照发** · 分析/批准照跑 · 要人手动复位，⛔ 不会自动恢复 | `send.ts autoSendTripped():98` |
 | **每天最多发** | `daily_send_limit` | 全系统总闸：**手动 + 自动 + 跟进 + 事务信共用**，跨全部发件域 | — | `send.ts systemDailySendLimit()` |
 | **自动通道单独限量** | `auto_send_daily_limit` | 只约束"自动发的初次信"（与总闸取更紧者） | ⚠️ **跟进不占这个配额**（`sendFollowup` 不写 `auto_sent`） | `send.ts autoSendDailyLimit()`；`index.ts:5297` |
-| **每封间隔** | `send_interval_seconds`（默认 90） | ⚠️ **只管快班的初次信**，且**闸每 tick 只查一次、在批之前** ⇒ 它隔开的是**批**不是**封**（一批最多 `TICK_SEND_MAX=3`） | ⛔ **完全不管跟进信** | `index.ts:5277-5294` |
+| **每封间隔** | `send_interval_seconds`（默认 90，生产 30） | **两条链各用一种方式**：① 初次信（快班）——闸每 tick 只查一次、**在批之前** ⇒ 它隔开的是**批**不是**封**（一批最多 `TICK_SEND_MAX=3`）；② 跟进（整点班，2026-09-05 新加）——**真·批内每封之间等这么久** | ⚠️ 初次信那半边**仍然是"隔批不隔封"**，本次一个字没动（要改走「间隔改成真·每封间隔」那一单） | 初次信 `index.ts:5277-5294`；跟进 `send.ts sendFollowupBatch()` 循环里的 `gapMs` |
+| **单班跟进封顶**（无界面，常量） | `HOURLY_FOLLOWUP_MAX=3` | 一个整点班最多放 3 封跟进；到期更多的**按班摊开**，⛔ 不一次放完。生效时**会打日志**（"本班封顶 3 封"） | 不是日限：真正管"每天最多发多少"的仍是 `daily_send_limit` | `index.ts:HOURLY_FOLLOWUP_MAX`；用在 3.5 步 |
 | **新域保护** | `send_ramp_enabled` | 每日实际上限 = max(起步, 昨日发出量 × 倍数) | — | `send.ts systemDailySendLimit()` |
 | **搜索预算** | `serper_daily_budget` | 每搜一次即记账，用完停到次日 UTC | — | `discover.ts runDiscovery()` |
 | **重扫闸** | — | `/api/rescan/start` 在 `auto_send_enabled` 开着时**拒绝启动** | ⚠️ 它防的是"`approved/queued` 被打回 `new` 再升过 60 分线被立刻发出去"，**不是防已联系那批** | `index.ts:4557`（另有 `rescoreLowGate` 同时查自动批准） |
@@ -75,11 +76,14 @@
    全仓其它对外动作一律走 `uiConfirm`（`applyAutoSend`、`mrResumeAutoSend` 都是），
    **唯独总开关这个最重的动作用了原生 `confirm`**。⚠️ 它还会被浏览器"阻止弹窗"策略静默吞掉 ⇒
    最坏形态：**Joe 以为自己点开了，实际没开**（或反过来）。
-5. 🔴 **跟进链没有每封间隔**（见 §2「每封间隔」行）。实测：3 封在**同一秒**发出。
-   ⇒ 总开关关得越久，重开那一刻放得越多：`sendFollowupBatch` 一个 tick 取走的是**当日全部剩余额度**
-   （`take = min(requested, dailyLimit - coldUsed)`，而 cron 传进去的 `requested` 就是那个剩余额度）。
-   生产 `daily_send_limit=1000` ⇒ 理论上一个整点班可以一次放出上百封。
-   ⚠️ **本单奉命不改间隔语义**，此条留给「间隔改成真·每封间隔」那一单。
+5. ~~跟进链没有每封间隔，重开总开关会一次放完~~ → **已修（同支）**。
+   **病型值得记：它不是旧毛病，是补闸的新产物。** 补闸前跟进从不停摆、无从积压；
+   补闸后它会攒，而这一步原来传的是"当日全部剩余额度"、批内又无间隔
+   ⇒ 生产 `daily_send_limit=1000` 时，一个整点班理论上能一次放出上百封。
+   ⇒ **改一处行为，要问"我有没有造出一个此前不存在的场景"**，而不只是"我改的这行对不对"。
+   实测（本地 5 条到期，封顶 3、间隔 5s）：
+   `16:16:35 → :40 → :45`（3 封，第 4/5 条不动）→ 下一班 `:54 → :59` 取走剩余两条。
+   ⚠️ 仍**没修**的那半边：**初次信**那条路的间隔依旧是"隔批不隔封"（见 §2）。
 6. **重扫停摆告警看不见重扫**：`produced = !!(inserted||analyzed||…)` ——
    重扫死了而 cron 照常分析 ⇒ `produced` 为真 ⇒ **永不告警**。
    反向验收用例现成的：2026-09-05 06:13→06:53 那 40 分钟。（`index.ts` 简报那段）
