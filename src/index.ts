@@ -53,6 +53,12 @@ const LEAD_ROW_COLS =
   // ⚠️ 只加列，**不动任何 WHERE**（口径一个字没变）。
   "l.fetch_fail_count AS fetch_fail_count, a.reason AS reason, " +
   "a.match_score AS match_score, a.customer_type AS customer_type, a.customer_category AS customer_category, " +
+  // ⭐ 2026-09-05（Joe 第二次问"已联系刷没刷"）：**分析时刻**必须能在屏幕上读到。
+  //   在此之前全前端 grep `analyzed_at` 只命中一行注释 ⇒ 界面上**没有任何地方**回答得了
+  //   "这条是什么时候、按哪版标准打的分" —— 他只能问人。代价已经兑现两次。
+  // ⚠️ `model` 一起带出来：它记着这条是"重扫刷的"还是"新分析的"（见 service.ts 写入点），
+  //   是"哪版标准"这半个问题的**唯一**现成答案。⛔ 不新建字段去存版本号。
+  "a.analyzed_at AS analyzed_at, a.model AS analysis_model, " +
   // 跟进中派生标志：已发(sent)线索中，存在已发出的 followup 邮件
   "EXISTS (SELECT 1 FROM emails e WHERE e.lead_id = l.id AND e.kind='followup' AND e.status='sent') AS has_followup, " +
   // 参与度（冲刺1a）：是否有邮件被打开/点击
@@ -1393,9 +1399,47 @@ app.get("/api/leads", async (c) => {
   else sql += " ORDER BY (a.match_score IS NULL), a.match_score DESC, l.id DESC LIMIT 300";
 
   const rows = await c.env.DB.prepare(sql).bind(...binds).all();
+
+  // ⭐⭐ 2026-09-05：**这一格的分析时间窗**（Joe 的问题是批级的，不是逐行的）。
+  //
+  // 他问的是「已联系那批刷没刷」——逐行日期回答不了这个：356 行他得自己扫一遍再自己比。
+  // ⇒ 这里算的是**当前筛选下的全量**聚合，⛔ 不是上面那 300 条（LIMIT 之内的样本会随排序漂，
+  //   而"这批最早/最晚什么时候分析的"必须对着全量说，否则又是一个"数字没错但不度量那件事"）。
+  // ⚠️ 用**同一个 where/binds**，与上面那条 SELECT 同口径 —— 换一套条件就会出现
+  //   "列表显示 356 家、窗口按另一批算"的分叉。
+  const w = where.length ? " WHERE " + where.join(" AND ") : "";
+  const agg = await c.env.DB.prepare(
+    `SELECT COUNT(*) AS total,
+            SUM(CASE WHEN a.analyzed_at IS NOT NULL THEN 1 ELSE 0 END) AS analyzed,
+            MIN(a.analyzed_at) AS first_at, MAX(a.analyzed_at) AS last_at
+       FROM leads l LEFT JOIN lead_analysis a ON a.lead_id = l.id${w}`
+  ).bind(...binds).first<{ total: number; analyzed: number; first_at: string | null; last_at: string | null }>();
+
+  // 最近一次全库重扫的起点：**判断"刷没刷过"的参照物**（analyzed_at < 起点 = 那次重扫没轮到它/它之后没再动过）。
+  // ⚠️ 读不到就给 null，前端据此**少说一句**，⛔ 不假装"全部刷过"。
+  const rescanAt = (await getSetting(c.env, "rescan_started_at", "")).trim() || null;
+  let stale: number | null = null;
+  if (rescanAt) {
+    const s = await c.env.DB.prepare(
+      `SELECT COUNT(*) AS n FROM leads l LEFT JOIN lead_analysis a ON a.lead_id = l.id${w}${w ? " AND" : " WHERE"}
+        (a.analyzed_at IS NOT NULL AND a.analyzed_at < ?)`
+    ).bind(...binds, rescanAt).first<{ n: number }>();
+    stale = s?.n ?? null;
+  }
+
   // C5-13：分类的**机器值仍是 customer_category（slug）**，筛选/统计都用它；
   //   额外给一个 `_label` 给屏幕用。标签只在服务端拼（taxonomy 住这儿），前端不抄第二份。
-  return c.json({ leads: (rows.results as any[]).map(withCategoryLabel).map(withPhoneDisplay) });
+  return c.json({
+    leads: (rows.results as any[]).map(withCategoryLabel).map(withPhoneDisplay),
+    analysis_window: {
+      total: agg?.total ?? 0,
+      analyzed: agg?.analyzed ?? 0,
+      first_at: agg?.first_at ?? null,
+      last_at: agg?.last_at ?? null,
+      rescan_started_at: rescanAt,
+      stale_before_rescan: stale,
+    },
+  });
 });
 
 // ---- toolbar-v9：「选中全部 N」—— 当前筛选下的**全量** id + 按钮计数要用的最小字段 ----
