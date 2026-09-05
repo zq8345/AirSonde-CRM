@@ -1287,9 +1287,20 @@
     .set-grid > .v { min-width:0; }
     .set-grid > .v > .hint { margin-top:6px; }
     /* 控件宽度按内容定，不再一律 100% —— 一个公司名的框拉满 720px 只会显得空 */
-    .set-in { width:100%; max-width:420px; background:var(--bg); border:1px solid var(--border);
+    /* 🔴 C5-50（Joe：「标题与输入框上对齐」「排版再优化一下」）—— 三件事，⛔ 只这三件：
+       ① **顶边对齐**：`.pr-row` 全站是 `align-items:center`，多行文本框那几行的标签因此吊在半空。
+          只在设置页改成 `start`，⛔ 不动全局（自动化页那些单行 + 数字框行靠居中才齐）。
+       ② **标签列宽 / 行距**：`.pr-row` 本来就是同一个 grid（120px 1fr）和同一个 padding ⇒ 已统一，
+          ⛔ 没有再动它（量过：24 行标签左缘同一个 x）。
+       ③ **输入框宽度统一**：原来单行框 `max-width:420px`、textarea 却是 `100%`（吃满 1fr）——
+          这就是 Joe 说的"公司名/官网短、地址/卖点长"。改成同一个变量。
+       ⚠️ `var(--set-field-w, 420px)` 带兜底值：`.set-in` 在 `.rs-pick-head`（重刷弹窗）里也用，
+          那里没有 `.set-page` 这层作用域 ⇒ 没有兜底就会拿到非法值、把那个框的宽度限制整个掀掉。 */
+    .set-page { --set-field-w:460px; }
+    .set-page .pr-row { align-items:start; }
+    .set-in { width:100%; max-width:var(--set-field-w, 420px); background:var(--bg); border:1px solid var(--border);
               color:var(--text); padding:7px 10px; border-radius:8px; }
-    .set-page textarea { max-width:100%; border-radius:8px; padding:10px 12px;
+    .set-page textarea { width:100%; max-width:var(--set-field-w, 420px); border-radius:8px; padding:10px 12px;
                          font-family:inherit; line-height:1.6; }   /* 去等宽：观感收益最大的一行 */
     .set-num { width:88px; background:var(--bg); border:1px solid var(--border); color:var(--text);
                padding:7px 10px; border-radius:8px; }
@@ -1782,17 +1793,13 @@
         <div class="pr-row"><span class="pr-k">官网</span>
           <span class="pr-v"><input id="cfg-website" class="set-in"></span></div>
         <div class="pr-row"><span class="pr-k">公司地址</span>
-          <span class="pr-v"><textarea id="cfg-address" style="min-height:60px"></textarea>
-            <span class="gj-help" data-help title="反垃圾邮件法（CAN-SPAM / GDPR）要求每封商业邮件带真实通信地址；它会出现在每封信的落款里。">(?)</span></span></div>
+          <span class="pr-v"><textarea id="cfg-address" style="min-height:60px"></textarea></span></div>
         <div class="pr-row"><span class="pr-k">卖点</span>
-          <span class="pr-v"><textarea id="cfg-selling" style="min-height:64px"></textarea>
-            <span class="gj-help" data-help title="AI 写开发信时**直接引用**这几句 ⇒ 只写站得住的事实。认证 / 产能 / MOQ / 案例在工厂书面确认前不要写。">(?)</span></span></div>
+          <span class="pr-v"><textarea id="cfg-selling" style="min-height:64px"></textarea></span></div>
         <div class="pr-row"><span class="pr-k">开场白</span>
-          <span class="pr-v"><textarea id="cfg-chatscript" style="min-height:76px"></textarea>
-            <span class="gj-help" data-help title="手动触达（LinkedIn / WhatsApp）时一键复制的那段话；{company} 会替换成对方公司名。">(?)</span></span></div>
+          <span class="pr-v"><textarea id="cfg-chatscript" style="min-height:76px"></textarea></span></div>
         <div class="pr-row"><span class="pr-k">存档邮箱</span>
-          <span class="pr-v"><input id="cfg-bcc" class="set-in">
-            <span class="gj-help" data-help title="填了就给每一封外发信密送一份到这个邮箱（留空 = 不存档）。">(?)</span></span></div>
+          <span class="pr-v"><input id="cfg-bcc" class="set-in"></span></div>
       </div>
 
       <!-- ── ② 发件身份（新卡）——「这封信看起来是谁发的」 ──
@@ -1806,11 +1813,9 @@
             <span class="u">Resend 已验证 · 只能改代码</span></span></div>
         <div class="pr-row"><span class="pr-k">发件人名字</span>
           <span class="pr-v"><input id="cfg-sender-name" class="set-in" style="max-width:220px" oninput="renderSenderPreview(_lastSendCfg)">
-            <span class="mr-live" id="cfg-sender-preview"></span>
-            <span class="gj-help" data-help title="收件人邮箱里显示的那个名字（From 的显示名）。留空 = 用默认 AirSonde。">(?)</span></span></div>
+            <span class="mr-live" id="cfg-sender-preview"></span></span></div>
         <div class="pr-row"><span class="pr-k">签名</span>
-          <span class="pr-v"><textarea id="cfg-sender-signature" style="min-height:64px"></textarea>
-            <span class="gj-help" data-help title="发送时自动加在正文末尾、公司地址与退订链接之前。AI 写信时不会自己写签名（提示词里已说明），就是留给这里。留空 = 不加。">(?)</span></span></div>
+          <span class="pr-v"><textarea id="cfg-sender-signature" style="min-height:64px"></textarea></span></div>
       </div>
 
       <!-- ── ③ 账号（无编辑）── -->
@@ -1822,7 +1827,6 @@
             <a class="mini" href="/cdn-cgi/access/logout" style="margin-left:auto;text-decoration:none">退出登录</a></span></div>
         <div class="pr-row"><span class="pr-k">加同事</span>
           <span class="pr-v"><span class="u">在 Cloudflare Access 里加邮箱，立刻生效</span>
-            <span class="gj-help" data-help title="能进 CRM = 能看全部线索、能发信；这里没有第二份名单，权限只由 Access 那一处决定。">(?)</span>
             <a class="mini" href="https://one.dash.cloudflare.com/?to=/:account/access/apps" target="_blank" rel="noopener" style="margin-left:auto;text-decoration:none">去加人 ↗</a></span></div>
       </div>
       </div><!-- /.set-page -->
@@ -1888,8 +1892,7 @@
               <button type="button" onclick="rsPer(-1)" aria-label="减少">−</button>
               <b id="rs-per">5</b>
               <button type="button" onclick="rsPer(1)" aria-label="增加">+</button>
-            </span><span class="u">条</span>
-            <span class="gj-help" data-help title="Serper 单页封顶约 10 条，再调高也不会更多（2026-09-03 实测：num=100 与 num=10 返回完全相同的结果）。">(?)</span></span></div>
+            </span><span class="u">条</span></span></div>
         <div class="rs-row"><span class="rs-k">预计</span>
           <span class="rs-v"><span id="rs-est" class="u">—</span></span></div>
 
