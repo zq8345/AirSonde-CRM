@@ -5536,6 +5536,25 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
       }
       window._settingsMode = mode;
     }
+    // ══ C5-51⑥（Joe：「设置页面…只读模式下把信息显示完整」）══
+    //
+    // 🔴 病因：`<textarea>` 的高度**不随内容走**（它按 `rows` 算，默认 2 行），
+    //   而只读态的 CSS 是 `height:auto; overflow:hidden`（index.html:1342）
+    //   ⇒ **超出那两行的内容被直接裁掉**，卖点 / 开场白 / 签名就是这么没的。
+    //   ⚠️ `height:auto` 看着像"按内容撑开"，对 div 是，**对 textarea 不是** —— 这是那条规则
+    //      当初没被发现裁字的原因：它读起来完全合理。
+    // ⛔ 内滚动、省略号都不行（Joe 要的是"显示完整"）⇒ 只读态按 `scrollHeight` 把高度撑到内容高。
+    // ⚠️ **进编辑态必须清掉这个内联高度**：不清就把用户拖过的高度钉死，而且下次内容变短它也缩不回去。
+    // ⚠️ 先把高度归零再量 —— 否则 `scrollHeight` 读到的是**上一次撑开后**的高度，越量越大
+    //   （尺子读自己上一次的结果，这仓栽过）。
+    function autosizePreview(sp, edit){
+      sp.querySelectorAll('textarea').forEach(t => {
+        if (edit) { t.style.height = ''; return; }
+        t.style.height = '0px';
+        t.style.height = t.scrollHeight + 'px';
+      });
+    }
+    window.autosizePreview = autosizePreview;
     function setOneFormMode(sp, edit){
       sp.classList.toggle('preview', !edit);
       // ⚠️ CSS 的 pointer-events 挡得住鼠标，**挡不住键盘 Tab 进去改** —— 所以再用属性兜一层。
@@ -5544,6 +5563,9 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
       sp.querySelectorAll('input:not([type=checkbox]):not(.cfg-live), textarea').forEach(el => { el.readOnly = !edit; });
       sp.querySelectorAll('input[type=checkbox]:not(.cfg-live)').forEach(el => { el.disabled = !edit; });
       sp.querySelectorAll('select:not(.cfg-live)').forEach(el => { el.disabled = !edit; });
+      // ⚠️ 必须排在 class 切换**之后**：只读态的 padding/border 由 `.preview` 那条规则给，
+      //   先量后切会量到编辑态的盒子。
+      autosizePreview(sp, edit);
     }
     window.setSettingsMode = setSettingsMode;
 
@@ -5612,6 +5634,9 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
       $("#cfg-website").value = c.company_website || "";
       $("#cfg-selling").value = c.selling_points || "";
       $("#cfg-chatscript").value = c.chat_script || "";
+      // C5-51⑥：值刚填进去，只读态要按新内容重新撑高（⛔ 填值不重量 = 还是上一次的高度）
+      document.querySelectorAll('#v-settings .cfg-form').forEach(sp =>
+        autosizePreview(sp, sp.classList.contains('preview') === false));
       $("#cfg-bcc").value = c.bcc_archive || "";
       // ⭐ 上限未被显式配置时**必须说出来**——上次静默用默认值，出信量被砍 90%、三天没人知道。
       const _lbadge = $("#cfg-limit-badge");
@@ -5768,6 +5793,9 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
       { const se = $("#cfg-sender-email"); if (se) se.textContent = c.sender_email || "sales@airsonde.net"; }
       { const sn = $("#cfg-sender-name"); if (sn) sn.value = c.sender_name || ""; }
       { const sg = $("#cfg-sender-signature"); if (sg) sg.value = c.sender_signature || ""; }
+      // C5-51⑥：签名同理 —— 它在另一处填，⛔ 不能只挂一个点
+      document.querySelectorAll('#v-settings .cfg-form').forEach(sp =>
+        autosizePreview(sp, sp.classList.contains('preview') === false));
       _lastSendCfg = c;   // 预览行 oninput 要用（⛔ 不为拼一行字再 fetch 一次配置）
       renderSenderPreview(c);
     }
