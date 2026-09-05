@@ -2725,8 +2725,15 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
       const total = (typeof gc[current] === "number") ? gc[current] : null;
       const cntTxt = total != null ? `<span class="cnt">(${total})</span>` : "";
       // toolbar-v9 页头副标（真值判）：待审批报分数线构成（facets.scoreBuckets）；待联系报 A/B/C 三数（readyGroupIds 同源）
+      //
+      // 🔴 C5-50（Joe：「把工具栏的这些废话干掉，后面有用的按钮都没显示全」「待审批页面工具栏的这个废话也干掉」）：
+      //   **未选态不出这一串**。990 实测它是真占地方：待联系那串 175px、待审批那串 106px。
+      // ⚠️ 信息没丢：可发数在「发全部 (N)」按钮上本来就有，分数线构成在列表里逐行看得见。
+      // ⚠️ **只关未选态** —— 勾选态是另一个状态（Joe 没说它），⛔ 保持逐字不变。
       let subTxt = "";
-      if (current === "review" && _facets && _facets.scoreBuckets && _facetsGroup === "review") {
+      if (n === 0) {
+        // 未选：只留「分组名 (条数)」
+      } else if (current === "review" && _facets && _facets.scoreBuckets && _facetsGroup === "review") {
         const hi = Number(_facets.scoreBuckets.bAuto) || 0;
         subTxt = `<span class="cnt">· ${hi > 0 ? `其中 ≥${SCORE_LINE} 分 ${hi} 家` : `全部低于 ${SCORE_LINE} 分线`}</span>`;
       } else if (current === "ready") {
