@@ -1678,7 +1678,21 @@
             <span id="cfg-limit-badge" class="pill" style="display:none"></span>
             <span class="gj-help" data-help title="手动 + 自动 + 跟进 共用这一个上限，跨全部发件域计数。系统物理上跑得动多少见 (?) 里的产能数，超出的顺延不会丢。">(?)</span><span class="mr-live" id="mr-live-limit"></span></span></div>
 
+        <!-- 🔴 C5-50（Joe：页面写着「机器自己发」= 关，机器却发了 15 封）——**病在名字，不在数据。**
+             下面那一行（现名「自动通道单独限量」）写的是 `auto_send_daily_limit`，**从来不写 `auto_send_enabled`**；
+             它显示"关"是真话，只是这句真话说的是另一件事。而 Joe 按标签读，得出"机器不会自己发"——
+             一个完全合理的推断，来自一个错误的名字。
+             ⇒ 两件一起做：**旧行改名说它真做的事** + **这一行是真闸**（接 `auto_send_enabled`）。
+             ⛔ 只改名不加真闸 = "我以为我关了"这个风险原样还在，只是换了措辞。
+             ⚠️ **勾选即存 + 二次确认，⛔ 绝不搭「保存」那趟车** —— 生产事故有案：它曾经跟公司名/话术
+                捆在一起提交，"改一句话术点保存"顺手把自动发信打开，3 天发了 17 封真邮件才被发现。 -->
         <div class="pr-row"><span class="pr-k">机器自己发</span>
+          <span class="pr-v">
+            <label class="tgl tgl-sm"><input type="checkbox" id="cfg-autosend" onchange="applyAutoSend(this)"><span class="tgl-track"><span class="tgl-knob"></span></span></label>
+            <span class="hint" style="margin-left:8px">关掉只停「机器自动发开发信」，找客户/分析/收信照跑；要全停用卡一右上的自动模式总开关。你手动点「发选中」不受它管。</span>
+          </span></div>
+
+        <div class="pr-row"><span class="pr-k">自动通道单独限量</span>
           <span class="pr-v">
             <label class="tgl tgl-sm"><input type="checkbox" id="cfg-auto-on"><span class="tgl-track"><span class="tgl-knob"></span></span></label>
             <span class="u">最多</span>
@@ -5352,6 +5366,30 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
     // ══ 自动模式总开关：唯一实现 ══
     // ⚠️ 顶层定义，不藏在某个渲染函数里 —— 藏进去的话它只在那个函数跑过之后才存在，
     //   而开关在「自动化」页一进去就可以点。**处理器必须先于控件可点的那一刻就位。**
+    // 🔴 C5-50：「机器自己发」真闸（`auto_send_enabled`）。**勾选即存**，⛔ 绝不进「保存」的 payload
+    //   —— 那条路有生产事故案底（改话术顺手开了自动发信，3 天 17 封）。同 applyAutomation 的形状。
+    // ⚠️ 只有**打开**要二次确认：打开 = 开始给真客户发真邮件；关掉 = 停下来，停下来不需要拦。
+    //   两个方向的代价不对称，确认也就不该对称。
+    // ⚠️ 用 `uiConfirm` ⛔ 不用原生 confirm（零弹窗规矩）。
+    window.applyAutoSend = async (m) => {
+      if (m.checked) {
+        let room = "读不到";   // ⚠️ 读不到就说读不到，⛔ 不填一个看起来正常的默认值
+        try { const q = await fetch("/api/settings/sending").then(r=>r.json());
+              if (Number.isFinite(Number(q.send_room_today))) room = q.send_room_today; } catch {}
+        const ok = await uiConfirm({ title:"打开「机器自己发」",
+          body:`打开后机器会**自动给真客户发真开发信**（仍受「每天最多发」「每封间隔」「新域保护」「退订就停」四道闸约束）。\n\n今日还可发 ${room} 封。`,
+          confirmText:"打开", cancelText:"先不开" });
+        if (!ok) { m.checked = false; return; }
+      }
+      const r = await fetch("/api/settings/sending",{method:"POST",headers:{"content-type":"application/json"},
+        body:JSON.stringify({ auto_send_enabled: m.checked })}).then(x=>x.json()).catch(e=>({error:String(e)}));
+      const el = $("#sendcfg-result");
+      // ⚠️ 失败要**把开关拨回去**：让它停在"看起来已经关了"而后端还开着，正是这次要治的那个病。
+      if (r && r.error) { m.checked = !m.checked; if (el) el.textContent = `❌ 没存上：${r.error}`; return; }
+      if (el) { el.textContent = m.checked ? "⚠️ 机器自己发 已打开" : "✅ 机器自己发 已关闭（手动「发选中」不受影响）"; setTimeout(()=>{ if(el) el.textContent=""; },3500); }
+      paintStatusBar();
+      try { renderAutomation(await fetch("/api/settings/sending").then(r2=>r2.json())); } catch (e) { console.error("回填自动化状态失败:", e); }
+    };
     window.applyAutomation = async (m) => {
       if (m.checked) {
         // 现拉一次真值（不用页面上可能已经放了很久的那份）。⚠️ 读不到就**说读不到**，
@@ -5622,6 +5660,10 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
       const _sysEff = c.effective_send_limit ?? c.daily_send_limit ?? 0;
       // 🔴 C5-48：两个 radio → 一个开关。开 = 另设自己的上限；关 = 不另设限（后端仍收 0）。
       //   ⚠️ 语义与旧版**完全相同**，只是控件从"二选一"变成"开/关"——后端一个字节没改。
+      // C5-50：真闸的回填。⚠️ 判据是**显式 === true** —— 字段缺失时宁可显示"关"，
+      //   ⛔ 不用 `!!c.auto_send_enabled` 那种把 undefined 也算成关的写法（那两者恰好同值，
+      //   但下次字段改名时前者会静默变成"永远关"，后者会当场报错）。与总开关那行同一写法。
+      { const s = $("#cfg-autosend"); if (s) s.checked = c.auto_send_enabled === true; }
       $("#cfg-auto-on").checked = !_autoFollow;
       $("#cfg-auto-limit").value = _autoFollow ? "" : (c.auto_send_daily_limit ?? "");
       $("#cfg-auto-limit").disabled = _autoFollow;
