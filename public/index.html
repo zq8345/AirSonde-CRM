@@ -6873,8 +6873,17 @@ ${esc(d.ours.body||'')}</div></details>`
       //   不挪起点熔断就不可恢复：一重开又拿同一批老数据再熔断）。⛔ 不新造端点、不前端清标记。
       { const slot = document.getElementById('mr-resume-slot');
         if (slot) slot.innerHTML = tripped ? `<button class="primary mini" onclick="mrResumeAutoSend()">恢复自动发信</button>` : ''; }
+      // 🔴 C5-51⑤（Joe：删掉「· 约 X 封/小时」）—— **它是一句会骗人的话**：
+      //   它按 `3600 / 间隔` 换算，前提是"每封之间都隔这么久"。而实测机制是
+      //   **间隔闸每 tick 只查一次、在批之前，一批最多 TICK_SEND_MAX=3 封** ⇒ 90 秒放行的是**一批**。
+      //   时间戳佐证（346 封相邻间隔）：60-95 秒区间 **0 条**，3-59 秒 193 条（批内）、>95 秒 152 条（批间）。
+      //   ⇒ 这个派生数与真实节奏差约 3 倍，**删掉比改一个仍然不准的数好**。
+      // ⚠️ 只删这句提示，⛔ 间隔输入框与它的生效逻辑一个字没动。
+      // ⚠️ `· 不限速`（间隔=0）留着 —— 它报的是**状态**不是换算值，且 Joe 点名的不是它。
+      //   （⚠️ 严格说 0 也不是"完全不限速"：每分钟一 tick、每 tick 最多 3 封仍在。
+      //     这一条随「间隔改成真·每封间隔」那单一起收拾，⛔ 不在本单里顺手改。）
       live('mr-live-gap', (() => { const g = Number(cfg.send_interval_seconds || 0);
-        return g > 0 ? `· 约 <b>${Math.floor(3600 / g)}</b> 封/小时` : '· 不限速'; })());
+        return g > 0 ? '' : '· 不限速'; })());
       live('mr-live-review', '');   // 待审批 N 已在卡一「AI 分析」那行，这里不再报（铁律五）
       // 搜索预算的实时位：⛔ 不再拼「今日 x/y」（Joe：多余，卡一与顶栏面板都在报）
       live('mr-live-search', scfgOk ? '' : '· 这次没读到搜索配置');
