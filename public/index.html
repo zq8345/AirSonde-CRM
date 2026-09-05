@@ -5703,9 +5703,21 @@ Acme Air Quality, acme-iaq.com, sales@acme-iaq.com, US"></textarea>
           confirmText: "打开", cancelText: "先不开" });
         if (!ok) { m.checked = false; return; }
       }
-      await fetch("/api/settings/sending",{method:"POST",headers:{"content-type":"application/json"},
-        body:JSON.stringify({ automation_enabled: m.checked })});
-      const el=$("#sendcfg-result"); if(el){ el.textContent = m.checked?"⚠️ 自动模式已开启（已推飞书）":"✅ 自动模式已关闭（已推飞书）"; setTimeout(()=>{ if(el) el.textContent=""; },3500); }
+      // 🔴 2026-09-05 commit2：这里原来**不看返回值**。
+      //   ⚠️ 病的真实形态是**实测出来的，跟我一开始设想的不一样**（反向自证撤掉本段跑了一遍）：
+      //     开关**不会**停在错位置 —— 下面那句 `renderAutomation(现拉真值)` 会把它读回去。
+      //     真正的坏处是**屏幕打出一句假话**：存不上时照样显示
+      //     「✅ 自动模式已关闭（已推飞书）」，而它根本没关、飞书也没推。
+      //   ⇒ 与本支主题同一个病（这个开关不许说谎），只是入口从"弹窗被吞"换成了"请求失败"。
+      //   ⭐ 记这个形状：**"我以为的机制"和"真机制"可以都指向同一个修法，但只有后者能写进报告。**
+      //   ⚠️ 形状**逐字照 `applyAutoSend`**（上面几行）：`.json()` + `.catch` 兜成 `{error}`、
+      //     失败就把勾选**拨回去**并说出原因、然后 `return`（⛔ 不再往下走 paintStatusBar / 重画那张卡：
+      //     那些都建立在"存成功了"这个前提上，前提没成立就不该刷新出一个假状态）。
+      const r = await fetch("/api/settings/sending",{method:"POST",headers:{"content-type":"application/json"},
+        body:JSON.stringify({ automation_enabled: m.checked })}).then(x=>x.json()).catch(e=>({error:String(e)}));
+      const el=$("#sendcfg-result");
+      if (r && r.error) { m.checked = !m.checked; if (el) el.textContent = `❌ 没存上：${r.error}`; return; }
+      if(el){ el.textContent = m.checked?"⚠️ 自动模式已开启（已推飞书）":"✅ 自动模式已关闭（已推飞书）"; setTimeout(()=>{ if(el) el.textContent=""; },3500); }
       paintStatusBar();   // 状态栏立刻跟上，不等下一次轮询
       // 🔴 这里原来写的是 `loadSendCfg()` —— **那个函数全仓根本不存在**（C5-48 之前就是这样）。
       //   它是最后一行，抛了 ReferenceError 也没有任何可见后果 ⇒ 潜伏至今没人发现。
