@@ -13,7 +13,7 @@ import { sendLead, sendApprovedBatch, sendFollowupBatch, sendWarmFollowupNow, un
 // 系统发信上限可设的最大值。Joe 拍板 1000 → 老的 500 clamp 会静默截断，故放宽到 2000 留余量。
 // （不设无穷：手滑多打一个 0 就把域名烧了，这类不可逆代价才值得一个上限。）
 const LIMIT_MAX = 2000;
-import { TIER1_COUNTRIES, runDiscovery, getKeywords, seedDefaultKeywords, getSearchConfig, COUNTRIES, DEFAULT_COUNTRIES, recomputeKeywordStats, inferCountryFromWebsite, getSerperUsage, runNmeaDiscovery, runLinkHarvest, runDirectoryRefresh, RVWITHTITO_URL, RVWITHTITO_BLACKLIST, SERPER_DAILY_BUDGET_DEFAULT, findDuplicateLead, getKeywordLangs, LANG_COUNTRIES } from "./discover";
+import { TIER1_COUNTRIES, runDiscovery, getKeywords, seedDefaultKeywords, getSearchConfig, COUNTRIES, DEFAULT_COUNTRIES, recomputeKeywordStats, inferCountryFromWebsite, getSerperUsage, runNmeaDiscovery, runLinkHarvest, runDirectoryRefresh, RVWITHTITO_URL, RVWITHTITO_BLACKLIST, SERPER_DAILY_BUDGET_DEFAULT, findDuplicateLead, getKeywordLangs, LANG_COUNTRIES, ensureDiscoveryLog } from "./discover";
 import { findLeadEmail, diagnoseSite, type PageProbe } from "./findemail";
 import { ingestReplies, matchReplyToLead, FREE_EMAIL_DOMAINS, domainOfEmail } from "./replies";
 import { ensureReplyColumns, stripQuoted, previewOf, isNoiseReply, tabOf, type InboxTab } from "./reply-inbox";
@@ -3313,6 +3313,111 @@ app.get("/api/keywords", async (c) => {
   return c.json({ keywords, effective: await getKeywords(c.env) });
 });
 // 手动重算关键词权重（回复率加权），供调试/立即优化
+// ══════════════ 投放体检表（2026-09-05，Joe：「按你的建议来，但是我需要能看到」）══════════════
+//
+// 🔴 **两列刻意没有**，因为按现有数据造不出来 —— SPEC 自己的规矩：算不出的列不摆。
+//   ① **投放国**：`leads.country` 存的是**公司自己在哪国**（ccTLD 推断，`gl` 仅兜底，
+//      见 discover.ts 那行）⇒ 拿它当"投放国"就是把一件事的标签贴在另一件上。
+//      ⇒ 这一版给的是「**这些公司在哪些国家**」（客户密度，本身有用），标签如实写。
+//   ② **每词成本**：Serper 用量在此之前只有全局日计数 `serper_used_YYYY-MM-DD`，
+//      没有任何按 keyword/gl 的记账 ⇒ 每词成本无从摊。
+//      ⇒ 已装 `discovery_log`（本次同批），**从装上那天起**两件事都算得出；历史补不回来，
+//        所以下面返回 `log_since`，界面据此写"自 X 日起统计"。
+//
+// ⚠️ **计数一律按"家"**，不按"封"：漏斗里混单位（家→家→封）最容易读错。
+//   而且每一格都是 GROUP BY 主体之后的家数 —— 重试/多封邮件**不会虚增**（台账里那条）。
+// ⚠️ 回复数现在全库只有 1 条 ⇒ 端点返回 `reply_sparse`，界面必须把 0 说成"数据还少"，
+//   ⛔ 不许读成"这个词没用"，更⛔ 不许拿回复率去驱动任何建议。
+const SCOREBOARD_MIN_SAMPLE = 20;    // 样本不够就不给建议（⛔ 不对 3 家挖到的词下结论）
+const SCOREBOARD_STOP_RATIO = 1 / 3; // 优质率 < 均值 × 这个 ⇒ 建议停
+const SCOREBOARD_BOOST_RATIO = 1.5;  // 优质率 > 均值 × 这个 ⇒ 建议加码
+app.get("/api/scoreboard", async (c) => {
+  await ensureKeywordArchivedColumn(c.env);
+  // 读者这一路也建一次表：判据是"**第一个读它的人来时表在不在**"，不是"写者那边有迁移"。
+  try { await ensureDiscoveryLog(c.env); } catch (e) { console.error("scoreboard: discovery_log 建表失败:", e); }
+
+  const rows = (await c.env.DB.prepare(
+    `SELECT l.keyword AS kw,
+            COUNT(*) AS dug,
+            SUM(CASE WHEN a.match_score >= ${APPROVE_MIN_SCORE} THEN 1 ELSE 0 END) AS good,
+            SUM(CASE WHEN l.status IN ('sent','replied','won') THEN 1 ELSE 0 END) AS contacted,
+            SUM(CASE WHEN l.status IN ('replied','won') THEN 1 ELSE 0 END) AS replied,
+            COUNT(DISTINCT NULLIF(l.country,'')) AS n_countries,
+            MIN(l.created_at) AS first_at, MAX(l.created_at) AS last_at
+       FROM leads l LEFT JOIN lead_analysis a ON a.lead_id = l.id
+      WHERE l.source='search' AND COALESCE(l.keyword,'') <> ''
+      GROUP BY l.keyword`
+  ).all()).results as any[];
+
+  // 归档态：下架的词也要显示（否则"我停过它"这件事在页面上消失，Joe 会以为没生效）
+  const arch = new Map<string, { id: number; archived: boolean }>();
+  for (const k of (await c.env.DB.prepare("SELECT id, keyword, COALESCE(archived,0) AS archived FROM keywords").all()).results as any[]) {
+    arch.set(String(k.keyword), { id: Number(k.id), archived: Number(k.archived) === 1 });
+  }
+
+  const totalDug = rows.reduce((s, r) => s + Number(r.dug || 0), 0);
+  const totalGood = rows.reduce((s, r) => s + Number(r.good || 0), 0);
+  const avg = totalDug ? totalGood / totalDug : 0;
+  const stopBelow = avg * SCOREBOARD_STOP_RATIO;
+  const boostAbove = avg * SCOREBOARD_BOOST_RATIO;
+
+  const out = rows.map((r) => {
+    const dug = Number(r.dug || 0), good = Number(r.good || 0);
+    const rate = dug ? good / dug : 0;
+    const meta = arch.get(String(r.kw));
+    let suggestion: "stop" | "boost" | null = null;
+    let evidence = "";
+    if (dug < SCOREBOARD_MIN_SAMPLE) {
+      evidence = `只挖到 ${dug} 家，样本不够 ${SCOREBOARD_MIN_SAMPLE} 家 —— 先不下结论`;
+    } else if (rate < stopBelow) {
+      suggestion = "stop";
+      evidence = `挖到 ${dug} 家里只有 ${good} 家优质（${(rate * 100).toFixed(1)}%），低于均值 ${(avg * 100).toFixed(1)}% 的三分之一（${(stopBelow * 100).toFixed(1)}%）`;
+    } else if (rate > boostAbove) {
+      suggestion = "boost";
+      evidence = `挖到 ${dug} 家里有 ${good} 家优质（${(rate * 100).toFixed(1)}%），是均值 ${(avg * 100).toFixed(1)}% 的 ${(rate / (avg || 1)).toFixed(1)} 倍`;
+    } else {
+      evidence = `优质率 ${(rate * 100).toFixed(1)}%，在均值 ${(avg * 100).toFixed(1)}% 附近 —— 维持`;
+    }
+    return {
+      keyword: r.kw, keyword_id: meta?.id ?? null, archived: !!meta?.archived,
+      dug, good, contacted: Number(r.contacted || 0), replied: Number(r.replied || 0),
+      good_rate: rate, n_countries: Number(r.n_countries || 0),
+      first_at: r.first_at, last_at: r.last_at,
+      suggestion, evidence,
+    };
+  }).sort((a, b) => b.dug - a.dug);
+
+  const logAgg = await c.env.DB.prepare(
+    "SELECT COUNT(*) AS n, MIN(searched_at) AS since FROM discovery_log"
+  ).first<{ n: number; since: string | null }>().catch(() => null);
+
+  return c.json({
+    as_of: new Date().toISOString().replace("T", " ").slice(0, 19),
+    rows: out,
+    totals: { dug: totalDug, good: totalGood, avg_good_rate: avg,
+              replied: rows.reduce((s, r) => s + Number(r.replied || 0), 0) },
+    thresholds: { min_sample: SCOREBOARD_MIN_SAMPLE, avg_good_rate: avg, stop_below: stopBelow, boost_above: boostAbove },
+    // 回复稀疏：⛔ 0 不等于"这词没用"。阈值取 10 —— 低于它，回复列只报数不参与判断。
+    reply_sparse: rows.reduce((s, r) => s + Number(r.replied || 0), 0) < 10,
+    // 「成本 / 投放国」自哪天起才算得出来（⛔ 历史补不回来，界面必须说）
+    log: { rows: Number(logAgg?.n || 0), since: logAgg?.since || null },
+  });
+});
+
+// 一个词挖到的公司**分布在哪些国家**。⚠️ 这是**公司所在国**，⛔ 不是投放国（见上方注释）。
+app.get("/api/scoreboard/countries", async (c) => {
+  const kw = (c.req.query("keyword") || "").trim();
+  if (!kw) return c.json({ error: "keyword 必填" }, 400);
+  const rows = (await c.env.DB.prepare(
+    `SELECT COALESCE(NULLIF(l.country,''),'(不详)') AS country, COUNT(*) AS n,
+            SUM(CASE WHEN a.match_score >= ${APPROVE_MIN_SCORE} THEN 1 ELSE 0 END) AS good
+       FROM leads l LEFT JOIN lead_analysis a ON a.lead_id = l.id
+      WHERE l.source='search' AND l.keyword = ?
+      GROUP BY 1 ORDER BY n DESC LIMIT 40`
+  ).bind(kw).all()).results;
+  return c.json({ keyword: kw, countries: rows });
+});
+
 app.post("/api/keywords/recompute", async (c) => {
   const out = await recomputeKeywordStats(c.env);
   return c.json(out);
@@ -3429,8 +3534,16 @@ async function ensureKeywordArchivedColumn(env: Env): Promise<void> {
 }
 app.delete("/api/keywords/:id", async (c) => {
   await ensureKeywordArchivedColumn(c.env);
+  const id = Number(c.req.param("id"));
+  // ⭐ 2026-09-05：**采纳要留痕**（SPEC：每次采纳进结构化日志）。
+  //   先读词名再改 —— 改完就读不到"停的是哪个词"了，只剩一个 id，事后查不出来。
+  //   ⚠️ 这是**唯一**的停用写路径（体检页与看板③卡都走它）⇒ 留痕挂在这里，两个入口自动都有。
+  const before = await c.env.DB.prepare("SELECT keyword, COALESCE(archived,0) AS archived FROM keywords WHERE id=?")
+    .bind(id).first<{ keyword: string; archived: number }>();
   const r = await c.env.DB.prepare("UPDATE keywords SET archived=1 WHERE id=?")
-    .bind(Number(c.req.param("id"))).run();
+    .bind(id).run();
+  console.log(`keyword-archive: #${id} 「${before?.keyword ?? "(读不到词名)"}」→ 停用` +
+    `（改动 ${r.meta.changes || 0} 行${before?.archived ? "；⚠️ 它本来就是停用状态" : ""}）—— 人工采纳，⛔ 机器不会自己停词`);
   return c.json({ ok: true, archived: r.meta.changes || 0 });
 });
 /**
